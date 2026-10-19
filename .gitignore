@@ -27,6 +27,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# orchestrator context
+task_context.json
+review_context.json
+
 # IntelliJ based IDEs
 .idea
 
