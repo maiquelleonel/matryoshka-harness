@@ -1,20 +1,20 @@
 # 📋 PRD: Polyglot Stack Detector & Base CLI Scaffold (baba / bbyg / matryoshka)
 
-**Status:** Aprovado para Desenvolvimento  
-**Fase do Roadmap:** Fase 1 (Issue #1)  
-**Autor:** Maiquel Leonel & Ouroboros Architecture Pod  
+**Status:** Approved for Development  
+**Roadmap Phase:** Phase 1 (Issue #1)  
+**Author:** Maiquel Leonel & Ouroboros Architecture Pod  
 **Target:** Bun + TypeScript  
 
 ---
 
-## 🎯 1. Objetivo & Visão Geral
-Construir o motor central de introspecção de código do **Matryoshka-Harness** capaz de inspecionar qualquer diretório de projeto em menos de 10ms, identificar a stack primária, ecossistema de frameworks, test runner canônico e expor esses dados via CLI ergonômico com os aliases canônicos `baba`, `bbyg` e `matryoshka`.
+## 🎯 1. Objective & Overview
+Build the core codebase introspection engine of **Matryoshka-Harness**, capable of inspecting any project directory in under 10ms, detecting its primary language stack, framework ecosystem, and canonical test runner, exposing this intelligence through an ergonomic CLI supporting the canonical aliases `baba`, `bbyg`, and `matryoshka`.
 
 ---
 
-## 🔍 2. Matriz de Detecção Poliglota
+## 🔍 2. Polyglot Detection Matrix
 
-| Ecossistema | Arquivos de Assinatura | Frameworks Detectados | Test Runners Suportados |
+| Ecosystem | Manifest Signatures | Detected Frameworks | Supported Test Runners |
 | :--- | :--- | :--- | :--- |
 | **Python** | `pyproject.toml`, `requirements.txt`, `Pipfile` | FastAPI, Django, Flask | `pytest`, `unittest` |
 | **JS / TS** | `package.json`, `bun.lock`, `package-lock.json` | Next.js, React, Vue, NestJS, Express | `bun test`, `vitest`, `jest` |
@@ -25,40 +25,40 @@ Construir o motor central de introspecção de código do **Matryoshka-Harness**
 
 ---
 
-## ⚡ 3. Ergonomia de Terminal (Aliases Canônicos)
-O CLI deve responder com paridade funcional estrita aos três comandos:
-1. `baba <command>` (A avó / matriarca das bonecas russas — 4 letras, zero typo)
-2. `bbyg <command>` (Baba-Yaga — a bruxaria de silício)
-3. `matryoshka <command>` (Nome acadêmico formal)
+## ⚡ 3. Terminal Ergonomics (Canonical Aliases)
+The CLI binary must respond with strict functional parity across all three aliases:
+1. `baba <command>` (The Slavic matriarch of nesting dolls — 4 letters, zero typos)
+2. `bbyg <command>` (Baba-Yaga mythology — pure silicon wizardry)
+3. `matryoshka <command>` (Formal academic name)
 
-### Subcomando Base:
+### Base Subcommand:
 ```bash
 baba detect [path] [--json]
 ```
 
 ---
 
-## ✅ 4. Critérios de Aceite (BDD)
+## ✅ 4. Acceptance Criteria (BDD)
 
-### AC-1: Detecção Determinística de Stack Primária
-* **Given** um diretório de projeto contendo um dos manifestos suportados (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`),
-* **When** a função `detectStack(projectPath)` for executada,
-* **Then** deve retornar o objeto de stack com `primary`, lista de `frameworks` e o `testRunner` detectado em < 15ms.
+### AC-1: Deterministic Primary Stack Detection
+* **Given** a project directory containing one of the supported manifests (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`),
+* **When** `detectStack(projectPath)` is executed,
+* **Then** it must return a `ProjectStack` object containing `primary`, detected `frameworks`, and `testRunner` in < 15ms.
 
-### AC-2: Fallback Gracioso para Repositórios Desconhecidos (L0 Unharnessed)
-* **Given** um diretório vazio ou sem manifestos de dependência reconhecidos,
-* **When** a detecção for executada,
-* **Then** deve retornar `primary: "unknown"`, `testRunner: null` e `frameworks: []` sem lançar exceções não tratadas.
+### AC-2: Graceful Fallback for Unharnessed Repositories (L0)
+* **Given** an empty directory or a repository without recognizable dependency manifests,
+* **When** stack detection is executed,
+* **Then** it must return `primary: "unknown"`, `testRunner: null`, and `frameworks: []` without raising unhandled exceptions.
 
-### AC-3: Paridade Estrita dos Aliases de CLI
-* **Given** a execução via terminal,
-* **When** invocado como `baba`, `bbyg` ou `matryoshka`,
-* **Then** o binário deve despachar o mesmo fluxo de parsing de argumentos, exibindo versão e ajuda idênticas.
+### AC-3: Strict CLI Alias Parity
+* **Given** execution via command line,
+* **When** invoked as `baba`, `bbyg`, or `matryoshka`,
+* **Then** the binary must dispatch identical argument parsing, help output, and version information.
 
-### AC-4: Saída Estruturada em JSON para Orquestradores
-* **Given** a flag `--json`,
-* **When** o comando for executado,
-* **Then** a saída em stdout deve ser estritamente um JSON parseável contendo:
+### AC-4: Structured JSON Output for Orchestrators
+* **Given** the `--json` flag,
+* **When** the command is executed,
+* **Then** stdout must output strictly valid, parseable JSON matching:
   ```json
   {
     "status": "success",

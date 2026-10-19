@@ -1,75 +1,75 @@
 # 🏛️ Matryoshka-Harness — System Architecture & Intent Blueprint
 
-**Projeto:** Matryoshka-Harness (Aliases: `baba` / `bbyg` / `matryoshka`)  
-**Propósito:** Context-fencing adaptativo, gerador de AGENTS.md anti-slop e remediação determinística de maturidade (L0 ➔ L4) para agentes de IA de código.  
-**Runtime Primário:** [Bun](https://bun.com) (TypeScript estrito, execução nativa < 15ms, empacotamento standalone).  
-**Licença:** Open-Source MIT.  
+**Project:** Matryoshka-Harness (Canonical Aliases: `baba` / `bbyg` / `matryoshka`)  
+**Core Purpose:** Adaptive context-fencing, anti-slop AGENTS.md generation, and deterministic maturity remediation (L0 ➔ L4) for autonomous AI coding agents.  
+**Primary Runtime:** [Bun](https://bun.com) (Strict TypeScript, native execution < 15ms, standalone binary compilation).  
+**License:** Open-Source MIT.  
 
 ---
 
-## 🎯 1. Visão Arquitetural & Princípios Fundamentais
+## 🎯 1. Architectural Vision & Core Principles
 
-1. **Context-Fencing Pragmático (Zero-Slop):**
-   - Agentes de IA modernos (Claude, Gemini, Codex) falham por excesso de liberdade ou regras abstratas fora do contexto real do projeto.
-   - O Matryoshka cerca o repositório antes do agente encostar no código: define convenções reais, proíbe abstrações inúteis (Zero SOLID em WordPress/Drupal!) e limita o raio de explosão.
-2. **Oráculo Externo de Maturidade (Sem Reinvenção de Roda):**
-   - Consome `paladini/harness-score` como dependência direta e oráculo oficial de governança (L0 a L4).
-3. **Raio-X Semântico com MCP:**
-   - Integra-se com o `codebase-memory-mcp` para ler o grafo em AST e reconciliar **o que falta** (diagnóstico) com **o que existe no código** (models, rotas, entidades).
-4. **Ergonomia Máxima de Terminal:**
-   - Binário tríplice: `baba` (4 letras, ultra-ergonômico), `bbyg` (Baba-Yaga) e `matryoshka` (formal).
+1. **Pragmatic Context-Fencing (Zero-Slop):**
+   - Modern AI agents (Claude, Gemini, Codex) fail due to unconstrained freedom or abstract textbook patterns that clash with the repository's real architecture.
+   - Matryoshka fences the codebase before any agent touches code: it establishes genuine conventions, forbids gratuitous abstractions (Zero forced SOLID in WordPress/Drupal!), and strictly bounds blast radius.
+2. **External Maturity Oracle (Zero Reinvention):**
+   - Consumes `paladini/harness-score` as a direct dependency and canonical governance oracle (L0 to L4).
+3. **Semantic AST Reconnaissance via MCP:**
+   - Integrates with `codebase-memory-mcp` to query codebase knowledge graphs, reconciling **what is missing** (diagnostics) with **what actually exists** (models, routes, database entities).
+4. **Ergonomic Terminal Footprint:**
+   - Triple binary aliases: `baba` (4 letters, zero typos), `bbyg` (Baba-Yaga mythology), and `matryoshka` (formal).
 
 ---
 
-## 📂 2. Estrutura Canônica de Pastas & Arquivos
+## 📂 2. Canonical Directory & File Structure
 
 ```text
 matryoshka-harness/
-├── ARCHITECTURE.md              # 🏛️ [ESTE DOCUMENTO] Blueprint da arquitetura
-├── ROADMAP.md                   # 🗺️ 5 Fases de desenvolvimento autônomo
-├── README.md                    # 📖 Vitrine open-source e quickstart
-├── package.json                 # 📦 Scripts Bun, binários (baba/bbyg/matryoshka) e deps
-├── tsconfig.json                # ⚙️ Configuração TypeScript estrita
-├── gemini-extension.json        # ♊ Manifesto nativo para Gemini CLI
-├── .claude-plugin/              # 🦊 Manifesto nativo para Claude Code
+├── ARCHITECTURE.md              # 🏛️ [THIS DOCUMENT] Architecture blueprint
+├── ROADMAP.md                   # 🗺️ 5 Autonomous development phases
+├── README.md                    # 📖 Open-source showcase & quickstart
+├── package.json                 # 📦 Bun scripts, binary aliases (baba/bbyg/matryoshka), and deps
+├── tsconfig.json                # ⚙️ Strict TypeScript configuration
+├── gemini-extension.json        # ♊ Native manifest for Gemini CLI
+├── .claude-plugin/              # 🦊 Native manifest for Claude Code
 │   └── plugin.json
 │
-├── src/                         # 💻 Core Engine (TypeScript puro / Bun)
-│   ├── cli.ts                   # Entrypoint do CLI com parsing de flags e rotas
-│   ├── detector.ts              # Detector poliglota de stack e test runner
-│   ├── scanner.ts               # Orquestrador do harness-score + codebase-memory-mcp
-│   ├── wrapper.ts               # Gerador adaptativo do AGENTS.md e cercamento
-│   ├── ast.ts                   # Parser sintático de AST (Tree-sitter WASM / SQL AST)
-│   ├── mcp.ts                   # Servidor MCP nativo via stdio para Claude e Gemini
-│   └── types.ts                 # Contratos e schemas de tipos centrais
+├── src/                         # 💻 Core Engine (Pure TypeScript / Bun)
+│   ├── cli.ts                   # CLI entrypoint with flag parsing and subcommands
+│   ├── detector.ts              # Polyglot stack & test runner detector
+│   ├── scanner.ts               # harness-score + codebase-memory-mcp orchestrator
+│   ├── wrapper.ts               # Adaptive AGENTS.md & context fence generator
+│   ├── ast.ts                   # Syntax AST engine (Tree-sitter WASM / SQL AST)
+│   ├── mcp.ts                   # Native stdio MCP server for Claude, Cursor, and Gemini
+│   └── types.ts                 # Shared TypeScript interfaces and contracts
 │
-├── skills/                      # 🪆 Agent Skills nativas (Universal Skills)
+├── skills/                      # 🪆 Native Agent Skills (Universal Schema)
 │   └── matryoshka/
-│       └── SKILL.md             # Definição e progressive disclosure da skill
+│       └── SKILL.md             # Skill definition with progressive disclosure
 │
-├── commands/                    # ⚡ Slash commands universais
+├── commands/                    # ⚡ Universal slash commands
 │   ├── wrap.md                  # Claude Code slash command
 │   └── wrap.toml                # Gemini CLI slash command
 │
-├── docs/                        # 📚 Documentação viva
+├── docs/                        # 📚 Living documentation
 │   ├── EXPERIENCE.md            # Harness² Meta-Learning Library
-│   └── prds/                    # Especificações atômicas de produto (PRDs)
+│   └── prds/                    # Atomic Product Requirement Documents (PRDs)
 │       ├── PRD_STACK_DETECTOR_AND_CLI_BASE.md
 │       └── PRD_HARNESS_SCORE_ORACLE_INTEGRATION.md
 │
-└── tests/                       # 🧪 Suíte de Testes (RED-to-GREEN)
-    ├── detector.test.ts         # Testes de detecção de stacks poliglotas
-    ├── scanner.test.ts          # Testes de orquestração do harness-score
-    └── cli.test.ts              # Testes de paridade de aliases (baba/bbyg)
+└── tests/                       # 🧪 Test Suite (RED-to-GREEN verification)
+    ├── detector.test.ts         # Polyglot stack detection tests
+    ├── scanner.test.ts          # harness-score integration tests
+    └── cli.test.ts              # Command alias parity tests (baba/bbyg/matryoshka)
 ```
 
 ---
 
-## 🧩 3. Responsabilidade dos Módulos Centrais
+## 🧩 3. Core Module Responsibilities
 
 ### `src/detector.ts` (Stack & Runner)
-* Lê a árvore de arquivos e inspeciona manifestos (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`).
-* Retorna o tipo `ProjectStack`:
+* Inspects repository file tree and package manifests (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`).
+* Exports the `ProjectStack` interface:
   ```typescript
   export interface ProjectStack {
     primary: 'python' | 'typescript' | 'go' | 'rust' | 'ruby' | 'php' | 'unknown';
@@ -79,19 +79,20 @@ matryoshka-harness/
   }
   ```
 
-### `src/scanner.ts` (Diagnóstico & Conciliação)
-* Invoca programmaticamente o `harness-score` para extrair o score L0..L4 e lista de gaps.
-* Consulta o grafo do `codebase-memory-mcp` para identificar modelos e rotas reais existentes.
-* Emite o relatório de conciliação: **O que falta vs O que existe**.
+### `src/scanner.ts` (Diagnostic & Reconciliation)
+* Programmatically invokes `harness-score` to retrieve L0..L4 maturity level and gap lists.
+* Queries `codebase-memory-mcp` graph to map real existing models and endpoints.
+* Emits a reconciled report: **Missing Governance vs Existing Codebase Reality**.
 
-### `src/wrapper.ts` (Remediação Adaptativa)
-* Injeta o `AGENTS.md` sob medida para o arquétipo do projeto.
-* Cria o diretório de skills modulares (`skill-backend.md`, `skill-api.md`, `skill-security.md`).
-* Configura os manifestos de MCP locais (`.cursor/mcp.json`, `.gemini/settings.json`).
+### `src/wrapper.ts` (Adaptive Remediation)
+* Injects tailored `AGENTS.md` matching the project's genuine architectural archetype.
+* Scaffolds modular skill directories (`skill-backend.md`, `skill-api.md`, `skill-security.md`).
+* Configures local MCP manifests (`.cursor/mcp.json`, `.gemini/settings.json`).
 
 ---
 
-## 🧪 4. Padrões de Qualidade & Testabilidade
-* **Zero Overhead:** O CLI deve responder a `baba detect` em menos de 15ms.
-* **TDD Estrito:** Todas as features são introduzidas via testes em `tests/*.test.ts` com o test runner nativo do Bun (`bun test`).
-* **Zero Runtime Dependencies:** Para o usuário final, a distribuição via `npx` ou binário compilado pelo Bun dispensa a necessidade de compiladores ou runtimes adicionais no host.
+## 🧪 4. Quality Standards & Verifiability
+* **Sub-15ms Overhead:** The CLI must respond to `baba detect` in under 15 milliseconds.
+* **Strict Red-to-Green TDD:** All features are introduced via deterministic tests in `tests/*.test.ts` using Bun's native test runner (`bun test`).
+* **Zero Runtime Dependencies:** End-user distribution via `npx` or compiled standalone Bun binaries requires zero host compilers or background daemons.
+* **Language Policy:** Source code, tests, commit messages, PRDs, and documentation must be authored strictly in English.
