@@ -1,4 +1,4 @@
-# 📋 PRD: Integração Nativa com paladini/harness-score como Oráculo de Avaliação
+# 📋 PRD: Comando 'baba scan' — Oráculo de Maturidade (harness-score) & Raio-X Semântico (codebase-memory-mcp)
 
 **Status:** Aprovado para Desenvolvimento  
 **Fase do Roadmap:** Fase 1 (Issue #2)  
@@ -7,40 +7,50 @@
 
 ---
 
-## 🎯 1. Objetivo & Visão Geral
-Integrar a biblioteca **`harness-score`** (criada por Daniel Paladini) como dependência nativa direta do pacote `matryoshka-harness`. Em vez de reinventar a régua de maturidade agêntica, o Matryoshka consome o motor do `harness-score` como o **oráculo oficial de diagnóstico**, expondo o comando `baba scan` (com aliases `bbyg scan` e `matryoshka scan`) para diagnosticar com rigor determinístico o nível de governança de qualquer repositório (L0 a L4).
+## 🎯 1. O Triângulo de Execução do Comando 'baba scan'
+
+O comando `baba scan` (com aliases `bbyg scan` e `matryoshka scan`) não é apenas um wrapper raso de terminal. Ele é a ponte inteligente entre a régua de governança e a realidade do código-fonte:
+
+1. **Régua de Maturidade (`harness-score`):**
+   - Roda a verificação canônica dos 5 eixos (Contexto, Skills, Guardrails, Sensores, Higiene).
+   - Aponta exatamente **o que está faltando** no repositório (gaps como `CTX-01`, `CI-01`, `SNS-05`).
+2. **Raio-X Semântico (`codebase-memory-mcp`):**
+   - Inspeciona o grafo de conhecimento da base em AST.
+   - Mapeia os clusters reais de código, rotas de API, models de banco e dependências.
+   - **Cruza o que o harness-score pediu com o que realmente existe no código**, identificando exatamente quais regras, fences e testes precisam ser gerados.
+3. **Especificação de Remediação para o Agente:**
+   - Emite o plano estruturado de issues atômicas prontas para o agente implementar no silício de acordo com a linguagem detectada.
 
 ---
 
-## 🏗️ 2. Arquitetura da Integração
+## 🏗️ 2. Arquitetura do Pipeline 'baba scan'
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 CLI ENTRANCE (baba / bbyg)                  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│               MATRYOSHKA SCANNER (src/scanner.ts)           │
-│                                                             │
-│   • Invoca programmaticamente o harness-score               │
-│   • Captura os 5 eixos de maturidade (105 pts):             │
-│       - Context & Guides (CTX)                              │
-│       - Skills & Commands (SKL)                             │
-│       - Hooks & Guardrails (GRD)                            │
-│       - Sensors & Feedback (SNS)                            │
-│       - Hygiene & Safety (HYG)                              │
-│   • Normaliza os Gaps com recomendações de remediação       │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       OUTPUT MODES                          │
-│                                                             │
-│   • Terminal UI: Resumo visual neon com barras de progresso  │
-│   • --json: Payload completo para o motor de remediação     │
-│   • --badge <file>: Gera o selo SVG oficial de maturidade   │
-└─────────────────────────────────────────────────────────────┘
+                                ❯ baba scan [path]
+                                        │
+           ┌────────────────────────────┴────────────────────────────┐
+           ▼                                                         ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
+│       1. paladini/harness-score      │  │        2. codebase-memory-mcp        │
+│          (O Diagnóstico L0..L4)      │  │          (O Raio-X Semântico)        │
+│                                      │  │                                      │
+│ • Gaps: CTX-01, CI-01, SNS-05        │  │ • Clusters: Controllers, Models, ORM │
+│ • Score atual: 35/105 pts (L1)       │  │ • Rotas HTTP & Entidades de Banco    │
+│ • O QUE FALTA                        │  │ • O QUE JÁ EXISTE NO CÓDIGO          │
+└──────────────────┬───────────────────┘  └──────────────────┬───────────────────┘
+                   │                                         │
+                   └────────────────────┬────────────────────┘
+                                        │
+                                        ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                       3. CONCILIAÇÃO & PLANO DE REMEDIAÇÃO                     │
+│                                                                                │
+│  • Bate os gaps contra o grafo do repositório:                                 │
+│      - Falta AGENTS.md? Extrai os padrões reais dos models/rotas para gerar.   │
+│      - Falta teste? Mapeia as 3 rotas críticas desprovidas de cobertura.       │
+│  • Emite o relatório executivo (Terminal / --json)                             │
+│  • Prepara o backlog de issues para o agente implementar na linguagem certa.   │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -48,13 +58,13 @@ Integrar a biblioteca **`harness-score`** (criada por Daniel Paladini) como depe
 ## ⚡ 3. Comandos & Ergonomia
 
 ```bash
-# Diagnóstico rápido visual no terminal
+# Scan completo: harness-score + codebase-memory-mcp
 baba scan .
 
-# Diagnóstico estruturado para orquestradores (Ouroboros / Claude / Gemini)
+# Scan com emissão de JSON para o agente implementar
 baba scan . --json
 
-# Diagnóstico com geração direta de badge SVG
+# Scan com geração de badge SVG
 baba scan . --badge ./docs/harness-badge.svg
 ```
 
@@ -62,36 +72,22 @@ baba scan . --badge ./docs/harness-badge.svg
 
 ## ✅ 4. Critérios de Aceite (BDD)
 
-### AC-1: Execução Programática Determinística do Harness-Score
+### AC-1: Execução Coordenada de harness-score & codebase-memory-mcp
 * **Given** um repositório git local,
-* **When** a função `scanHarness(targetPath)` for acionada,
-* **Then** deve executar o scanner oficial do `harness-score` sem requisições de rede, retornando o objeto contendo `level` (L0..L4), `score`, `maxScore` e `percentual`.
+* **When** o comando `baba scan .` for executado,
+* **Then** o sistema deve executar o `harness-score` para capturar os gaps de governança e consultar o grafo do `codebase-memory-mcp` para identificar os clusters e entidades reais da base.
 
-### AC-2: Mapeamento Granular de Gaps de Remediação
-* **Given** um repositório com falhas de maturidade (ex: sem `AGENTS.md` ou sem CI),
-* **When** o scan for concluído,
-* **Then** deve expor a lista de pendências não cumpridas com seus IDs canônicos (`CTX-01`, `CI-01`, etc.) e a descrição exata da remediação necessária para guiar o futuro comando `baba wrap`.
+### AC-2: Conciliação Semântica de Gaps vs Código Existente
+* **Given** gaps reportados pelo harness-score (ex: ausência de contexto de arquitetura),
+* **When** o scan cruzar os dados com o grafo de conhecimento,
+* **Then** a saída deve detalhar exatamente quais frameworks, models e rotas existentes devem compor o `AGENTS.md` e as `SKILLS.md`, sem inventar estruturas inexistentes.
 
-### AC-3: Suporte à Flag --badge para Exportação de SVG
-* **Given** a flag `--badge <caminho>`,
-* **When** o scan for executado,
-* **Then** o arquivo SVG oficial de maturidade deve ser gravado no caminho especificado (ex: `harness | L4`) com status 0.
+### AC-3: Mapeamento de Issues de Remediação por Linguagem
+* **Given** um projeto com stack identificada (Python, PHP, TS, Go, Rust, Ruby),
+* **When** a flag `--json` for passada,
+* **Then** o payload deve conter uma lista ordenada de `remediation_issues` tipadas para a linguagem, prontas para consumo por agentes agênticos.
 
-### AC-4: Saída Estruturada em JSON
-* **Given** a flag `--json`,
-* **When** invocado por um orquestrador agêntico,
-* **Then** a saída em stdout deve conter estritamente o JSON parseável no formato:
-  ```json
-  {
-    "status": "success",
-    "maturity": {
-      "level": "L4",
-      "levelName": "Self-correcting",
-      "score": 105,
-      "maxScore": 105,
-      "percent": 100
-    },
-    "gaps": [],
-    "timestamp": "2026-10-18T22:30:00Z"
-  }
-  ```
+### AC-4: Resiliência Offline & Fallback Defensivo
+* **Given** um ambiente onde o servidor MCP ainda não foi inicializado,
+* **When** o `baba scan .` rodar,
+* **Then** o scanner deve realizar o bootstrap in-memory do grafo ou degradar graciosamente para a inspeção estrutural de arquivos locais, sem travar o comando.
