@@ -20,6 +20,9 @@
     "matryoshka": "./src/cli.ts"
   },
   "scripts": {
+    "baba": "bun run src/cli.ts",
+    "bbyg": "bun run src/cli.ts",
+    "matryoshka": "bun run src/cli.ts",
     "detect": "bun run src/cli.ts detect",
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
