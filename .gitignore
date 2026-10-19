@@ -30,6 +30,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # orchestrator context
 task_context.json
 review_context.json
+ouroboros_usage.json
 
 # IntelliJ based IDEs
 .idea
