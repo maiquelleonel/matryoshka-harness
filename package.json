@@ -22,5 +22,7 @@
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
     "test": "bun test"
-  }
+  },
+  "license": "MIT",
+  "author": "Maiquel Leonel <skywishmtfk@gmail.com>"
 }
