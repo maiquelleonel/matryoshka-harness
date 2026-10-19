@@ -11,5 +11,16 @@
   },
   "dependencies": {
     "picocolors": "^1.1.1"
+  },
+  "description": "Adaptive context-fencing, anti-slop AGENTS.md generator and L4 harness-score remediation",
+  "bin": {
+    "baba": "./src/cli.ts",
+    "bbyg": "./src/cli.ts",
+    "matryoshka": "./src/cli.ts"
+  },
+  "scripts": {
+    "scan": "bun run src/cli.ts scan",
+    "wrap": "bun run src/cli.ts wrap",
+    "test": "bun test"
   }
 }
