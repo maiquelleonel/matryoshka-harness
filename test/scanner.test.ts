@@ -6,6 +6,8 @@ import {
   discoverCodebaseEntities,
   evaluateInMemoryFallback,
   executeHarnessScore,
+  formatScanHumanOutput,
+  formatScanJsonOutput,
   generateRemediationIssue,
   normalizeMaturityLevel,
   reconcileGapsWithStack,
@@ -583,6 +585,161 @@ process.exit(0);
       expect(scanResult.oracleScore).toBeGreaterThanOrEqual(0);
       expect(Array.isArray(scanResult.remediationIssues)).toBe(true);
       expect(scanResult.entities).toBeDefined();
+    });
+  });
+
+  describe("AC-7: Human-Readable Terminal Output & Structured JSON Export", () => {
+    it("formatScanHumanOutput generates styled terminal report with colors and summary", () => {
+      const mockReconciliation: SemanticReconciliation = {
+        primaryStack: "typescript",
+        archetype: "reactive-frontend",
+        frameworks: ["nextjs", "react"],
+        testRunner: "bun test",
+        oracleScore: 45,
+        oracleLevel: "L1",
+        totalGaps: 2,
+        remediationIssues: [
+          {
+            id: "REM-CTX-01",
+            gapId: "CTX-01",
+            axis: "context",
+            title: "Generate Context Fence (AGENTS.md)",
+            description: "Missing root AGENTS.md",
+            targetFiles: ["AGENTS.md"],
+            stack: "typescript",
+            priority: "critical",
+            suggestedAction: "Generate root AGENTS.md with TypeScript conventions",
+          },
+          {
+            id: "REM-CI-01",
+            gapId: "CI-01",
+            axis: "guardrails",
+            title: "Configure Continuous Integration Pipeline",
+            description: "No CI workflow configurations found",
+            targetFiles: [".github/workflows/ci.yml"],
+            stack: "typescript",
+            priority: "high",
+            suggestedAction: "Configure GitHub Actions CI workflow",
+          },
+        ],
+        entities: {
+          routes: ["src/routes/users.ts"],
+          models: ["src/models/user.ts"],
+          controllers: [],
+        },
+        timestamp: "2026-10-20T12:00:00.000Z",
+      };
+
+      const output = formatScanHumanOutput(mockReconciliation, tempDir);
+
+      expect(output).toContain("Matryoshka Maturity Scanner");
+      expect(output).toContain(tempDir);
+      expect(output).toContain("typescript");
+      expect(output).toContain("nextjs, react");
+      expect(output).toContain("bun test");
+      expect(output).toContain("L1");
+      expect(output).toContain("45/105");
+      expect(output).toContain("src/routes/users.ts");
+      expect(output).toContain("src/models/user.ts");
+      expect(output).toContain("CRITICAL");
+      expect(output).toContain("REM-CTX-01");
+      expect(output).toContain("AGENTS.md");
+      expect(output).toContain("HIGH");
+      expect(output).toContain("REM-CI-01");
+    });
+
+    it("formatScanHumanOutput handles empty entities gracefully without crashing", () => {
+      const mockReconciliation: SemanticReconciliation = {
+        primaryStack: "unknown",
+        archetype: "generic",
+        frameworks: [],
+        testRunner: null,
+        oracleScore: 0,
+        oracleLevel: "L0",
+        totalGaps: 1,
+        remediationIssues: [
+          {
+            id: "REM-CTX-01",
+            gapId: "CTX-01",
+            axis: "context",
+            title: "Generate Context Fence",
+            description: "Missing AGENTS.md",
+            targetFiles: ["AGENTS.md"],
+            stack: "unknown",
+            priority: "critical",
+            suggestedAction: "Create AGENTS.md",
+          },
+        ],
+        entities: {
+          routes: [],
+          models: [],
+          controllers: [],
+        },
+        timestamp: "2026-10-20T12:00:00.000Z",
+      };
+
+      const output = formatScanHumanOutput(mockReconciliation, tempDir);
+
+      expect(output).toContain("none");
+      expect(output).toContain("L0");
+      expect(output).toContain("0/105");
+      expect(output).toContain("CRITICAL");
+    });
+
+    it("formatScanJsonOutput produces valid structured envelope with snake_case remediation_issues", () => {
+      const mockReconciliation: SemanticReconciliation = {
+        primaryStack: "python",
+        archetype: "generic",
+        frameworks: ["fastapi"],
+        testRunner: "pytest",
+        oracleScore: 35,
+        oracleLevel: "L1",
+        totalGaps: 1,
+        remediationIssues: [
+          {
+            id: "REM-CTX-01",
+            gapId: "CTX-01",
+            axis: "context",
+            title: "Generate Context Fence (AGENTS.md)",
+            description: "Missing AGENTS.md",
+            targetFiles: ["AGENTS.md"],
+            stack: "python",
+            priority: "critical",
+            suggestedAction: "Generate root AGENTS.md with FastAPI conventions",
+          },
+        ],
+        entities: {
+          routes: ["api/routes.py"],
+          models: ["api/models.py"],
+          controllers: [],
+        },
+        timestamp: "2026-10-20T12:00:00.000Z",
+      };
+
+      const jsonPayload = formatScanJsonOutput(mockReconciliation, tempDir);
+
+      expect(jsonPayload.status).toBe("success");
+      expect(jsonPayload.command).toBe("scan");
+      expect(jsonPayload.rootPath).toBe(tempDir);
+      expect(jsonPayload.primaryStack).toBe("python");
+      expect(jsonPayload.archetype).toBe("generic");
+      expect(jsonPayload.frameworks).toEqual(["fastapi"]);
+      expect(jsonPayload.testRunner).toBe("pytest");
+      expect(jsonPayload.oracleScore).toBe(35);
+      expect(jsonPayload.oracleLevel).toBe("L1");
+      expect(jsonPayload.totalGaps).toBe(1);
+
+      // Both camelCase and snake_case properties are exposed for agent tooling
+      expect(Array.isArray(jsonPayload.remediationIssues)).toBe(true);
+      expect(Array.isArray(jsonPayload.remediation_issues)).toBe(true);
+
+      const snakeIssue = jsonPayload.remediation_issues[0];
+      expect(snakeIssue.id).toBe("REM-CTX-01");
+      expect(snakeIssue.gap_id).toBe("CTX-01");
+      expect(snakeIssue.target_files).toContain("AGENTS.md");
+      expect(snakeIssue.suggested_action).toContain("FastAPI");
+
+      expect(jsonPayload.entities.routes).toContain("api/routes.py");
     });
   });
 });
