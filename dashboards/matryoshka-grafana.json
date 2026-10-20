@@ -174,6 +174,89 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "title": "Maturity Gap Evaluation & Remediation Counts",
+      "type": "timeseries",
+      "description": "Tracks count of governance gaps evaluated and remediation recommendations produced across scanner runs.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(matryoshka_gaps_evaluated_total[5m])) by (gap_id)",
+          "legendFormat": "Evaluated Gap: {{gap_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(matryoshka_remediation_issues_total) by (category)",
+          "legendFormat": "Remediations: {{category}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "title": "AST Knowledge Graph Tool Invocations by Method",
+      "type": "timeseries",
+      "description": "Distribution of semantic AST queries across tools (search_graph, query_graph, trace_path, get_code_snippet).",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(codebase_memory_mcp_tool_invocations_total[5m])) by (tool)",
+          "legendFormat": "Tool: {{tool}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     }
   ],
   "refresh": "10s",

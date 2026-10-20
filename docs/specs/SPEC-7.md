@@ -3,7 +3,7 @@
 ## 🎯 1. Specification Metadata
 - **Spec ID:** SPEC-7
 - **Issue:** #7 - feat(mcp): auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
-- **Status:** IMPLEMENTING
+- **Status:** COMPLETED
 - **Author:** Maiquel Leonel & Ouroboros Architecture Pod
 - **Target Runtime:** Bun v1.3+ / TypeScript
 
@@ -151,3 +151,12 @@ And the JSON payload must report the planned file modifications (`status: planne
 Given the matryoshka-harness repository
 When inspecting the `dashboards/` directory
 Then `dashboards/matryoshka-grafana.json` must exist with metrics for `search_graph`.
+
+---
+
+## 🏁 5. Subtasks Completion Summary
+- [x] Subtask 1: **CLI Injection Subcommand:** CLI subcommands wired under `mcp wire [path]` with strict alias parity (`baba`, `bbyg`, `matryoshka`).
+- [x] Subtask 2: **Auto-Injection Targets:** Deterministic target configuration for `.cursor/mcp.json`, `.gemini/settings.json`, and `.claude/mcp.json` with target isolation and filtering (`--targets`).
+- [x] Subtask 3: **Idempotence & Safety:** Non-destructive deep merge, zero destructive overwrite on corrupt JSON, and dry-run simulation mode (`--dry-run --json`).
+- [x] Subtask 4: **Dashboard-as-Code & Observability:** Production Grafana dashboard at `dashboards/matryoshka-grafana.json` tracking `search_graph` throughput, P95/P99 latencies, error rates, active auto-wired environments, and maturity gap evaluations.
+
