@@ -24,6 +24,29 @@ export interface SkillDefinition {
   content: string;
 }
 
+export interface SkillFrontmatter {
+  name: SkillName;
+  description: string;
+}
+
+export interface SkillMetadataItem {
+  name: SkillName;
+  fileName: string;
+  relativePath: string;
+  domain: string;
+  description: string;
+  tokenCount: number;
+}
+
+export interface SkillsMetadataIndex {
+  skillsDir: string;
+  skills: SkillMetadataItem[];
+  totalIndexTokens: number;
+  monolithicTokens: number;
+  tokenSavings: number;
+  savingsPercentage: number;
+}
+
 export interface PlannedFile {
   path: string;
   tokens: number;
@@ -54,6 +77,7 @@ export interface GenerateAgentsResult {
   planned_files: PlannedFile[];
   estimatedTokenSavings: EstimatedTokenSavings;
   estimated_token_savings: EstimatedTokenSavings;
+  skillsIndex?: SkillsMetadataIndex;
   message?: string;
 }
 
@@ -456,6 +480,151 @@ const SKILL_TITLE_MAP: Record<SkillName, string> = {
 };
 
 /**
+ * Parses YAML frontmatter from a markdown skill definition.
+ * Enforces strictly formatted 'name' and 'description' keys.
+ */
+export function parseSkillFrontmatter(content: string): SkillFrontmatter | null {
+  if (!content || typeof content !== "string") {
+    return null;
+  }
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (!match || !match[1]) {
+    return null;
+  }
+  const rawYaml = match[1];
+  const nameMatch = rawYaml.match(/^name:\s*(.+)$/m);
+  const descMatch = rawYaml.match(/^description:\s*(.+)$/m);
+
+  if (!nameMatch || !descMatch || !nameMatch[1] || !descMatch[1]) {
+    return null;
+  }
+
+  const name = nameMatch[1].trim() as SkillName;
+  const description = descMatch[1].trim();
+
+  if (!name || !description) {
+    return null;
+  }
+
+  return {
+    name,
+    description
+  };
+}
+
+/**
+ * Validates that the skill content begins with a valid YAML frontmatter block.
+ */
+export function validateSkillFrontmatter(content: string): boolean {
+  const frontmatter = parseSkillFrontmatter(content);
+  return frontmatter !== null && Boolean(frontmatter.name && frontmatter.description);
+}
+
+/**
+ * Builds a lightweight skills metadata index.
+ * Only domain names, paths, and short descriptions are indexed, preventing context flooding.
+ */
+export function buildSkillsMetadataIndex(
+  projectPath: string = process.cwd(),
+  activeSkills?: SkillName[]
+): SkillsMetadataIndex {
+  const root = path.resolve(projectPath);
+  const skillsDir = path.join(root, ".agents", "skills");
+
+  const skillsToInclude =
+    activeSkills && activeSkills.length > 0
+      ? activeSkills
+      : ([
+          "skill-backend",
+          "skill-frontend",
+          "skill-database",
+          "skill-security",
+          "skill-testing"
+        ] as SkillName[]);
+
+  const skills: SkillMetadataItem[] = [];
+  let totalIndexTokens = 0;
+  let monolithicTokens = 0;
+
+  for (const skillName of skillsToInclude) {
+    const def = SKILL_DEFINITIONS[skillName];
+    if (!def) continue;
+
+    const domain = SKILL_TITLE_MAP[skillName] || skillName;
+    const tokenCount = estimateTokens(def.content);
+    monolithicTokens += tokenCount;
+
+    const metadataSnippet = `* ${domain}: .agents/skills/${def.fileName} - ${def.description}`;
+    const metadataTokens = estimateTokens(metadataSnippet);
+    totalIndexTokens += metadataTokens;
+
+    skills.push({
+      name: skillName,
+      fileName: def.fileName,
+      relativePath: path.join(".agents", "skills", def.fileName).replace(/\\/g, "/"),
+      domain,
+      description: def.description,
+      tokenCount
+    });
+  }
+
+  const tokenSavings = Math.max(0, monolithicTokens - totalIndexTokens);
+  const savingsPercentage =
+    monolithicTokens > 0
+      ? Math.round((tokenSavings / monolithicTokens) * 100)
+      : 0;
+
+  return {
+    skillsDir,
+    skills,
+    totalIndexTokens,
+    monolithicTokens,
+    tokenSavings,
+    savingsPercentage
+  };
+}
+
+/**
+ * Loads a specialized skill on demand.
+ * Reads from disk if available at .agents/skills/<fileName>, otherwise falls back to catalog.
+ * Avoids dumping full instruction bodies prematurely into agent context.
+ */
+export function loadSkillOnDemand(
+  skillName: SkillName,
+  projectPath: string = process.cwd()
+): SkillDefinition & { fullPath?: string; source: "disk" | "catalog" } {
+  const catalogSkill = SKILL_DEFINITIONS[skillName];
+  if (!catalogSkill) {
+    throw new Error(`Unknown skill '${skillName}'`);
+  }
+
+  const root = path.resolve(projectPath);
+  const diskPath = path.join(root, ".agents", "skills", catalogSkill.fileName);
+
+  if (fs.existsSync(diskPath)) {
+    try {
+      const content = fs.readFileSync(diskPath, "utf-8");
+      const parsed = parseSkillFrontmatter(content);
+      return {
+        name: (parsed?.name as SkillName) || catalogSkill.name,
+        fileName: catalogSkill.fileName,
+        description: parsed?.description || catalogSkill.description,
+        content,
+        fullPath: diskPath,
+        source: "disk"
+      };
+    } catch {
+      // Fallback to catalog if read fails
+    }
+  }
+
+  return {
+    ...catalogSkill,
+    source: "catalog"
+  };
+}
+
+/**
  * Compiles the ultra-lean root AGENTS.md index strictly under 200 tokens.
  */
 export function compileRootAgents(profile: {
@@ -534,6 +703,8 @@ export function generateAgents(
     savingsPercentage
   };
 
+  const skillsIndex = buildSkillsMetadataIndex(root, profile.activeSkills);
+
   // Dry-run mode: do not touch disk
   if (options.dryRun) {
     return {
@@ -546,7 +717,8 @@ export function generateAgents(
       plannedFiles,
       planned_files: plannedFiles,
       estimatedTokenSavings: estimatedSavings,
-      estimated_token_savings: estimatedSavings
+      estimated_token_savings: estimatedSavings,
+      skillsIndex
     };
   }
 
@@ -584,6 +756,7 @@ export function generateAgents(
     plannedFiles,
     planned_files: plannedFiles,
     estimatedTokenSavings: estimatedSavings,
-    estimated_token_savings: estimatedSavings
+    estimated_token_savings: estimatedSavings,
+    skillsIndex
   };
 }
