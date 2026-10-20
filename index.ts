@@ -2,6 +2,8 @@
 export * from "./src/types";
 export * from "./src/detector";
 export * from "./src/scanner";
+export * from "./src/governance";
+export * from "./src/release";
 export * from "./src/cli";
 
 import { runCli } from "./src/cli";

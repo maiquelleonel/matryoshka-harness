@@ -1,6 +1,5 @@
 {
   "name": "matryoshka-harness",
-  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -20,6 +19,8 @@
     "matryoshka": "./src/cli.ts"
   },
   "scripts": {
+    "build": "bun build ./index.ts --outdir ./dist",
+    "release": "bun run ./src/release.ts",
     "baba": "bun run src/cli.ts",
     "bbyg": "bun run src/cli.ts",
     "matryoshka": "bun run src/cli.ts",
