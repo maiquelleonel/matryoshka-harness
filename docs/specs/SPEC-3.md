@@ -128,6 +128,17 @@ export interface SemanticReconciliation {
 * **When** semantic reconciliation inspects the repository layout,
 * **Then** discovered entities must be incorporated into the reconciliation payload (`entities.routes`, `entities.models`, `entities.controllers`) and referenced in the remediation actions for AGENTS.md, adhering to the anti-slop archetype rules (e.g. Zero forced SOLID in WordPress procedural CMS).
 
+### AC-7: Human-Readable Terminal Output & Structured JSON Export for 'baba scan'
+* **Given** a target codebase analyzed by `runMaturityScan`,
+* **When** `baba scan [path]` is executed in the terminal without `--json`,
+* **Then** it must render a styled, human-readable executive summary featuring:
+  - Introspected root path, primary language stack, frameworks, and archetype
+  - Oracle maturity level (L0-L4) and numerical score (e.g., `35/105 pts`)
+  - Discovered codebase entities (routes, models, controllers)
+  - Prioritized remediation action plan sorted by criticality (`critical`, `high`, `medium`, `low`) with target files and actionable instructions.
+* **When** `baba scan [path] --json` is executed,
+* **Then** it must emit strictly valid JSON with `status: "success"`, `command: "scan"`, `rootPath`, `oracleScore`, `oracleLevel`, `primaryStack`, `archetype`, `frameworks`, `testRunner`, `entities`, and `remediation_issues` ready for agent consumption.
+
 ---
 
 ## 📋 4. Subtasks & Delivery Checklist
