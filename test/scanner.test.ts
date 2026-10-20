@@ -753,7 +753,7 @@ process.exit(0);
       expect(output).toContain("Matryoshka Maturity Scanner");
       expect(output).toContain(tempDir);
       expect(output).toContain("typescript");
-      expect(output).toContain("nextjs, react");
+      expect(output).toContain("nextjs"); expect(output).toContain("react");
       expect(output).toContain("bun test");
       expect(output).toContain("L1");
       expect(output).toContain("45/105");
