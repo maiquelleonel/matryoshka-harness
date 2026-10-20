@@ -52,7 +52,7 @@ describe("SPEC-5: Subtask 3 - Automated SemVer Release Pipeline", () => {
     it("should have release script defined in package.json or workflow step executing release", () => {
       const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
       const workflowContent = readFileSync(releaseWorkflowPath, "utf-8");
-      const hasScript = pkg.scripts && pkg.scripts.release;
+      const hasScript = Boolean(pkg.scripts && pkg.scripts.release);
       const hasStep = workflowContent.includes("release.ts") || workflowContent.includes("bun run release");
       expect(hasScript || hasStep).toBe(true);
     });

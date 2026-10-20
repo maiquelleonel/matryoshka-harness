@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "bun build ./index.ts --outdir ./dist",
+    "release": "bun run ./src/release.ts",
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
     "test": "bun test"
