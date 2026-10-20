@@ -57,6 +57,77 @@ describe("SPEC-7: MCP Auto-Wiring & Observability (baba mcp wire)", () => {
     });
   });
 
+  describe("Subtask 2: Auto-Injection Targets Isolation & CLI Flags", () => {
+    it("wires only cursor when --targets cursor is provided", async () => {
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets",
+        "cursor",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, ".cursor", "mcp.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".gemini"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, ".claude"))).toBe(false);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.targets.length).toBe(1);
+      expect(parsed.targets[0].target).toBe("cursor");
+    });
+
+    it("wires multiple filtered targets when --targets cursor,claude is provided", async () => {
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets",
+        "cursor,claude",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, ".cursor", "mcp.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".claude", "mcp.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".gemini"))).toBe(false);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.targets.length).toBe(2);
+      expect(parsed.targets.map((t: any) => t.target).sort()).toEqual(["claude", "cursor"]);
+    });
+
+    it("supports singular --target flag for single target isolation", async () => {
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--target",
+        "gemini",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, ".gemini", "settings.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".cursor"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, ".claude"))).toBe(false);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.targets.length).toBe(1);
+      expect(parsed.targets[0].target).toBe("gemini");
+    });
+  });
+
   describe("Scenario 2: Preserving existing configurations (Idempotent Merge)", () => {
     it("strictly preserves existing settings, custom MCP servers, and user keys", async () => {
       const geminiDir = path.join(tempDir, ".gemini");
