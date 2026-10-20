@@ -139,11 +139,20 @@ export interface SemanticReconciliation {
 * **When** `baba scan [path] --json` is executed,
 * **Then** it must emit strictly valid JSON with `status: "success"`, `command: "scan"`, `rootPath`, `oracleScore`, `oracleLevel`, `primaryStack`, `archetype`, `frameworks`, `testRunner`, `entities`, and `remediation_issues` ready for agent consumption.
 
+### AC-8: SVG Maturity Badge Generation via '--badge'
+* **Given** a target codebase analyzed by `runMaturityScan`,
+* **When** `baba scan [path] --badge [outputPath]` is executed,
+* **Then** it must generate a clean, accessible SVG badge with standard Shields.io flat styling displaying the governance label, maturity level (L0-L4), and numerical score with corresponding color coding (L4: `#2ea44f`, L3: `#0969da`, L2: `#1f6feb`, L1: `#d29922`, L0: `#cf222e`).
+* **When** no custom path is provided for `--badge`,
+* **Then** it must default to saving the badge at `harness-badge.svg` within the target repository root, automatically ensuring any required parent directories exist.
+* **When** `--badge` is combined with `--json`,
+* **Then** the structured output must include the resolved badge path in `badgePath` and `badge_path`.
+
 ---
 
 ## 📋 4. Subtasks & Delivery Checklist
 - [x] Subtask 1: Execute `paladini/harness-score` (or local equivalent binary) against host repo via Bun subprocess
 - [x] Subtask 2: Perform semantic reconciliation: map L0-L4 gaps with detected polyglot stack
 - [x] Subtask 3: Expose human-readable terminal output and structured `--json`
-- [ ] Subtask 4: Support SVG badge generation via `--badge`
+- [x] Subtask 4: Support SVG badge generation via `--badge`
 - [ ] Subtask 5: Graceful in-memory fallback when oracle is not globally installed
