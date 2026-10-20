@@ -9,9 +9,13 @@ import {
   validateSkillFrontmatter,
   buildSkillsMetadataIndex,
   loadSkillOnDemand,
+  discoverSeams,
+  profileArchetype,
   SKILL_DEFINITIONS,
   type AgentArchetype,
-  type SkillName
+  type SkillName,
+  type ArchetypeProfile,
+  type DiscoveredSeams
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -573,6 +577,233 @@ dependencies = [
       expect(parsedReal).toHaveProperty("skillsIndex");
       expect(parsedReal.skillsIndex.skills.length).toBe(5);
       expect(parsedReal.skillsIndex.savingsPercentage).toBeGreaterThanOrEqual(70);
+    });
+  });
+
+  describe("Subtask 3: Archetype Profiler & Seam Discovery", () => {
+    describe("discoverSeams()", () => {
+      it("discovers all architectural seams in a structured repository", () => {
+        // Create seam directories and files
+        fs.mkdirSync(path.join(tempDir, "src", "routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "src", "models"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "src", "controllers"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "src", "services"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "src", "views"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src", "routes", "users.ts"), "export const route = {};");
+        fs.writeFileSync(path.join(tempDir, "src", "models", "user.model.ts"), "export interface User {}");
+        fs.writeFileSync(path.join(tempDir, "src", "controllers", "user.controller.ts"), "export class UserController {}");
+        fs.writeFileSync(path.join(tempDir, "src", "services", "user.service.ts"), "export class UserService {}");
+        fs.writeFileSync(path.join(tempDir, "src", "views", "index.html"), "<h1>Home</h1>");
+        fs.writeFileSync(path.join(tempDir, "tests", "user.test.ts"), "test('user', () => {});");
+
+        const seams = discoverSeams(tempDir);
+
+        expect(seams.hasBackend).toBe(true);
+        expect(seams.hasDatabase).toBe(true);
+        expect(seams.hasFrontend).toBe(true);
+        expect(seams.hasTesting).toBe(true);
+        expect(seams.hasSecurity).toBe(true);
+
+        expect(seams.routes.some((r) => r.includes("users.ts"))).toBe(true);
+        expect(seams.models.some((m) => m.includes("user.model.ts"))).toBe(true);
+        expect(seams.controllers.some((c) => c.includes("user.controller.ts"))).toBe(true);
+        expect(seams.services.some((s) => s.includes("user.service.ts"))).toBe(true);
+        expect(seams.views.some((v) => v.includes("index.html"))).toBe(true);
+        expect(seams.tests.some((t) => t.includes("user.test.ts"))).toBe(true);
+      });
+
+      it("returns clean empty structure for empty directory", () => {
+        const seams = discoverSeams(tempDir);
+
+        expect(seams.hasBackend).toBe(false);
+        expect(seams.hasDatabase).toBe(false);
+        expect(seams.hasFrontend).toBe(false);
+        expect(seams.hasTesting).toBe(false);
+        expect(seams.routes).toEqual([]);
+        expect(seams.models).toEqual([]);
+        expect(seams.controllers).toEqual([]);
+        expect(seams.services).toEqual([]);
+        expect(seams.views).toEqual([]);
+        expect(seams.tests).toEqual([]);
+      });
+    });
+
+    describe("profileArchetype() with Seams Discovery", () => {
+      it("profiles monorepo layout (apps/web Next.js + apps/api FastAPI) as fullstack_hybrid", () => {
+        fs.mkdirSync(path.join(tempDir, "apps", "web"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "apps", "api"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "apps", "web", "package.json"),
+          JSON.stringify({ name: "web", dependencies: { next: "^14.0.0", react: "^18.0.0" } })
+        );
+
+        fs.writeFileSync(
+          path.join(tempDir, "apps", "api", "pyproject.toml"),
+          `[project]\nname = "api"\ndependencies = ["fastapi", "uvicorn"]\n`
+        );
+
+        const profile: ArchetypeProfile = profileArchetype(tempDir);
+
+        expect(profile.archetype).toBe("fullstack_hybrid");
+        expect(profile.activeSkills).toContain("skill-frontend");
+        expect(profile.activeSkills).toContain("skill-backend");
+        expect(profile.seams.hasFrontend).toBe(true);
+        expect(profile.seams.hasBackend).toBe(true);
+      });
+
+      it("profiles dual manifest repository (root Next.js + root FastAPI) as fullstack_hybrid", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "frontend", dependencies: { next: "^14.0.0" } })
+        );
+
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "backend"\ndependencies = ["fastapi", "asyncpg"]\n`
+        );
+
+        const profile = profileArchetype(tempDir);
+        expect(profile.archetype).toBe("fullstack_hybrid");
+        expect(profile.activeSkills).toContain("skill-frontend");
+        expect(profile.activeSkills).toContain("skill-backend");
+      });
+
+      it("profiles django-ninja as api_backend instead of opinionated_monolith", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "ninja-api"\ndependencies = ["django-ninja>=1.0.0", "pydantic"]\n`
+        );
+
+        const profile = profileArchetype(tempDir);
+        expect(profile.archetype).toBe("api_backend");
+        expect(profile.activeSkills).toContain("skill-backend");
+        expect(profile.activeSkills).not.toContain("skill-frontend");
+      });
+
+      it("profiles Python queue/worker without web framework as systems_microservice", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "worker"\ndependencies = ["celery>=5.3.0", "redis", "pydantic"]\n`
+        );
+
+        const profile = profileArchetype(tempDir);
+        expect(profile.archetype).toBe("systems_microservice");
+        expect(profile.activeSkills).toContain("skill-backend");
+        expect(profile.activeSkills).not.toContain("skill-frontend");
+      });
+
+      it("omits skill-frontend in Ruby on Rails API mode without views or assets", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "Gemfile"),
+          `source 'https://rubygems.org'\ngem 'rails', '~> 7.1.0'\n`
+        );
+
+        const profile = profileArchetype(tempDir);
+        expect(profile.archetype).toBe("opinionated_monolith");
+        expect(profile.activeSkills).not.toContain("skill-frontend");
+      });
+
+      it("includes skill-frontend in Ruby on Rails with app/views directory", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "Gemfile"),
+          `source 'https://rubygems.org'\ngem 'rails', '~> 7.1.0'\n`
+        );
+        fs.mkdirSync(path.join(tempDir, "app", "views"), { recursive: true });
+        fs.writeFileSync(path.join(tempDir, "app", "views", "index.html.erb"), "<h1>Welcome</h1>");
+
+        const profile = profileArchetype(tempDir);
+        expect(profile.archetype).toBe("opinionated_monolith");
+        expect(profile.activeSkills).toContain("skill-frontend");
+      });
+    });
+
+    describe("CLI 'agents profile' subcommand & CLI integration", () => {
+      it("supports 'baba agents profile [path]' with formatted terminal output", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "my-app", dependencies: { next: "14", prisma: "5" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "profile", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("Matryoshka Archetype Profiler & Seam Discovery");
+        expect(stdout).toContain("Archetype:");
+        expect(stdout).toContain("fullstack_hybrid");
+        expect(stdout).toContain("Discovered Seams:");
+      });
+
+      it("supports 'baba agents profile [path] --json' with structured JSON output", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "fastapi-svc"\ndependencies = ["fastapi", "pytest"]\n`
+        );
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "profile", tempDir, "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.archetype).toBe("api_backend");
+        expect(parsed).toHaveProperty("seams");
+        expect(parsed.seams).toHaveProperty("hasBackend");
+        expect(parsed.seams.hasBackend).toBe(true);
+        expect(parsed).toHaveProperty("activeSkills");
+        expect(parsed.activeSkills).toContain("skill-backend");
+      });
+
+      it("ensures alias parity across baba, bbyg, and matryoshka for agents profile --json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "parity-test", dependencies: { express: "^4.18.0" } })
+        );
+
+        const procBaba = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "profile", tempDir, "--json"
+        ]);
+        const procBbyg = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "profile", tempDir, "--json"
+        ]);
+        const procMatryoshka = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "profile", tempDir, "--json"
+        ]);
+
+        expect(procBaba.exitCode).toBe(0);
+        expect(procBbyg.exitCode).toBe(0);
+        expect(procMatryoshka.exitCode).toBe(0);
+
+        const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+        const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+        const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+        expect(resBaba.archetype).toBe(resBbyg.archetype);
+        expect(resBaba.archetype).toBe(resMatryoshka.archetype);
+        expect(resBaba.runtime).toBe(resBbyg.runtime);
+        expect(resBaba.seams.hasBackend).toBe(resBbyg.seams.hasBackend);
+      });
+
+      it("includes seams and profile in generateAgents output", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "gen-test", dependencies: { next: "14", prisma: "5" } })
+        );
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed).toHaveProperty("seams");
+        expect(parsed).toHaveProperty("profile");
+        expect(parsed.profile.archetype).toBe("fullstack_hybrid");
+        expect(parsed.seams.hasFrontend).toBe(true);
+      });
     });
   });
 });
