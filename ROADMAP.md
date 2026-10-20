@@ -1,70 +1,75 @@
 # 🪆 Matryoshka-Harness — Engineering Roadmap
 **Projeto:** Matryoshka Context-Fencing & Adaptive Remediation CLI  
-**Objetivo:** Transformar LLMs de 'estagiários hiperativos' em Devs Seniores disciplinados através de cercamento contextual, remediação de maturidade (L0 a L4) e AST poliglota.  
-**Licença:** Open-Source MIT  
-**Stack Base:** Bun + TypeScript (Compilação standalone, zero runtime dependencies)  
+**Objetivo:** Transformar LLMs de "estagiários hiperativos" em Devs Seniores disciplinados através de cercamento contextual, auto-wiring de MCP e AST poliglota.  
+**Runtime:** Bun (TypeScript estrito, execução <15ms).  
+**Licença:** MIT.  
 
 ---
 
-## 🏛️ O Quadrado Mágico das Dependências Estruturais
-1. **Oráculo de Avaliação:** paladini/harness-score (Régua canônica de maturidade L0 a L4).
-2. **Raio-X Semântico:** codebase-memory-mcp (Grafo de tipos, chamadas, models e rotas sem queimar tokens).
-3. **Cérebro de Auto-Ajuste:** Harness² Protocol (Gera DIAGNOSTIC.md com fragilidades, anti-patterns e lições aprendidas).
-4. **Motor AST Poliglota (Rust/WASM):** web-tree-sitter (Do PHP/Ruby ao Rust/Mojo, com AST de SQL para detectar N+1 e queries sem índice).
+## 🏛️ Pilares Estruturais da Arquitetura
+1. **Oráculo de Avaliação:** `paladini/harness-score` (régua externa de maturidade L0 a L4).
+2. **Raio-X Semântico:** `codebase-memory-mcp` (grafo de conhecimento e AST contextual via MCP).
+3. **Remediação Pragmática:** Geração dinâmica de `AGENTS.md` e `SKILLS.md` anti-slop guiada por arquétipos e topologia real de código.
+4. **Motor AST Poliglota & Cérebro:** `web-tree-sitter` (WASM) para validação estática de SQL/código + protocolo `Harness²` (`DIAGNOSTIC.md` e `EXPERIENCE.md`).
+5. **Distribuição Soberana:** CLI standalone compilada com Bun (`baba`, `bbyg`, `matryoshka`) e servidor MCP nativo.
 
 ---
 
 ## 🗺️ Fases do Desenvolvimento Autônomo
 
-### 🐣 Fase 1: O Embrião & Oráculo de Avaliação
-* [ ] **Issue #1: Detector Poliglota & CLI Base**
-  * Auto-detecção de stack: Python (pyproject.toml), JS/TS (package.json), Go (go.mod), Rust (Cargo.toml), Ruby (Gemfile), PHP (composer.json).
-  * Mapeamento do runner de testes (pytest, bun test, cargo test, go test, pest).
-* [ ] **Issue #2: Integração com paladini/harness-score**
-  * Adicionar harness-score como dependência direta do pacote.
-  * Execução determinística do comando 'matryoshka scan [path] --json'.
-  * Extração dos gaps de maturidade (CTX-01, CTX-03, CI-01, SNS-05, HYG-08).
+### 🐣 Fase 1: O Embrião & Oráculo de Avaliação `[CONCLUÍDA]`
+* [x] **Issue #1: Detector Poliglota & CLI Base**
+  * Auto-detecção instantânea de stacks (Python, JS/TS, Go, Rust, Ruby, PHP), frameworks e test runners em <15ms.
+  * Aliases canônicos: `baba`, `bbyg` e `matryoshka`.
+* [x] **Issue #3: Integração com paladini/harness-score & Badge SVG**
+  * Wrapper determinístico do `harness-score --json`.
+  * Extração de gaps de maturidade (L0 a L4) e exportação de badge SVG dinâmico (`--badge`).
+* [x] **Issue #5 / PR #6: GitHub Actions CI Gate & Automated SemVer Release**
+  * Pipeline com testes unitários no Bun, linter e release automático.
 
 ---
 
-### 🛡️ Fase 2: Remediação Pragmática & AGENTS.md Adaptativo
-* [ ] **Issue #3: Gerador do AGENTS.md Context-Aware (Anti-Slop)**
+### 🔍 Fase 2: Raio-X Semântico & Auto-Wiring MCP `[EM EXECUÇÃO / PRÓXIMA DA FILA]`
+*Foco: Equipar o agente com o Grafo de Conhecimento antes de gerar instruções, reduzindo tokens em 70% e habilitando telemetria no Grafana.*
+* [ ] **Issue #7: Injeção do codebase-memory-mcp (Auto-Wiring) & Telemetria Grafana**
+  * Configuração automática do servidor MCP em `.cursor/mcp.json`, `.gemini/settings.json` e `.claude/mcp.json`.
+  * Merge idempotente e preservação de configurações prévias do desenvolvedor.
+  * Instrumentação e hidratação da métrica `search_graph` no Grafana do projeto para visibilidade operacional de AgentOps.
+  * O agente acorda com o grafo de conhecimento carregado no primeiro segundo de execução (`baba mcp wire [path]`).
+
+---
+
+### 🛡️ Fase 3: Remediação Pragmática & AGENTS.md Adaptativo (Graph-Powered)
+*Foco: Usar o raio-X semântico do grafo para injetar diretrizes contextuais reais, não alucinações teóricas.*
+* [ ] **Issue #8: Gerador de AGENTS.md Context-Aware & Anti-Slop**
   * Detecção de arquétipo: Web Procedural (WordPress/Drupal), Frontend Reativo (React/Vue), Framework Opinado (Laravel/Django/Rails), Sistemas Distribuídos (Go/Rust).
-  * Injeção de diretrizes pragmáticas: DRY e YAGNI prioritários; SOLID adaptativo apenas quando o arquétipo comportar (zero classes abstratas em hooks funcionais).
-* [ ] **Issue #4: Modularização em SKILLS.md por Especialidade**
+  * Enriquecimento com rotas, camadas e convenções reais identificadas pelo MCP.
+  * Injeção de diretrizes pragmáticas: DRY e YAGNI prioritários; regras estritas de não-slop.
+* [ ] **Issue #9: Modularização em SKILLS.md por Especialidade**
   * Geração de skills focadas para economizar tokens:
-    * skill-backend.md: ORM, isolamento transacional, anti-N+1.
-    * skill-frontend.md: Acessibilidade, reatividade, layout shifts.
-    * skill-api.md: Contratos OpenAPI, idempotência, schemas Pydantic/Zod.
-    * skill-security.md: OWASP Top 10, sanitização de inputs, DLP.
+    * `skill-backend.md`: ORM, isolamento transacional, anti-N+1.
+    * `skill-frontend.md`: Acessibilidade, reatividade, layout shifts.
+    * `skill-api.md`: Contratos OpenAPI, idempotência, schemas Pydantic/Zod.
+    * `skill-security.md`: OWASP Top 10, sanitização de inputs, DLP.
 
 ---
 
-### 🔍 Fase 3: Raio-X Semântico & AST Poliglota (Rust/WASM)
-* [ ] **Issue #5: Injeção do codebase-memory-mcp (Auto-Wiring)**
-  * Configuração automática do servidor MCP em .cursor/mcp.json, .gemini/settings.json e .claude/mcp.json.
-  * O agente já acorda com o grafo de conhecimento carregado no primeiro segundo.
-* [ ] **Issue #6: Motor AST Multi-Linguagem com Tree-sitter WASM**
-  * Parser sintático de alta velocidade cobrindo as 5+ linguagens canônicas.
-  * Análise estática de AST de SQL (detecção de SELECT *, ausência de índices e injection antes de tocar no banco).
-
----
-
-### 🧠 Fase 4: O Cérebro Harness² & Diagnóstico Executivo
-* [ ] **Issue #7: Geração do DIAGNOSTIC.md Automatizado**
+### 🧠 Fase 4: Motor AST Poliglota & O Cérebro Harness²
+*Foco: Validação estática profunda em tempo de compilação e diagnóstico executivo de débitos.*
+* [ ] **Issue #10: Motor AST Multi-Linguagem com Tree-sitter WASM**
+  * Parser sintático de alta velocidade cobrindo 5+ linguagens canônicas via WebAssembly.
+  * Análise estática de AST de SQL: detecção de `SELECT *`, ausência de índices e injection antes de tocar no banco.
+* [ ] **Issue #11: Geração do DIAGNOSTIC.md Automatizado & Comando Canônico `matryoshka wrap`**
   * Relatório executivo apontando: 3 queries lentas, 2 gargalos de concorrência e débitos técnicos prioritários.
-  * Criação do meta-learning log local (EXPERIENCE.md) para o repositório acumular sabedoria a cada sprint.
-* [ ] **Issue #8: Comando Canônico matryoshka wrap [path]**
-  * Fluxo completo end-to-end: Scan L0 ➔ Remediar ➔ Modularizar ➔ Auto-Wiring MCP ➔ Re-scan L4 (100% de maturidade).
+  * Meta-aprendizado local incremental em `EXPERIENCE.md`.
+  * Comando canônico `baba wrap [path]` executando detecção, score, MCP wiring, cercamento e diagnóstico em um único passo.
 
 ---
 
 ### 🌐 Fase 5: Distribuição Universal & Lançamento Open-Source
-* [ ] **Issue #9: Servidor MCP Nativo (matryoshka mcp)**
-  * Expor os tools matryoshka_scan e matryoshka_wrap via stdio para Claude Code, Cursor, Gemini CLI e Zed.
-* [ ] **Issue #10: Compilação de Binários Standalone via Bun**
-  * bun build --compile gerando executáveis únicos para Linux x64/ARM64, macOS Apple Silicon e Windows.
-  * Publicação no npm (npx matryoshka-harness wrap .).
-
----
-*LeonelLabs Matryoshka Harness — Engineered for Sovereign Silicon Governance.*
+*Foco: Empacotamento para consumo global por qualquer agente ou desenvolvedor.*
+* [ ] **Issue #12: Servidor MCP Nativo (`matryoshka mcp`)**
+  * Exposição dos recursos do Matryoshka como um servidor MCP via stdio para consumo direto por Cursor, Gemini CLI, Claude Code e Aider.
+* [ ] **Issue #13: Compilação de Binários Standalone via Bun & Publicação NPM**
+  * Compilação via `bun build --compile` gerando executáveis únicos sem dependências externas (`baba-linux-x64`, `baba-darwin-arm64`, etc.).
+  * Publicação multi-package com cascas protetoras (`@maiquelleonel/matryoshka` e aliases).
