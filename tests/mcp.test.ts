@@ -126,6 +126,33 @@ describe("SPEC-7: MCP Auto-Wiring & Observability (baba mcp wire)", () => {
       expect(parsed.targets.length).toBe(1);
       expect(parsed.targets[0].target).toBe("gemini");
     });
+
+    it("isolates target error and sets overall status to error when writing fails", async () => {
+      // Create a directory where the config file is expected to be, making writeFileSync fail
+      const cursorDir = path.join(tempDir, ".cursor");
+      fs.mkdirSync(cursorDir, { recursive: true });
+      // Create a directory named mcp.json so writeFileSync(mcp.json) throws EISDIR
+      fs.mkdirSync(path.join(cursorDir, "mcp.json"));
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets",
+        "cursor",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(1);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.status).toBe("error");
+      expect(parsed.targets.length).toBe(1);
+      expect(parsed.targets[0].status).toBe("error");
+      expect(parsed.targets[0].error).toBeDefined();
+    });
   });
 
   describe("Scenario 2: Preserving existing configurations (Idempotent Merge)", () => {

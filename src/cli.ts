@@ -10,7 +10,7 @@ import {
   runMaturityScan,
 } from "./scanner";
 import { formatMcpWireHumanOutput, wireMcpTargets } from "./mcp";
-import type { DetectResult, ProjectStack } from "./types";
+import type { DetectResult, McpTargetName, ProjectStack } from "./types";
 
 const VERSION = "0.1.0";
 
@@ -21,7 +21,7 @@ Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
   baba wrap [path]
-  baba mcp wire [path] [--dry-run] [--json]
+  baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
 
 Commands:
   detect   Inspect codebase and detect primary stack, frameworks, and test runner
@@ -30,11 +30,12 @@ Commands:
   mcp wire Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
 
 Options:
-  --json         Output strictly valid JSON
-  --dry-run      Simulate execution without modifying files on disk
-  --badge [path] Generate maturity SVG badge (default: ./harness-badge.svg)
-  -h, --help     Show help information
-  -v, --version  Show version
+  --json             Output strictly valid JSON
+  --dry-run          Simulate execution without modifying files on disk
+  --targets <list>   Comma-separated target environments (cursor, gemini, claude)
+  --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  -h, --help         Show help information
+  -v, --version      Show version
 `.trim();
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -226,19 +227,43 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       const isDryRun = mcpArgs.includes("--dry-run");
-      const positional = mcpArgs.filter((arg) => !arg.startsWith("-"));
+
+      let targets: McpTargetName[] | undefined;
+      const targetsIdx = mcpArgs.indexOf("--targets");
+      const targetIdx = mcpArgs.indexOf("--target");
+
+      if (targetsIdx !== -1) {
+        const nextVal = mcpArgs[targetsIdx + 1];
+        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+          targets = nextVal
+            .split(",")
+            .map((t) => t.trim().toLowerCase() as McpTargetName)
+            .filter(Boolean);
+        }
+      } else if (targetIdx !== -1) {
+        const nextVal = mcpArgs[targetIdx + 1];
+        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+          targets = [nextVal.trim().toLowerCase() as McpTargetName];
+        }
+      }
+
+      const positional = mcpArgs.filter((arg, idx) => {
+        if (arg.startsWith("-")) return false;
+        if (idx > 0 && (mcpArgs[idx - 1] === "--targets" || mcpArgs[idx - 1] === "--target")) return false;
+        return true;
+      });
       const targetDir = positional[0] || process.cwd();
       const resolvedPath = path.resolve(targetDir);
 
       try {
-        const wireResult = wireMcpTargets(resolvedPath, { dryRun: isDryRun });
+        const wireResult = wireMcpTargets(resolvedPath, { dryRun: isDryRun, targets });
 
         if (isJson) {
           console.log(JSON.stringify(wireResult, null, 2));
         } else {
           console.log(formatMcpWireHumanOutput(wireResult));
         }
-        process.exit(0);
+        process.exit(wireResult.status === "error" ? 1 : 0);
       } catch (error: any) {
         if (isJson) {
           console.log(

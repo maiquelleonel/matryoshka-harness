@@ -120,6 +120,7 @@ export interface McpTargetConfig {
 
 export interface McpWireOptions {
   dryRun?: boolean;
+  targets?: McpTargetName[];
 }
 
 export interface McpWireResult {

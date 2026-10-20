@@ -37,10 +37,18 @@ export function wireMcpTargets(
 ): McpWireResult {
   const rootPath = path.resolve(targetDir);
   const dryRun = Boolean(options.dryRun);
+  const targetFilter =
+    options.targets && options.targets.length > 0
+      ? new Set(options.targets.map((t) => t.toLowerCase()))
+      : null;
+
+  const targetDefs = targetFilter
+    ? TARGET_DEFINITIONS.filter((def) => targetFilter.has(def.target))
+    : TARGET_DEFINITIONS;
 
   const results: McpTargetConfig[] = [];
 
-  for (const def of TARGET_DEFINITIONS) {
+  for (const def of targetDefs) {
     const filePath = path.resolve(rootPath, def.relativePath);
     const dirPath = path.dirname(filePath);
 
@@ -97,6 +105,7 @@ export function wireMcpTargets(
     }
 
     let status: McpTargetConfig["status"] = "planned";
+    let targetError: string | undefined;
 
     if (!dryRun) {
       try {
@@ -116,6 +125,7 @@ export function wireMcpTargets(
             : "unchanged";
       } catch (err: any) {
         status = "error";
+        targetError = err?.message || String(err);
       }
     } else {
       status = "planned";
@@ -128,11 +138,14 @@ export function wireMcpTargets(
       relativePath: def.relativePath,
       action,
       status,
+      ...(targetError ? { error: targetError } : {}),
     });
   }
 
+  const hasErrors = results.some((r) => r.status === "error");
+
   return {
-    status: dryRun ? "planned" : "success",
+    status: hasErrors ? "error" : dryRun ? "planned" : "success",
     command: "mcp wire",
     rootPath,
     dryRun,
@@ -173,6 +186,8 @@ export function formatMcpWireHumanOutput(result: McpWireResult): string {
           ? pc.green("[created]")
           : t.status === "updated"
           ? pc.cyan("[updated]")
+          : t.status === "error"
+          ? pc.red(`[error: ${t.error || "failed"}]`)
           : pc.dim("[unchanged]");
       lines.push(`    - ${pc.bold(t.name)}: ${t.relativePath} ${statusBadge}`);
     }
