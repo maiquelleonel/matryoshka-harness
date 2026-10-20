@@ -234,5 +234,110 @@ describe("CLI Commands and Aliases (src/cli.ts & index.ts)", () => {
       expect(parsedBaba.oracleScore).toBe(parsedBbyg.oracleScore);
       expect(parsedBaba.oracleScore).toBe(parsedMatryoshka.oracleScore);
     });
+
+    it("generates default SVG badge when --badge flag is provided without path", async () => {
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--badge"]);
+      expect(procScan.exitCode).toBe(0);
+
+      const expectedBadgePath = path.join(tempDir, "harness-badge.svg");
+      expect(fs.existsSync(expectedBadgePath)).toBe(true);
+
+      const content = fs.readFileSync(expectedBadgePath, "utf-8");
+      expect(content).toContain("<svg");
+      expect(content).toContain("harness");
+      expect(content).toContain("</svg>");
+    });
+
+    it("generates SVG badge at specified custom path creating subdirectories", async () => {
+      const customRelativeBadge = "docs/badges/governance.svg";
+      const procScan = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        customRelativeBadge,
+      ]);
+      expect(procScan.exitCode).toBe(0);
+
+      const expectedBadgePath = path.join(tempDir, customRelativeBadge);
+      expect(fs.existsSync(expectedBadgePath)).toBe(true);
+
+      const content = fs.readFileSync(expectedBadgePath, "utf-8");
+      expect(content).toContain("<svg");
+      expect(content).toContain("harness");
+      expect(content).toContain("</svg>");
+    });
+
+    it("includes badgePath in structured JSON output when --badge and --json are combined", async () => {
+      const customBadge = path.join(tempDir, "custom-badge.svg");
+      const procScan = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--json",
+        "--badge",
+        customBadge,
+      ]);
+      expect(procScan.exitCode).toBe(0);
+
+      const parsed = JSON.parse(procScan.stdout.toString().trim());
+      expect(parsed.status).toBe("success");
+      expect(parsed.badgePath).toBe(customBadge);
+      expect(parsed.badge_path).toBe(customBadge);
+      expect(fs.existsSync(customBadge)).toBe(true);
+    });
+
+    it("preserves strict alias parity for --badge across baba, bbyg, and matryoshka", async () => {
+      const badgeBaba = path.join(tempDir, "baba.svg");
+      const badgeBbyg = path.join(tempDir, "bbyg.svg");
+      const badgeMatryoshka = path.join(tempDir, "matryoshka.svg");
+
+      const procBaba = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeBaba,
+      ]);
+      const procBbyg = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeBbyg,
+      ]);
+      const procMatryoshka = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeMatryoshka,
+      ]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      expect(fs.existsSync(badgeBaba)).toBe(true);
+      expect(fs.existsSync(badgeBbyg)).toBe(true);
+      expect(fs.existsSync(badgeMatryoshka)).toBe(true);
+
+      const contentBaba = fs.readFileSync(badgeBaba, "utf-8");
+      const contentBbyg = fs.readFileSync(badgeBbyg, "utf-8");
+      const contentMatryoshka = fs.readFileSync(badgeMatryoshka, "utf-8");
+
+      expect(contentBaba).toBe(contentBbyg);
+      expect(contentBaba).toBe(contentMatryoshka);
+    });
   });
 });

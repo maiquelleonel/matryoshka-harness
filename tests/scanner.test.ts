@@ -8,6 +8,7 @@ import {
   executeHarnessScore,
   formatScanHumanOutput,
   formatScanJsonOutput,
+  generateHarnessBadgeSvg,
   generateRemediationIssue,
   normalizeMaturityLevel,
   reconcileGapsWithStack,
@@ -740,6 +741,76 @@ process.exit(0);
       expect(snakeIssue.suggested_action).toContain("FastAPI");
 
       expect(jsonPayload.entities.routes).toContain("api/routes.py");
+    });
+  });
+
+  describe("AC-8: SVG Maturity Badge Generation (generateHarnessBadgeSvg)", () => {
+    const baseReconciliation: SemanticReconciliation = {
+      primaryStack: "typescript",
+      archetype: "reactive-frontend",
+      frameworks: ["nextjs"],
+      testRunner: "bun test",
+      oracleScore: 85,
+      oracleLevel: "L3",
+      totalGaps: 2,
+      remediationIssues: [],
+      entities: { routes: [], models: [], controllers: [] },
+      timestamp: "2026-10-20T12:00:00.000Z",
+    };
+
+    it("generates a valid SVG badge with standard shields.io elements and aria metadata", () => {
+      const svg = generateHarnessBadgeSvg(baseReconciliation);
+      expect(svg).toContain("<svg");
+      expect(svg).toContain("</svg>");
+      expect(svg).toContain('role="img"');
+      expect(svg).toContain('aria-label="harness: L3 (85/105)"');
+      expect(svg).toContain("harness");
+      expect(svg).toContain("L3 (85/105)");
+    });
+
+    it("applies canonical color palette according to maturity level", () => {
+      const svgL4 = generateHarnessBadgeSvg({ level: "L4", score: 105, maxScore: 105 });
+      expect(svgL4).toContain("#2ea44f");
+
+      const svgL3 = generateHarnessBadgeSvg({ level: "L3", score: 80, maxScore: 105 });
+      expect(svgL3).toContain("#0969da");
+
+      const svgL2 = generateHarnessBadgeSvg({ level: "L2", score: 55, maxScore: 105 });
+      expect(svgL2).toContain("#1f6feb");
+
+      const svgL1 = generateHarnessBadgeSvg({ level: "L1", score: 30, maxScore: 105 });
+      expect(svgL1).toContain("#d29922");
+
+      const svgL0 = generateHarnessBadgeSvg({ level: "L0", score: 0, maxScore: 105 });
+      expect(svgL0).toContain("#cf222e");
+    });
+
+    it("supports custom label and format options", () => {
+      const svgCustom = generateHarnessBadgeSvg(
+        { level: "L4", score: 100, maxScore: 105 },
+        { label: "governance", format: "level" }
+      );
+      expect(svgCustom).toContain("governance");
+      expect(svgCustom).toContain(">L4<");
+
+      const svgScore = generateHarnessBadgeSvg(
+        { level: "L2", score: 50, maxScore: 100 },
+        { label: "maturity", format: "score" }
+      );
+      expect(svgScore).toContain("maturity");
+      expect(svgScore).toContain("50/100");
+    });
+
+    it("supports formatScanHumanOutput and formatScanJsonOutput with badgePath option", () => {
+      const badgePath = path.join(tempDir, "harness-badge.svg");
+
+      const humanOutput = formatScanHumanOutput(baseReconciliation, tempDir, { badgePath });
+      expect(humanOutput).toContain("Badge:");
+      expect(humanOutput).toContain("harness-badge.svg");
+
+      const jsonOutput = formatScanJsonOutput(baseReconciliation, tempDir, { badgePath });
+      expect(jsonOutput.badgePath).toBe(badgePath);
+      expect(jsonOutput.badge_path).toBe(badgePath);
     });
   });
 });
