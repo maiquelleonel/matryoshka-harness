@@ -2,6 +2,11 @@
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
+import {
+  formatScanHumanOutput,
+  formatScanJsonOutput,
+  runMaturityScan,
+} from "./scanner";
 import type { DetectResult, ProjectStack } from "./types";
 
 const VERSION = "0.1.0";
@@ -25,7 +30,7 @@ Options:
   -v, --version  Show version
 `.trim();
 
-export function runCli(args: string[] = process.argv.slice(2)): void {
+export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
   const isHelp = args.includes("--help") || args.includes("-h");
   const isVersion = args.includes("--version") || args.includes("-v");
   const isJson = args.includes("--json");
@@ -89,27 +94,37 @@ export function runCli(args: string[] = process.argv.slice(2)): void {
       const targetDir = positional[0] || process.cwd();
       const resolvedPath = path.resolve(targetDir);
 
-      if (isJson) {
-        console.log(
-          JSON.stringify(
-            {
-              status: "pending",
-              command: "scan",
-              rootPath: resolvedPath,
-              message: "Maturity scan engine scheduled for Phase 1 (Issue #2)"
-            },
-            null,
-            2
-          )
-        );
-      } else {
-        console.log(
-          pc.yellow(
-            `\n[baba scan] Scheduled for Phase 1 (Issue #2). Inspected path: ${resolvedPath}\n`
-          )
-        );
+      try {
+        const reconciliation = await runMaturityScan(resolvedPath, {
+          allowFallback: true,
+        });
+
+        if (isJson) {
+          const jsonResult = formatScanJsonOutput(reconciliation, resolvedPath);
+          console.log(JSON.stringify(jsonResult, null, 2));
+        } else {
+          console.log(formatScanHumanOutput(reconciliation, resolvedPath));
+        }
+        process.exit(0);
+      } catch (error: any) {
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "error",
+                command: "scan",
+                rootPath: resolvedPath,
+                message: error?.message || "Maturity scan failed",
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(pc.red(`\nScan failed: ${error?.message || "Unknown error"}\n`));
+        }
+        process.exit(1);
       }
-      process.exit(0);
       break;
     }
 
@@ -151,5 +166,8 @@ export function runCli(args: string[] = process.argv.slice(2)): void {
 }
 
 if (import.meta.main) {
-  runCli();
+  runCli().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

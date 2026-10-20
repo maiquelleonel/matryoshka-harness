@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import pc from "picocolors";
 import { detectStack } from "./detector";
 import type {
   CodebaseEntities,
@@ -875,4 +876,131 @@ export async function runMaturityScan(
   });
   return reconcileGapsWithStack(oracleResult, stack, resolvedPath);
 }
+
+/**
+ * Formats a semantic reconciliation result into a styled human-readable terminal report.
+ */
+export function formatScanHumanOutput(
+  reconciliation: SemanticReconciliation,
+  rootPath: string
+): string {
+  const lines: string[] = [];
+
+  // Header
+  lines.push(pc.bold(pc.cyan("\n🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)")));
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Root Path:")}   ${rootPath}`);
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Primary:")}     ${pc.green(reconciliation.primaryStack)}`);
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Frameworks:")}  ${
+      reconciliation.frameworks.length > 0
+        ? reconciliation.frameworks.map((f) => pc.blue(f)).join(", ")
+        : pc.dim("none")
+    }`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Test Runner:")} ${
+      reconciliation.testRunner ? pc.yellow(reconciliation.testRunner) : pc.dim("none")
+    }`
+  );
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Archetype:")}   ${pc.magenta(reconciliation.archetype)}`);
+
+  // Maturity Level & Score
+  let levelColor = pc.red;
+  if (reconciliation.oracleLevel === "L4") levelColor = pc.green;
+  else if (reconciliation.oracleLevel === "L3") levelColor = pc.cyan;
+  else if (reconciliation.oracleLevel === "L2") levelColor = pc.blue;
+  else if (reconciliation.oracleLevel === "L1") levelColor = pc.yellow;
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Maturity:")}    ${levelColor(
+      reconciliation.oracleLevel
+    )} (${reconciliation.oracleScore}/105 pts) — ${reconciliation.totalGaps} governance gap(s)`
+  );
+
+  // Codebase Entities
+  lines.push(pc.bold(pc.cyan("\n📍 Discovered Codebase Entities")));
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Routes:")}      ${
+      reconciliation.entities.routes.length > 0
+        ? reconciliation.entities.routes.join(", ")
+        : pc.dim("none")
+    }`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Models:")}      ${
+      reconciliation.entities.models.length > 0
+        ? reconciliation.entities.models.join(", ")
+        : pc.dim("none")
+    }`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Controllers:")} ${
+      reconciliation.entities.controllers.length > 0
+        ? reconciliation.entities.controllers.join(", ")
+        : pc.dim("none")
+    }`
+  );
+
+  // Prioritized Remediation Plan
+  lines.push(pc.bold(pc.cyan("\n🛠️ Remediation Plan (Prioritized Issues)")));
+  if (reconciliation.remediationIssues.length === 0) {
+    lines.push(`  ${pc.green("✔ No governance gaps identified! Repository is fully harnessed.")}`);
+  } else {
+    for (const issue of reconciliation.remediationIssues) {
+      let badge = pc.gray("[LOW]");
+      if (issue.priority === "critical") badge = pc.bold(pc.red("[CRITICAL]"));
+      else if (issue.priority === "high") badge = pc.bold(pc.yellow("[HIGH]"));
+      else if (issue.priority === "medium") badge = pc.bold(pc.blue("[MEDIUM]"));
+
+      lines.push(`  ${badge} ${pc.bold(issue.id)}: ${issue.title}`);
+      lines.push(`    ${pc.dim("Target:")} ${pc.magenta(issue.targetFiles.join(", "))}`);
+      lines.push(`    ${pc.dim("Action:")} ${issue.suggestedAction}`);
+    }
+  }
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats a semantic reconciliation result into a structured JSON payload ready for agent tooling.
+ */
+export function formatScanJsonOutput(
+  reconciliation: SemanticReconciliation,
+  rootPath: string
+): Record<string, any> {
+  const remediation_issues = reconciliation.remediationIssues.map((issue) => ({
+    id: issue.id,
+    gap_id: issue.gapId,
+    gapId: issue.gapId,
+    axis: issue.axis,
+    title: issue.title,
+    description: issue.description,
+    target_files: issue.targetFiles,
+    targetFiles: issue.targetFiles,
+    stack: issue.stack,
+    priority: issue.priority,
+    suggested_action: issue.suggestedAction,
+    suggestedAction: issue.suggestedAction,
+    snippet: issue.snippet,
+  }));
+
+  return {
+    status: "success",
+    command: "scan",
+    rootPath,
+    primaryStack: reconciliation.primaryStack,
+    archetype: reconciliation.archetype,
+    frameworks: reconciliation.frameworks,
+    testRunner: reconciliation.testRunner,
+    oracleScore: reconciliation.oracleScore,
+    oracleLevel: reconciliation.oracleLevel,
+    totalGaps: reconciliation.totalGaps,
+    remediationIssues: reconciliation.remediationIssues,
+    remediation_issues,
+    entities: reconciliation.entities,
+    timestamp: reconciliation.timestamp,
+  };
+}
+
 
