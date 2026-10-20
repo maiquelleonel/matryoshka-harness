@@ -23,6 +23,7 @@ Biblioteca canônica de lições arquiteturais, cicatrizes de segurança e gover
 - [ast] AST de SQL & Detecção Estática de Fragilidades: O uso de parsers de AST de SQL (sqlparser-rs / node-sql-parser) permite auditar queries em código de backend sem necessidade de conexão ativa com o banco, capturando anti-patterns críticos (SELECT * em tabelas grandes, N+1 em loops de ORM, ausência de índices em WHERE/JOIN e risco de injection) antes do commit.
 - [finops] Modularização em SKILLS.md por Especialidade: Em vez de um AGENTS.md monolítico de 500 linhas que sobrecarrega a janela de contexto, decomponha as instruções em skills especializadas (.gemini/skills/ ou .cursor/skills/): skill-backend.md, skill-frontend.md, skill-api.md e skill-security.md. Carregar apenas a skill necessária reduz o custo por turno em até 60%.
 - [harness] Oráculo de Avaliação vs Remediação Ativa: Não reinvente a roda. Utilize o paladini/harness-score como o oráculo determinístico de maturidade (L0 a L4) e concentre o valor do Matryoshka na remediação automatizada (wrap), gerando tráfego e prestígio mútuo para o software livre.
+- [oracle] Subprocess Spawning de Oráculo com Bun.spawn: Ao executar ferramentas oráculo externas (como paladini/harness-score) via Bun.spawn com stdout: "pipe", proc.stdout é exposto como ReadableStream. Em TypeScript estrito, utilize "instanceof ReadableStream" antes de consumir com "new Response(proc.stdout).text()" para evitar erros de tipo TS2345 sem violar guardrails de type assertion forçado.
 
 ---
 

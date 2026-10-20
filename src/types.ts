@@ -27,3 +27,41 @@ export interface DetectResult {
   rootPath: string;
   message?: string;
 }
+
+export type MaturityLevel = "L0" | "L1" | "L2" | "L3" | "L4";
+
+export type GovernanceAxis =
+  | "context"
+  | "skills"
+  | "guardrails"
+  | "sensors"
+  | "hygiene";
+
+export interface HarnessGap {
+  id: string;
+  axis: GovernanceAxis;
+  title: string;
+  description?: string;
+  remediation?: string;
+  weight?: number;
+}
+
+export interface HarnessScoreOptions {
+  binaryPath?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+  allowFallback?: boolean;
+}
+
+export interface HarnessScoreResult {
+  score: number;
+  maxScore: number;
+  level: MaturityLevel;
+  gaps: HarnessGap[];
+  passed: string[];
+  rawOutput?: string;
+  source: "subprocess" | "fallback";
+  executionTimeMs: number;
+}
