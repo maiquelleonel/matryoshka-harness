@@ -55,3 +55,22 @@ Establish a robust, automated continuous integration and delivery (CI/CD) pipeli
 - **Given** `package.json`,
 - **When** `bun run build` is invoked,
 - **Then** it must compile the entrypoint cleanly to `dist/` without errors.
+
+---
+
+## ✅ 4. Acceptance Criteria (Subtask 2)
+
+### AC-5: Code Owners Definition (`.github/CODEOWNERS`)
+- **Given** the repository root,
+- **When** `.github/CODEOWNERS` is inspected,
+- **Then** it must exist and configure `* @maiquelleonel` as the owner for all files across the repository.
+
+### AC-6: Maintainer Merge Gate Workflow (`.github/workflows/maintainer-gate.yml`)
+- **Given** a pull request targeting `main`,
+- **When** the workflow `.github/workflows/maintainer-gate.yml` triggers on `pull_request` and `pull_request_review`,
+- **Then** it must execute on `ubuntu-latest` and verify that the PR author or approving reviewer is `@maiquelleonel`.
+
+### AC-7: Enforcement & Status Check Gate
+- **Given** an unapproved pull request by an external contributor,
+- **When** evaluated by the maintainer verification gate,
+- **Then** it must fail the status check and block merge until an approved review by `@maiquelleonel` is registered.
