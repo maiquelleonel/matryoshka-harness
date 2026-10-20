@@ -103,9 +103,9 @@ export function resolveHarnessScoreBinary(
 }
 
 /**
- * Executes harness-score against a host repository via Bun subprocess.
+ * Internal runner that executes harness-score against a host repository via Bun subprocess.
  */
-export async function runHarnessScoreSubprocess(
+async function executeHarnessScoreSubprocessInternal(
   targetDir: string,
   options?: HarnessScoreOptions
 ): Promise<HarnessScoreResult> {
@@ -227,6 +227,25 @@ export async function runHarnessScoreSubprocess(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/**
+ * Executes harness-score against a host repository via Bun subprocess,
+ * falling back gracefully to in-memory evaluation when allowFallback is enabled.
+ */
+export async function runHarnessScoreSubprocess(
+  targetDir: string,
+  options?: HarnessScoreOptions
+): Promise<HarnessScoreResult> {
+  if (options?.allowFallback) {
+    try {
+      return await executeHarnessScoreSubprocessInternal(targetDir, options);
+    } catch {
+      return evaluateInMemoryFallback(targetDir);
+    }
+  }
+
+  return await executeHarnessScoreSubprocessInternal(targetDir, options);
 }
 
 /**
@@ -697,6 +716,46 @@ export function generateRemediationIssue(
     };
   }
 
+  // 4. Project Manifest Sensor: SNS-02
+  if (gapUpper === "SNS-02") {
+    let targets: string[] = [];
+    let action = "";
+    if (stack.primary === "typescript") {
+      targets = ["package.json"];
+      action = "Initialize package.json manifest defining project metadata, scripts, and dependencies.";
+    } else if (stack.primary === "python") {
+      targets = ["pyproject.toml"];
+      action = "Initialize pyproject.toml manifest defining Python package build configuration and dependencies.";
+    } else if (stack.primary === "go") {
+      targets = ["go.mod"];
+      action = "Initialize go.mod module definition file.";
+    } else if (stack.primary === "rust") {
+      targets = ["Cargo.toml"];
+      action = "Initialize Cargo.toml manifest with package metadata and dependencies.";
+    } else if (stack.primary === "ruby") {
+      targets = ["Gemfile"];
+      action = "Initialize Gemfile specifying Ruby dependencies.";
+    } else if (stack.primary === "php") {
+      targets = ["composer.json"];
+      action = "Initialize composer.json defining PHP package metadata and autoloading.";
+    } else {
+      targets = ["package.json"];
+      action = "Initialize project build/test manifest.";
+    }
+
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Initialize Project Manifest Sensor",
+      description: gap.description || "No recognized build/test manifest detected.",
+      targetFiles: targets,
+      stack: stack.primary,
+      priority: "critical",
+      suggestedAction: action,
+    };
+  }
+
   // 4. Linter / Formatter: GRD-03
   if (gapUpper === "GRD-03") {
     let targets: string[] = [];
@@ -855,6 +914,7 @@ export function reconcileGapsWithStack(
     testRunner: stack.testRunner,
     oracleScore: oracleResult.score,
     oracleLevel: oracleResult.level,
+    oracleSource: oracleResult.source,
     totalGaps: oracleResult.gaps.length,
     remediationIssues,
     entities,
@@ -1001,6 +1061,8 @@ export function formatScanJsonOutput(
     testRunner: reconciliation.testRunner,
     oracleScore: reconciliation.oracleScore,
     oracleLevel: reconciliation.oracleLevel,
+    oracleSource: reconciliation.oracleSource || "fallback",
+    oracle_source: reconciliation.oracleSource || "fallback",
     totalGaps: reconciliation.totalGaps,
     remediationIssues: reconciliation.remediationIssues,
     remediation_issues,
