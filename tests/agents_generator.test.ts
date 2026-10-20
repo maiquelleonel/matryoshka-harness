@@ -2,7 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { compileRootAgents, estimateTokens, type AgentArchetype, type SkillName } from "../src/agents";
+import {
+  compileRootAgents,
+  estimateTokens,
+  parseSkillFrontmatter,
+  validateSkillFrontmatter,
+  buildSkillsMetadataIndex,
+  loadSkillOnDemand,
+  SKILL_DEFINITIONS,
+  type AgentArchetype,
+  type SkillName
+} from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
   let tempDir: string;
@@ -397,6 +407,172 @@ dependencies = [
       expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
       expect(stdout).toContain("Archetype:");
       expect(stdout).toContain("Token Savings:");
+    });
+  });
+
+  describe("Subtask 2: On-demand modular skills with strict YAML Frontmatter (.agents/skills/): Specialized guidance (Backend, Frontend, Database, Security, Testing) loaded only on demand via metadata index to prevent premature context flooding", () => {
+    const canonicalSkills: SkillName[] = [
+      "skill-backend",
+      "skill-frontend",
+      "skill-database",
+      "skill-security",
+      "skill-testing"
+    ];
+
+    it("verifies all 5 canonical skills exist in catalog with valid YAML frontmatter and descriptions", () => {
+      for (const skillName of canonicalSkills) {
+        const skill = SKILL_DEFINITIONS[skillName];
+        expect(skill).toBeDefined();
+        expect(skill.name).toBe(skillName);
+        expect(skill.fileName).toBe(`${skillName}.md`);
+        expect(skill.description).toBeDefined();
+        expect(skill.description.length).toBeGreaterThan(20);
+
+        // Content must start with YAML frontmatter delimiters
+        expect(skill.content.startsWith("---\n")).toBe(true);
+        expect(skill.content).toContain("\n---\n");
+
+        // Frontmatter parser and validator must recognize valid format
+        const parsed = parseSkillFrontmatter(skill.content);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.name).toBe(skillName);
+        expect(parsed?.description).toBe(skill.description);
+
+        expect(validateSkillFrontmatter(skill.content)).toBe(true);
+      }
+    });
+
+    it("validates that parseSkillFrontmatter returns null and validateSkillFrontmatter returns false on malformed content", () => {
+      expect(parseSkillFrontmatter("")).toBeNull();
+      expect(validateSkillFrontmatter("")).toBe(false);
+
+      expect(parseSkillFrontmatter("# Just a title without frontmatter")).toBeNull();
+      expect(validateSkillFrontmatter("# Just a title without frontmatter")).toBe(false);
+
+      expect(parseSkillFrontmatter("---\nname: skill-backend\n# missing closing delimiter")).toBeNull();
+      expect(validateSkillFrontmatter("---\nname: skill-backend\n# missing closing delimiter")).toBe(false);
+
+      expect(parseSkillFrontmatter("---\ndescription: missing name\n---\n# Body")).toBeNull();
+      expect(validateSkillFrontmatter("---\ndescription: missing name\n---\n# Body")).toBe(false);
+
+      expect(parseSkillFrontmatter("---\nname: skill-backend\n---\n# Body")).toBeNull();
+      expect(validateSkillFrontmatter("---\nname: skill-backend\n---\n# Body")).toBe(false);
+    });
+
+    it("enforces specialized guidance invariants in all 5 skill bodies", () => {
+      // Backend
+      const backend = SKILL_DEFINITIONS["skill-backend"].content;
+      expect(backend).toContain("Anti-N+1 Query Invariant");
+      expect(backend).toContain("Transactional Boundaries & Atomic Persistence");
+      expect(backend).toContain("Idiomatic Layer Seams");
+
+      // Frontend
+      const frontend = SKILL_DEFINITIONS["skill-frontend"].content;
+      expect(frontend).toContain("Pure Rendering & Reactivity Invariants");
+      expect(frontend).toContain("Cumulative Layout Shifts (CLS) & Performance");
+      expect(frontend).toContain("Accessibility (A11y) & Semantic Markup");
+
+      // Database
+      const database = SKILL_DEFINITIONS["skill-database"].content;
+      expect(database).toContain("Zero-Downtime Migration Contract");
+      expect(database).toContain("Lock Safety & Non-Blocking DDL");
+      expect(database).toContain("Query & Index Hygiene");
+
+      // Security
+      const security = SKILL_DEFINITIONS["skill-security"].content;
+      expect(security).toContain("Zero Secret Leakage Invariant");
+      expect(security).toContain("Strict Input Sanitization & Parameterization");
+      expect(security).toContain("Authentication & Authorization Guardrails");
+
+      // Testing
+      const testing = SKILL_DEFINITIONS["skill-testing"].content;
+      expect(testing).toContain("The Seam Contract (Red-to-Green)");
+      expect(testing).toContain("Deterministic Fixtures & Isolation");
+      expect(testing).toContain("Mock Boundaries");
+    });
+
+    it("builds a lightweight skills metadata index preventing premature context flooding", () => {
+      const activeSkills: SkillName[] = [
+        "skill-backend",
+        "skill-database",
+        "skill-security",
+        "skill-testing"
+      ];
+      const index = buildSkillsMetadataIndex(tempDir, activeSkills);
+
+      expect(index.skillsDir).toBe(path.join(tempDir, ".agents", "skills"));
+      expect(index.skills).toHaveLength(4);
+
+      for (const item of index.skills) {
+        expect(item.relativePath).toMatch(/^\.agents\/skills\/skill-.*\.md$/);
+        expect(item.description.length).toBeGreaterThan(15);
+        expect(item.domain.length).toBeGreaterThan(0);
+        expect(item.tokenCount).toBeGreaterThan(0);
+      }
+
+      // Metadata index must consume a fraction of tokens compared to full monolithic instructions
+      expect(index.totalIndexTokens).toBeLessThan(350);
+      expect(index.monolithicTokens).toBeGreaterThan(700);
+      expect(index.tokenSavings).toBeGreaterThan(500);
+      expect(index.savingsPercentage).toBeGreaterThanOrEqual(70);
+    });
+
+    it("loads skills on demand from disk when generated and falls back to catalog", () => {
+      // Before generation: loads on-demand from catalog fallback
+      const initialSkill = loadSkillOnDemand("skill-backend", tempDir);
+      expect(initialSkill.name).toBe("skill-backend");
+      expect(initialSkill.source).toBe("catalog");
+      expect(initialSkill.content).toContain("Anti-N+1 Query Invariant");
+
+      // Generate files on disk
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "test-app", dependencies: { express: "^4.18.0", pg: "^8.0.0" } })
+      );
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+      expect(proc.exitCode).toBe(0);
+
+      // After generation: loads on-demand from disk
+      const diskSkill = loadSkillOnDemand("skill-backend", tempDir);
+      expect(diskSkill.name).toBe("skill-backend");
+      expect(diskSkill.source).toBe("disk");
+      expect(diskSkill.fullPath).toBe(path.join(tempDir, ".agents", "skills", "skill-backend.md"));
+      expect(diskSkill.content).toContain("Anti-N+1 Query Invariant");
+      expect(validateSkillFrontmatter(diskSkill.content)).toBe(true);
+
+      // Loading a skill on-demand does not alter or flood memory with other skills
+      const loadedTesting = loadSkillOnDemand("skill-testing", tempDir);
+      expect(loadedTesting.source).toBe("disk");
+      expect(loadedTesting.content).toContain("The Seam Contract");
+    });
+
+    it("includes skillsIndex in generateAgents result without dryRun and with dryRun", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "fullstack-demo",
+          dependencies: { next: "^14.0.0", prisma: "^5.0.0" }
+        })
+      );
+
+      // Dry run
+      const dryResult = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+      ]);
+      expect(dryResult.exitCode).toBe(0);
+      const parsedDry = JSON.parse(dryResult.stdout.toString().trim());
+      expect(parsedDry).toHaveProperty("skillsIndex");
+      expect(parsedDry.skillsIndex.skills.length).toBe(5);
+
+      // Actual run
+      const realResult = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--json"
+      ]);
+      expect(realResult.exitCode).toBe(0);
+      const parsedReal = JSON.parse(realResult.stdout.toString().trim());
+      expect(parsedReal).toHaveProperty("skillsIndex");
+      expect(parsedReal.skillsIndex.skills.length).toBe(5);
+      expect(parsedReal.skillsIndex.savingsPercentage).toBeGreaterThanOrEqual(70);
     });
   });
 });
