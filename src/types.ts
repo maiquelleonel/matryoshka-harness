@@ -94,6 +94,7 @@ export interface SemanticReconciliation {
   testRunner: string | null;
   oracleScore: number;
   oracleLevel: MaturityLevel;
+  oracleSource?: "subprocess" | "fallback";
   totalGaps: number;
   remediationIssues: RemediationIssue[];
   entities: CodebaseEntities;

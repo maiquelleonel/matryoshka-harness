@@ -269,6 +269,123 @@ process.exit(0);
       expect(Array.isArray(result.gaps)).toBe(true);
       expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
     });
+
+    it("executes in-memory fallback via runHarnessScoreSubprocess when binary is not found and allowFallback is true", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "sample" }));
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Sample");
+
+      const result = await runHarnessScoreSubprocess(tempDir, {
+        allowFallback: true,
+        binaryPath: "/non/existent/path/to/harness-score",
+      });
+
+      expect(result).toBeDefined();
+      expect(result.source).toBe("fallback");
+      expect(result.score).toBeGreaterThanOrEqual(15);
+      expect(result.maxScore).toBe(105);
+      expect(result.passed).toContain("SNS-02");
+      expect(result.passed).toContain("CTX-03");
+    });
+
+    it("falls back gracefully in runHarnessScoreSubprocess when process fails and allowFallback is true", async () => {
+      const mockBinPath = path.join(tempDir, "mock-failing-bin");
+      fs.writeFileSync(
+        mockBinPath,
+        `#!/usr/bin/env bun\nconsole.error("Critical failure");\nprocess.exit(1);\n`,
+        { mode: 0o755 }
+      );
+
+      const result = await runHarnessScoreSubprocess(tempDir, {
+        binaryPath: mockBinPath,
+        allowFallback: true,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.source).toBe("fallback");
+    });
+
+    it("falls back gracefully in runHarnessScoreSubprocess when process times out and allowFallback is true", async () => {
+      const mockBinPath = path.join(tempDir, "mock-hanging-bin");
+      fs.writeFileSync(
+        mockBinPath,
+        `#!/usr/bin/env bun\nawait new Promise(r => setTimeout(r, 2000));\nconsole.log("{}");\n`,
+        { mode: 0o755 }
+      );
+
+      const result = await runHarnessScoreSubprocess(tempDir, {
+        binaryPath: mockBinPath,
+        timeoutMs: 50,
+        allowFallback: true,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.source).toBe("fallback");
+    });
+
+    it("evaluateInMemoryFallback scores empty repository as L0 with 0 points and all 8 governance gaps", () => {
+      const result = evaluateInMemoryFallback(tempDir);
+      expect(result.score).toBe(0);
+      expect(result.maxScore).toBe(105);
+      expect(result.level).toBe("L0");
+      expect(result.source).toBe("fallback");
+      expect(result.passed.length).toBe(0);
+      expect(result.gaps.length).toBe(9);
+      const gapIds = result.gaps.map((g) => g.id);
+      expect(gapIds).toContain("CTX-01");
+      expect(gapIds).toContain("CTX-02");
+      expect(gapIds).toContain("CTX-03");
+      expect(gapIds).toContain("SKL-01");
+      expect(gapIds).toContain("CI-01");
+      expect(gapIds).toContain("GRD-01");
+      expect(gapIds).toContain("SNS-01");
+      expect(gapIds).toContain("SNS-02");
+      expect(gapIds).toContain("HYG-01");
+    });
+
+    it("evaluateInMemoryFallback scores fully harnessed repository as L4 with 105 points and 0 gaps", () => {
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Guidelines");
+      fs.writeFileSync(path.join(tempDir, "ARCHITECTURE.md"), "# Architecture");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Readme");
+      fs.mkdirSync(path.join(tempDir, "skills"));
+      fs.mkdirSync(path.join(tempDir, ".github", "workflows"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, ".gitignore"), "node_modules/");
+      fs.mkdirSync(path.join(tempDir, "tests"));
+      fs.writeFileSync(path.join(tempDir, "package.json"), "{}");
+      fs.writeFileSync(path.join(tempDir, "LICENSE"), "MIT");
+
+      const result = evaluateInMemoryFallback(tempDir);
+      expect(result.score).toBe(105);
+      expect(result.maxScore).toBe(105);
+      expect(result.level).toBe("L4");
+      expect(result.source).toBe("fallback");
+      expect(result.gaps.length).toBe(0);
+      expect(result.passed.length).toBe(9);
+    });
+
+    it("reconcileGapsWithStack preserves oracleSource in SemanticReconciliation", () => {
+      const mockResult: HarnessScoreResult = {
+        score: 0,
+        maxScore: 105,
+        level: "L0",
+        gaps: [{ id: "SNS-02", axis: "sensors", title: "Missing manifest" }],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 5,
+      };
+      const reconciliation = reconcileGapsWithStack(mockResult, {
+        primary: "typescript",
+        frameworks: [],
+        testRunner: "bun test",
+        archetype: "generic",
+      });
+
+      expect(reconciliation.oracleSource).toBe("fallback");
+      expect(reconciliation.remediationIssues.length).toBeGreaterThan(0);
+      const firstIssue = reconciliation.remediationIssues[0];
+      if (firstIssue) {
+        expect(firstIssue.targetFiles).toContain("package.json");
+      }
+    });
   });
 
   describe("AC-5: Semantic Reconciliation of Gaps with Polyglot Stack", () => {
