@@ -2,6 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
+import { generateAgents } from "./agents";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
@@ -19,14 +20,18 @@ Matryoshka-Harness CLI (baba / bbyg / matryoshka)
 Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
+  baba agents generate [path] [--force] [--dry-run] [--json]
   baba wrap [path]
 
 Commands:
   detect   Inspect codebase and detect primary stack, frameworks, and test runner
   scan     Execute maturity audit and semantic AST reconciliation
+  agents   Generate adaptive AGENTS.md and modular skills
   wrap     Apply adaptive context fence and inject AGENTS.md / SKILLS.md
 
 Options:
+  --force, -f    Overwrite existing files (creates .bak of pre-existing AGENTS.md)
+  --dry-run      Simulate generation without writing to disk
   --json         Output strictly valid JSON
   --badge [path] Generate maturity SVG badge (default: ./harness-badge.svg)
   -h, --help     Show help information
@@ -169,6 +174,70 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           );
         } else {
           console.error(pc.red(`\nScan failed: ${error?.message || "Unknown error"}\n`));
+        }
+        process.exit(1);
+      }
+      break;
+    }
+
+    case "agents": {
+      const isForce = rest.includes("--force") || rest.includes("-f");
+      const isDryRun = rest.includes("--dry-run");
+      const positional = rest.filter((arg) => !arg.startsWith("-"));
+
+      let targetDir: string | undefined;
+      if (positional[0] === "generate") {
+        targetDir = positional[1] || process.cwd();
+      } else {
+        targetDir = positional[0] || process.cwd();
+      }
+
+      const resolvedPath = path.resolve(targetDir);
+
+      try {
+        const result = generateAgents(resolvedPath, {
+          force: isForce,
+          dryRun: isDryRun,
+          json: isJson,
+        });
+
+        if (isJson) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          console.log(pc.bold(pc.cyan("\n🪆 Matryoshka Adaptive Agents Generator")));
+          console.log(`  ${pc.dim("•")} ${pc.bold("Root Path:")}     ${resolvedPath}`);
+          console.log(`  ${pc.dim("•")} ${pc.bold("Archetype:")}     ${pc.magenta(result.archetype)}`);
+          console.log(
+            `  ${pc.dim("•")} ${pc.bold("Root AGENTS:")}   ${pc.green(result.rootAgentsPath)} (${pc.yellow(result.rootTokens.toString())} tokens)`
+          );
+          console.log(`  ${pc.dim("•")} ${pc.bold("Skills Dir:")}    ${pc.blue(result.skillsDir)}`);
+          console.log(pc.bold(pc.cyan("  Planned / Generated Files:")));
+          for (const file of result.plannedFiles) {
+            console.log(`    ${pc.dim("•")} ${pc.green(file.path)} (${pc.yellow(file.tokens.toString())} tokens)`);
+          }
+          console.log(
+            `  ${pc.dim("•")} ${pc.bold("Token Savings:")} ${pc.green(
+              `${result.estimatedTokenSavings.savedTokens} tokens (${result.estimatedTokenSavings.savingsPercentage}%)`
+            )}\n`
+          );
+        }
+        process.exit(0);
+      } catch (error: any) {
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "error",
+                command: "agents",
+                rootPath: resolvedPath,
+                message: error?.message || "Agents generation failed",
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(pc.red(`\nGeneration failed: ${error?.message || "Unknown error"}\n`));
         }
         process.exit(1);
       }
