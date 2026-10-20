@@ -3,6 +3,7 @@ import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
 import type {
+  BadgeOptions,
   CodebaseEntities,
   GovernanceAxis,
   HarnessGap,
@@ -882,7 +883,8 @@ export async function runMaturityScan(
  */
 export function formatScanHumanOutput(
   reconciliation: SemanticReconciliation,
-  rootPath: string
+  rootPath: string,
+  options?: { badgePath?: string }
 ): string {
   const lines: string[] = [];
 
@@ -916,6 +918,9 @@ export function formatScanHumanOutput(
       reconciliation.oracleLevel
     )} (${reconciliation.oracleScore}/105 pts) — ${reconciliation.totalGaps} governance gap(s)`
   );
+  if (options?.badgePath) {
+    lines.push(`  ${pc.dim("•")} ${pc.bold("Badge:")}       ${pc.green(options.badgePath)}`);
+  }
 
   // Codebase Entities
   lines.push(pc.bold(pc.cyan("\n📍 Discovered Codebase Entities")));
@@ -967,7 +972,8 @@ export function formatScanHumanOutput(
  */
 export function formatScanJsonOutput(
   reconciliation: SemanticReconciliation,
-  rootPath: string
+  rootPath: string,
+  options?: { badgePath?: string }
 ): Record<string, any> {
   const remediation_issues = reconciliation.remediationIssues.map((issue) => ({
     id: issue.id,
@@ -985,7 +991,7 @@ export function formatScanJsonOutput(
     snippet: issue.snippet,
   }));
 
-  return {
+  const output: Record<string, any> = {
     status: "success",
     command: "scan",
     rootPath,
@@ -1001,6 +1007,90 @@ export function formatScanJsonOutput(
     entities: reconciliation.entities,
     timestamp: reconciliation.timestamp,
   };
+
+  if (options?.badgePath) {
+    output.badgePath = options.badgePath;
+    output.badge_path = options.badgePath;
+    output.badge = options.badgePath;
+  }
+
+  return output;
+}
+
+/**
+ * Generates an SVG maturity badge (Shields.io flat style)
+ * representing the evaluated score and governance maturity level.
+ */
+export function generateHarnessBadgeSvg(
+  reconciliation:
+    | SemanticReconciliation
+    | HarnessScoreResult
+    | { score: number; level: MaturityLevel; maxScore?: number },
+  options?: BadgeOptions
+): string {
+  const label = options?.label || "harness";
+
+  let level: MaturityLevel = "L0";
+  let score = 0;
+  let maxScore = 105;
+
+  if ("oracleLevel" in reconciliation) {
+    level = normalizeMaturityLevel(reconciliation.oracleLevel);
+    score = reconciliation.oracleScore;
+  } else if ("level" in reconciliation) {
+    level = normalizeMaturityLevel(reconciliation.level);
+    score = reconciliation.score;
+    if ("maxScore" in reconciliation && typeof reconciliation.maxScore === "number") {
+      maxScore = reconciliation.maxScore;
+    }
+  }
+
+  const format = options?.format || "full";
+  let value: string;
+  if (format === "level") {
+    value = level;
+  } else if (format === "score") {
+    value = `${score}/${maxScore}`;
+  } else {
+    value = `${level} (${score}/${maxScore})`;
+  }
+
+  let color = "#cf222e"; // L0 (Red)
+  if (level === "L4") color = "#2ea44f"; // Green
+  else if (level === "L3") color = "#0969da"; // Blue
+  else if (level === "L2") color = "#1f6feb"; // Indigo/Blue
+  else if (level === "L1") color = "#d29922"; // Yellow/Orange
+
+  const leftWidth = Math.max(30, label.length * 7 + 14);
+  const rightWidth = Math.max(30, value.length * 7 + 14);
+  const totalWidth = leftWidth + rightWidth;
+
+  const leftX = Math.round((leftWidth / 2) * 10);
+  const rightX = Math.round((leftWidth + rightWidth / 2) * 10);
+  const leftTextLength = (leftWidth - 10) * 10;
+  const rightTextLength = (rightWidth - 10) * 10;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20" role="img" aria-label="${label}: ${value}">
+  <title>${label}: ${value}</title>
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="r">
+    <rect width="${totalWidth}" height="20" rx="3" fill="#fff"/>
+  </clipPath>
+  <g clip-path="url(#r)">
+    <rect width="${leftWidth}" height="20" fill="#555"/>
+    <rect x="${leftWidth}" width="${rightWidth}" height="20" fill="${color}"/>
+    <rect width="${totalWidth}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+    <text aria-hidden="true" x="${leftX}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${leftTextLength}">${label}</text>
+    <text x="${leftX}" y="140" transform="scale(.1)" fill="#fff" textLength="${leftTextLength}">${label}</text>
+    <text aria-hidden="true" x="${rightX}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${rightTextLength}">${value}</text>
+    <text x="${rightX}" y="140" transform="scale(.1)" fill="#fff" textLength="${rightTextLength}">${value}</text>
+  </g>
+</svg>`;
 }
 
 

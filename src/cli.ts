@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
+import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
   formatScanJsonOutput,
+  generateHarnessBadgeSvg,
   runMaturityScan,
 } from "./scanner";
 import type { DetectResult, ProjectStack } from "./types";
@@ -16,7 +18,7 @@ Matryoshka-Harness CLI (baba / bbyg / matryoshka)
 
 Usage:
   baba detect [path] [--json]
-  baba scan [path] [--json]
+  baba scan [path] [--json] [--badge [path]]
   baba wrap [path]
 
 Commands:
@@ -26,6 +28,7 @@ Commands:
 
 Options:
   --json         Output strictly valid JSON
+  --badge [path] Generate maturity SVG badge (default: ./harness-badge.svg)
   -h, --help     Show help information
   -v, --version  Show version
 `.trim();
@@ -90,20 +93,64 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "scan": {
-      const positional = rest.filter((arg) => !arg.startsWith("-"));
-      const targetDir = positional[0] || process.cwd();
-      const resolvedPath = path.resolve(targetDir);
+      let targetDir: string | undefined;
+      let badgePath: string | null = null;
+      let isBadge = false;
+
+      for (let i = 0; i < rest.length; i++) {
+        const arg = rest[i];
+        if (!arg) continue;
+        if (arg === "--json") {
+          // Handled via isJson flag
+        } else if (arg === "--badge") {
+          isBadge = true;
+          const next = rest[i + 1];
+          if (next && !next.startsWith("-")) {
+            badgePath = next;
+            i++;
+          } else {
+            badgePath = "harness-badge.svg";
+          }
+        } else if (arg.startsWith("--badge=")) {
+          isBadge = true;
+          badgePath = arg.slice("--badge=".length) || "harness-badge.svg";
+        } else if (!arg.startsWith("-")) {
+          if (!targetDir) {
+            targetDir = arg;
+          }
+        }
+      }
+
+      const resolvedPath = path.resolve(targetDir || process.cwd());
 
       try {
         const reconciliation = await runMaturityScan(resolvedPath, {
           allowFallback: true,
         });
 
+        let resolvedBadgePath: string | undefined;
+        if (isBadge && badgePath) {
+          resolvedBadgePath = path.isAbsolute(badgePath)
+            ? badgePath
+            : path.resolve(resolvedPath, badgePath);
+
+          const badgeSvg = generateHarnessBadgeSvg(reconciliation);
+          const badgeDir = path.dirname(resolvedBadgePath);
+          if (!fs.existsSync(badgeDir)) {
+            fs.mkdirSync(badgeDir, { recursive: true });
+          }
+          fs.writeFileSync(resolvedBadgePath, badgeSvg, "utf-8");
+        }
+
         if (isJson) {
-          const jsonResult = formatScanJsonOutput(reconciliation, resolvedPath);
+          const jsonResult = formatScanJsonOutput(reconciliation, resolvedPath, {
+            badgePath: resolvedBadgePath,
+          });
           console.log(JSON.stringify(jsonResult, null, 2));
         } else {
-          console.log(formatScanHumanOutput(reconciliation, resolvedPath));
+          console.log(formatScanHumanOutput(reconciliation, resolvedPath, {
+            badgePath: resolvedBadgePath,
+          }));
         }
         process.exit(0);
       } catch (error: any) {
