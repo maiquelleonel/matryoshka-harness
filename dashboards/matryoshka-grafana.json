@@ -1,0 +1,202 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Production observability dashboard for Matryoshka-Harness and codebase-memory-mcp AST knowledge graph queries.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Semantic Knowledge Graph Invocations (search_graph)",
+      "type": "timeseries",
+      "description": "Tracks throughput and invocation rate of search_graph operations across agent sessions.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(codebase_memory_mcp_search_graph_total[5m])) by (project)",
+          "legendFormat": "{{project}} - search_graph ops/sec",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "Semantic Query Latency (P95 / P99)",
+      "type": "timeseries",
+      "description": "P95 and P99 latency percentiles for search_graph and knowledge graph AST queries.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(codebase_memory_mcp_query_duration_seconds_bucket{tool=\"search_graph\"}[5m])) by (le))",
+          "legendFormat": "search_graph P95 Latency",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(codebase_memory_mcp_query_duration_seconds_bucket{tool=\"search_graph\"}[5m])) by (le))",
+          "legendFormat": "search_graph P99 Latency",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "title": "MCP Tool Error Rates & Subprocess Failures",
+      "type": "timeseries",
+      "description": "Percentage error rate of codebase-memory-mcp tool invocations including search_graph and query_graph.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(codebase_memory_mcp_errors_total{tool=\"search_graph\"}[5m])) / (sum(rate(codebase_memory_mcp_requests_total{tool=\"search_graph\"}[5m])) + 0.0001) * 100",
+          "legendFormat": "search_graph Error Rate (%)",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "title": "Active MCP Auto-Wired Sessions & Node Density",
+      "type": "stat",
+      "description": "Total AST nodes and active auto-wired environments (Cursor, Gemini CLI, Claude Code).",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "codebase_memory_mcp_nodes_total",
+          "legendFormat": "AST Nodes",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "codebase_memory_mcp_wired_targets_total",
+          "legendFormat": "Auto-Wired Targets",
+          "range": false,
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "matryoshka",
+    "mcp",
+    "codebase-memory-mcp",
+    "search_graph",
+    "telemetry",
+    "observability"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Matryoshka Harness - MCP & Knowledge Graph Telemetry",
+  "uid": "matryoshka-mcp-telemetry",
+  "version": 1
+}

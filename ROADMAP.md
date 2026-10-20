@@ -41,9 +41,10 @@
 ---
 
 ### 🔍 Fase 3: Raio-X Semântico & AST Poliglota (Rust/WASM)
-* [ ] **Issue #5: Injeção do codebase-memory-mcp (Auto-Wiring)**
+* [x] **Issue #7: Injeção do codebase-memory-mcp (Auto-Wiring & Telemetria)**
   * Configuração automática do servidor MCP em .cursor/mcp.json, .gemini/settings.json e .claude/mcp.json.
   * O agente já acorda com o grafo de conhecimento carregado no primeiro segundo.
+  * Dashboard de observabilidade e métricas de AST conhecimento em dashboards/matryoshka-grafana.json.
 * [ ] **Issue #6: Motor AST Multi-Linguagem com Tree-sitter WASM**
   * Parser sintático de alta velocidade cobrindo as 5+ linguagens canônicas.
   * Análise estática de AST de SQL (detecção de SELECT *, ausência de índices e injection antes de tocar no banco).

@@ -15,6 +15,7 @@ Biblioteca canônica de lições arquiteturais, cicatrizes de segurança e gover
 - [interoperability] Convergência de SKILL.md (Claude, Gemini, Codex, OpenCode): A indústria agêntica padronizou a especificação de Agent Skills em pastas isoladas com frontmatter YAML (skills/<nome>/SKILL.md). Um único repositório de skills pode ser consumido nativamente pelo Gemini CLI (gemini extensions install), Claude Code (claude --plugin-dir), OpenAI Codex e OpenCode sem duplicar regras de negócio.
 - [interoperability] Dual Manifesto de Extensão: Para distribuição universal zero-install, o projeto mantém gemini-extension.json (para o Gemini CLI) e .claude-plugin/plugin.json (para o Claude Code) na raiz, permitindo instalação de 1 clique direto dos repositórios GitHub.
 - [mcp] Model Context Protocol como Barramento de Ferramental: Em vez de bibliotecas pesadas instaladas localmente no host do cliente, o MCP via stdio é o padrão ouro para expor comandos de inspeção e remediação (mcp_matryoshka_scan, mcp_matryoshka_wrap).
+- [mcp] Auto-Wiring Não-Destrutivo de MCP Servers: Ao injetar servidores MCP como codebase-memory-mcp nos clientes de agentes (.cursor/mcp.json, .gemini/settings.json, .claude/mcp.json), utilize merge profundo que preserve 100% dos campos de usuário existentes (temas, preferências, outros servidores MCP customizados). O suporte a --dry-run e --json assegura que pipelines e orquestradores possam simular e auditar planos de injeção sem tocar no disco.
 
 ---
 

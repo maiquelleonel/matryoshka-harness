@@ -106,3 +106,34 @@ export interface BadgeOptions {
   format?: "level" | "score" | "full";
 }
 
+export type McpTargetName = "cursor" | "gemini" | "claude";
+
+export interface McpTargetConfig {
+  name: string;
+  target: McpTargetName;
+  path: string;
+  relativePath: string;
+  action: "create" | "update" | "unchanged";
+  status: "planned" | "created" | "updated" | "unchanged" | "error";
+  error?: string;
+}
+
+export interface McpWireOptions {
+  dryRun?: boolean;
+}
+
+export interface McpWireResult {
+  status: "planned" | "success" | "error";
+  command: "mcp wire";
+  rootPath: string;
+  dryRun: boolean;
+  serverName: "codebase-memory-mcp";
+  serverConfig: {
+    command: string;
+    args: string[];
+  };
+  targets: McpTargetConfig[];
+  files: McpTargetConfig[];
+  message?: string;
+}
+

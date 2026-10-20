@@ -27,6 +27,7 @@
     "detect": "bun run src/cli.ts detect",
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
+    "mcp": "bun run src/cli.ts mcp",
     "test": "bun test"
   },
   "license": "MIT",
