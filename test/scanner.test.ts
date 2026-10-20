@@ -77,12 +77,12 @@ process.exit(0);
       expect(result.maxScore).toBe(105);
       expect(result.level).toBe("L1");
       expect(result.gaps.length).toBe(3);
-      expect(result.gaps[0].id).toBe("CTX-01");
-      expect(result.gaps[0].axis).toBe("context");
-      expect(result.gaps[1].id).toBe("CI-01");
-      expect(result.gaps[1].axis).toBe("guardrails");
-      expect(result.gaps[2].id).toBe("SNS-05");
-      expect(result.gaps[2].axis).toBe("sensors");
+      expect(result.gaps[0]?.id).toBe("CTX-01");
+      expect(result.gaps[0]?.axis).toBe("context");
+      expect(result.gaps[1]?.id).toBe("CI-01");
+      expect(result.gaps[1]?.axis).toBe("guardrails");
+      expect(result.gaps[2]?.id).toBe("SNS-05");
+      expect(result.gaps[2]?.axis).toBe("sensors");
       expect(result.passed).toContain("HYG-01");
       expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
     });
@@ -139,12 +139,12 @@ process.exit(0);
 
       const result = await runHarnessScoreSubprocess(tempDir, { binaryPath: mockBinPath });
 
-      expect(result.gaps[0].axis).toBe("context");
-      expect(result.gaps[1].axis).toBe("skills");
-      expect(result.gaps[2].axis).toBe("guardrails");
-      expect(result.gaps[3].axis).toBe("sensors");
-      expect(result.gaps[4].axis).toBe("hygiene");
-      expect(result.gaps[5].axis).toBe("hygiene");
+      expect(result.gaps[0]?.axis).toBe("context");
+      expect(result.gaps[1]?.axis).toBe("skills");
+      expect(result.gaps[2]?.axis).toBe("guardrails");
+      expect(result.gaps[3]?.axis).toBe("sensors");
+      expect(result.gaps[4]?.axis).toBe("hygiene");
+      expect(result.gaps[5]?.axis).toBe("hygiene");
     });
 
     it("normalizes maturity levels accurately across integer and string formats", () => {
