@@ -174,18 +174,170 @@ describe("CLI Commands and Aliases (src/cli.ts & index.ts)", () => {
       expect(proc.stderr.toString()).toContain("Unknown command 'unknown-command'");
     });
 
-    it("supports scan and wrap subcommands with pending JSON responses", async () => {
-      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
-      expect(procScan.exitCode).toBe(0);
-      const scanParsed = JSON.parse(procScan.stdout.toString().trim());
-      expect(scanParsed.status).toBe("pending");
-      expect(scanParsed.command).toBe("scan");
-
+    it("supports wrap subcommand with pending JSON responses", async () => {
       const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--json"]);
       expect(procWrap.exitCode).toBe(0);
       const wrapParsed = JSON.parse(procWrap.stdout.toString().trim());
       expect(wrapParsed.status).toBe("pending");
       expect(wrapParsed.command).toBe("wrap");
+    });
+
+    it("supports scan subcommand with structured JSON output", async () => {
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(procScan.exitCode).toBe(0);
+      const scanParsed = JSON.parse(procScan.stdout.toString().trim());
+      expect(scanParsed.status).toBe("success");
+      expect(scanParsed.command).toBe("scan");
+      expect(scanParsed.primaryStack).toBe("unknown");
+      expect(scanParsed.oracleScore).toBeDefined();
+      expect(scanParsed.oracleLevel).toBe("L0");
+      expect(Array.isArray(scanParsed.remediationIssues)).toBe(true);
+      expect(Array.isArray(scanParsed.remediation_issues)).toBe(true);
+    });
+
+    it("supports scan subcommand with human-readable terminal output", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-scan-app",
+          dependencies: { next: "^14.0.0" },
+          scripts: { test: "bun test" },
+        })
+      );
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# CLI App");
+
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir]);
+      expect(procScan.exitCode).toBe(0);
+      const stdout = procScan.stdout.toString();
+      expect(stdout).toContain("Matryoshka Maturity Scanner");
+      expect(stdout).toContain("typescript");
+      expect(stdout).toContain("nextjs");
+      expect(stdout).toContain("Remediation Plan");
+    });
+
+    it("ensures scan alias parity across baba, bbyg, and matryoshka invocations", async () => {
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.status).toBe("success");
+      expect(parsedBbyg.status).toBe("success");
+      expect(parsedMatryoshka.status).toBe("success");
+      expect(parsedBaba.oracleScore).toBe(parsedBbyg.oracleScore);
+      expect(parsedBaba.oracleScore).toBe(parsedMatryoshka.oracleScore);
+    });
+
+    it("generates default SVG badge when --badge flag is provided without path", async () => {
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--badge"]);
+      expect(procScan.exitCode).toBe(0);
+
+      const expectedBadgePath = path.join(tempDir, "harness-badge.svg");
+      expect(fs.existsSync(expectedBadgePath)).toBe(true);
+
+      const content = fs.readFileSync(expectedBadgePath, "utf-8");
+      expect(content).toContain("<svg");
+      expect(content).toContain("harness");
+      expect(content).toContain("</svg>");
+    });
+
+    it("generates SVG badge at specified custom path creating subdirectories", async () => {
+      const customRelativeBadge = "docs/badges/governance.svg";
+      const procScan = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        customRelativeBadge,
+      ]);
+      expect(procScan.exitCode).toBe(0);
+
+      const expectedBadgePath = path.join(tempDir, customRelativeBadge);
+      expect(fs.existsSync(expectedBadgePath)).toBe(true);
+
+      const content = fs.readFileSync(expectedBadgePath, "utf-8");
+      expect(content).toContain("<svg");
+      expect(content).toContain("harness");
+      expect(content).toContain("</svg>");
+    });
+
+    it("includes badgePath in structured JSON output when --badge and --json are combined", async () => {
+      const customBadge = path.join(tempDir, "custom-badge.svg");
+      const procScan = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--json",
+        "--badge",
+        customBadge,
+      ]);
+      expect(procScan.exitCode).toBe(0);
+
+      const parsed = JSON.parse(procScan.stdout.toString().trim());
+      expect(parsed.status).toBe("success");
+      expect(parsed.badgePath).toBe(customBadge);
+      expect(parsed.badge_path).toBe(customBadge);
+      expect(fs.existsSync(customBadge)).toBe(true);
+    });
+
+    it("preserves strict alias parity for --badge across baba, bbyg, and matryoshka", async () => {
+      const badgeBaba = path.join(tempDir, "baba.svg");
+      const badgeBbyg = path.join(tempDir, "bbyg.svg");
+      const badgeMatryoshka = path.join(tempDir, "matryoshka.svg");
+
+      const procBaba = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeBaba,
+      ]);
+      const procBbyg = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeBbyg,
+      ]);
+      const procMatryoshka = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--badge",
+        badgeMatryoshka,
+      ]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      expect(fs.existsSync(badgeBaba)).toBe(true);
+      expect(fs.existsSync(badgeBbyg)).toBe(true);
+      expect(fs.existsSync(badgeMatryoshka)).toBe(true);
+
+      const contentBaba = fs.readFileSync(badgeBaba, "utf-8");
+      const contentBbyg = fs.readFileSync(badgeBbyg, "utf-8");
+      const contentMatryoshka = fs.readFileSync(badgeMatryoshka, "utf-8");
+
+      expect(contentBaba).toBe(contentBbyg);
+      expect(contentBaba).toBe(contentMatryoshka);
     });
   });
 });
