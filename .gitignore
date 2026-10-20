@@ -43,3 +43,6 @@ task_context.json
 review_context.json
 ouroboros_usage.json
 
+
+__pycache__/
+.venv/
