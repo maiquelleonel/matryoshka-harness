@@ -100,3 +100,8 @@ export interface SemanticReconciliation {
   timestamp: string;
 }
 
+export interface BadgeOptions {
+  label?: string;
+  format?: "level" | "score" | "full";
+}
+
