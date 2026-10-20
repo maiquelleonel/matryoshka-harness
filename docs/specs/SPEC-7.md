@@ -39,6 +39,13 @@ Each target file maps the `codebase-memory-mcp` entry inside `mcpServers`:
 }
 ```
 
+Target selection can be filtered using `--targets <comma-separated-targets>` or `--target <target>`:
+- `baba mcp wire --targets cursor`
+- `baba mcp wire --targets cursor,claude`
+If omitted, all 3 targets are configured by default.
+
+When target file writing fails (e.g. read-only filesystem or invalid permissions), the error is isolated per target with `status: "error"` and `error` description, setting the overall result status to `"error"`.
+
 ### 2.3. Subtask 3: Idempotence, Safety & Dry-Run
 - **Deep Merge:** If any target configuration file already exists, existing top-level keys, nested configurations, and existing `mcpServers` entries are strictly preserved.
 - **Idempotent Write:** Re-running the command does not duplicate or corrupt settings.
@@ -69,6 +76,7 @@ export interface McpTargetConfig {
 
 export interface McpWireOptions {
   dryRun?: boolean;
+  targets?: McpTargetName[];
 }
 
 export interface McpWireResult {
@@ -99,6 +107,18 @@ When directories `.cursor/`, `.gemini/`, and `.claude/` do not exist
 Then the CLI must create the required directories
 And create the configuration files with `codebase-memory-mcp` set to `bunx codebase-memory-mcp`
 And return exit code 0.
+
+### AC-1.1: Target Isolation and Filtering
+Given the developer executes `baba mcp wire ./my-project --targets cursor,claude`
+When directories do not exist
+Then only `.cursor/mcp.json` and `.claude/mcp.json` must be created
+And `.gemini/settings.json` must not be created.
+
+### AC-1.2: Target Error Isolation
+Given a target configuration cannot be written to disk
+When `wireMcpTargets` is executed
+Then the affected target must report `status: "error"` and include the `error` message
+And the overall result status must be `"error"`.
 
 ### AC-2: Non-Destructive Idempotent Merge
 Given `.gemini/settings.json` already contains a custom MCP server and user settings
