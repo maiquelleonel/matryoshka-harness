@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { compileRootAgents, estimateTokens, type AgentArchetype, type SkillName } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
   let tempDir: string;
@@ -241,6 +242,84 @@ dependencies = [
       expect(parsedBaba.archetype).toBe(parsedBbyg.archetype);
       expect(parsedBaba.archetype).toBe(parsedMatryoshka.archetype);
       expect(parsedBaba.archetype).toBe("fullstack_hybrid");
+    });
+  });
+
+  describe("Subtask 1: Ultra-lean root AGENTS.md (<200 tokens): Defining archetype identity, canonical test/build/lint commands, and non-negotiable anti-slop rules", () => {
+    const archetypes: AgentArchetype[] = [
+      "api_backend",
+      "opinionated_monolith",
+      "reactive_frontend",
+      "systems_microservice",
+      "fullstack_hybrid"
+    ];
+
+    for (const archetype of archetypes) {
+      it(`compiles root AGENTS.md strictly under 200 tokens for archetype ${archetype}`, () => {
+        const profile = {
+          archetype,
+          runtime: "bun",
+          packageManager: "bun",
+          testCommand: "bun test",
+          buildCommand: "bun run build",
+          lintCommand: "none",
+          activeSkills: [
+            "skill-backend",
+            "skill-database",
+            "skill-security",
+            "skill-testing"
+          ] as SkillName[]
+        };
+
+        const compiled = compileRootAgents(profile);
+        const tokens = estimateTokens(compiled);
+        const words = compiled.trim().split(/\s+/).length;
+
+        // Token budget guard (< 200 tokens)
+        expect(tokens).toBeLessThan(200);
+        expect(words).toBeLessThan(200);
+
+        // Archetype and stack identity
+        expect(compiled).toContain(`* **Archetype:** ${archetype}`);
+        expect(compiled).toContain("* **Runtime:** bun (bun)");
+        expect(compiled).toContain("* **Test Runner:** `bun test`");
+        expect(compiled).toContain("* **Build / Lint:** `bun run build` | `none`");
+
+        // Non-negotiable anti-slop rules
+        expect(compiled).toContain("## 🛡️ Anti-Slop Core Invariants");
+        expect(compiled).toContain("* **YAGNI & DRY First:**");
+        expect(compiled).toContain("* **No Unprompted Refactoring:**");
+        expect(compiled).toContain("* **Verification First:**");
+
+        // On-demand specialized skills links
+        expect(compiled).toContain("## 🧭 On-Demand Specialized Skills");
+        expect(compiled).toContain(".agents/skills/skill-backend.md");
+        expect(compiled).toContain(".agents/skills/skill-database.md");
+        expect(compiled).toContain(".agents/skills/skill-security.md");
+        expect(compiled).toContain(".agents/skills/skill-testing.md");
+      });
+    }
+
+    it("enforces token count strictly < 200 even with all 5 active skills and full commands", () => {
+      const allSkills: SkillName[] = [
+        "skill-backend",
+        "skill-frontend",
+        "skill-database",
+        "skill-security",
+        "skill-testing"
+      ];
+      const compiled = compileRootAgents({
+        archetype: "fullstack_hybrid",
+        runtime: "typescript (bun)",
+        packageManager: "bun",
+        testCommand: "bun test",
+        buildCommand: "bun run build",
+        lintCommand: "bunx biome check .",
+        activeSkills: allSkills
+      });
+
+      const tokens = estimateTokens(compiled);
+      expect(tokens).toBeLessThan(200);
     });
   });
 
