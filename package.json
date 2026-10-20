@@ -19,6 +19,7 @@
     "matryoshka": "./src/cli.ts"
   },
   "scripts": {
+    "build": "bun build ./index.ts --outdir ./dist",
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
     "test": "bun test"
