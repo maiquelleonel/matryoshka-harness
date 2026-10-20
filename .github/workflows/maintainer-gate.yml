@@ -8,6 +8,10 @@ on:
   pull_request_review:
     types: [submitted, edited, dismissed]
 
+permissions:
+  pull-requests: read
+  contents: read
+
 jobs:
   verify-maintainer:
     name: Verify Maintainer Approval
