@@ -1,0 +1,108 @@
+export type PrimaryStack =
+  | "python"
+  | "typescript"
+  | "go"
+  | "rust"
+  | "ruby"
+  | "php"
+  | "unknown";
+
+export type ProjectArchetype =
+  | "procedural-cms"
+  | "reactive-frontend"
+  | "opinionated-framework"
+  | "distributed-systems"
+  | "generic";
+
+export interface ProjectStack {
+  primary: PrimaryStack;
+  frameworks: string[];
+  testRunner: string | null;
+  archetype: ProjectArchetype;
+}
+
+export interface DetectResult {
+  status: "success" | "error";
+  stack: ProjectStack;
+  rootPath: string;
+  message?: string;
+}
+
+export type MaturityLevel = "L0" | "L1" | "L2" | "L3" | "L4";
+
+export type GovernanceAxis =
+  | "context"
+  | "skills"
+  | "guardrails"
+  | "sensors"
+  | "hygiene";
+
+export interface HarnessGap {
+  id: string;
+  axis: GovernanceAxis;
+  title: string;
+  description?: string;
+  remediation?: string;
+  weight?: number;
+}
+
+export interface HarnessScoreOptions {
+  binaryPath?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+  allowFallback?: boolean;
+}
+
+export interface HarnessScoreResult {
+  score: number;
+  maxScore: number;
+  level: MaturityLevel;
+  gaps: HarnessGap[];
+  passed: string[];
+  rawOutput?: string;
+  source: "subprocess" | "fallback";
+  executionTimeMs: number;
+}
+
+export type RemediationPriority = "critical" | "high" | "medium" | "low";
+
+export interface RemediationIssue {
+  id: string;
+  gapId: string;
+  axis: GovernanceAxis;
+  title: string;
+  description: string;
+  targetFiles: string[];
+  stack: PrimaryStack;
+  priority: RemediationPriority;
+  suggestedAction: string;
+  snippet?: string;
+}
+
+export interface CodebaseEntities {
+  models: string[];
+  routes: string[];
+  controllers: string[];
+}
+
+export interface SemanticReconciliation {
+  primaryStack: PrimaryStack;
+  archetype: ProjectArchetype;
+  frameworks: string[];
+  testRunner: string | null;
+  oracleScore: number;
+  oracleLevel: MaturityLevel;
+  oracleSource?: "subprocess" | "fallback";
+  totalGaps: number;
+  remediationIssues: RemediationIssue[];
+  entities: CodebaseEntities;
+  timestamp: string;
+}
+
+export interface BadgeOptions {
+  label?: string;
+  format?: "level" | "score" | "full";
+}
+
