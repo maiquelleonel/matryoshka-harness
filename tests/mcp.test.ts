@@ -127,6 +127,28 @@ describe("SPEC-7: MCP Auto-Wiring & Observability (baba mcp wire)", () => {
       expect(parsed.targets[0].target).toBe("gemini");
     });
 
+    it("supports --targets=<list> and --target=<name> with equal-sign syntax", async () => {
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets=cursor,claude",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, ".cursor", "mcp.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".claude", "mcp.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".gemini"))).toBe(false);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.targets.length).toBe(2);
+      expect(parsed.targets.map((t: any) => t.target).sort()).toEqual(["claude", "cursor"]);
+    });
+
     it("isolates target error and sets overall status to error when writing fails", async () => {
       // Create a directory where the config file is expected to be, making writeFileSync fail
       const cursorDir = path.join(tempDir, ".cursor");
@@ -216,6 +238,185 @@ describe("SPEC-7: MCP Auto-Wiring & Observability (baba mcp wire)", () => {
       );
       expect(idempSettings).toEqual(updatedSettings);
     });
+
+    it("preserves custom settings across all targets simultaneously (Cursor, Gemini, Claude)", async () => {
+      const cursorDir = path.join(tempDir, ".cursor");
+      const claudeDir = path.join(tempDir, ".claude");
+      fs.mkdirSync(cursorDir, { recursive: true });
+      fs.mkdirSync(claudeDir, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(cursorDir, "mcp.json"),
+        JSON.stringify({
+          editorRules: { strict: true },
+          mcpServers: {
+            "github-context": { command: "docker", args: ["run", "gh-mcp"] }
+          }
+        })
+      );
+
+      fs.writeFileSync(
+        path.join(claudeDir, "mcp.json"),
+        JSON.stringify({
+          autoApprove: ["read_file"],
+          mcpServers: {
+            "filesystem-mcp": { command: "node", args: ["fs-server.js"] }
+          }
+        })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "mcp", "wire", tempDir, "--json"]);
+      expect(proc.exitCode).toBe(0);
+
+      const cursorConfig = JSON.parse(fs.readFileSync(path.join(cursorDir, "mcp.json"), "utf-8"));
+      const claudeConfig = JSON.parse(fs.readFileSync(path.join(claudeDir, "mcp.json"), "utf-8"));
+
+      expect(cursorConfig.editorRules).toEqual({ strict: true });
+      expect(cursorConfig.mcpServers["github-context"]).toEqual({
+        command: "docker",
+        args: ["run", "gh-mcp"]
+      });
+      expect(cursorConfig.mcpServers["codebase-memory-mcp"]).toEqual({
+        command: "bunx",
+        args: ["codebase-memory-mcp"]
+      });
+
+      expect(claudeConfig.autoApprove).toEqual(["read_file"]);
+      expect(claudeConfig.mcpServers["filesystem-mcp"]).toEqual({
+        command: "node",
+        args: ["fs-server.js"]
+      });
+      expect(claudeConfig.mcpServers["codebase-memory-mcp"]).toEqual({
+        command: "bunx",
+        args: ["codebase-memory-mcp"]
+      });
+    });
+
+    it("updates existing outdated codebase-memory-mcp configuration while preserving other servers", async () => {
+      const cursorDir = path.join(tempDir, ".cursor");
+      fs.mkdirSync(cursorDir, { recursive: true });
+
+      const outdatedConfig = {
+        mcpServers: {
+          "codebase-memory-mcp": {
+            command: "npx",
+            args: ["legacy-mcp@0.0.1"]
+          },
+          "other-server": {
+            command: "python",
+            args: ["server.py"]
+          }
+        }
+      };
+
+      fs.writeFileSync(
+        path.join(cursorDir, "mcp.json"),
+        JSON.stringify(outdatedConfig, null, 2)
+      );
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets",
+        "cursor",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      const updated = JSON.parse(fs.readFileSync(path.join(cursorDir, "mcp.json"), "utf-8"));
+      expect(updated.mcpServers["codebase-memory-mcp"]).toEqual({
+        command: "bunx",
+        args: ["codebase-memory-mcp"]
+      });
+      expect(updated.mcpServers["other-server"]).toEqual({
+        command: "python",
+        args: ["server.py"]
+      });
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.targets[0].action).toBe("update");
+      expect(parsed.targets[0].status).toBe("updated");
+    });
+
+    it("prevents destructive overwrites when encountering corrupted or malformed JSON files (AC-2.1)", async () => {
+      const cursorDir = path.join(tempDir, ".cursor");
+      fs.mkdirSync(cursorDir, { recursive: true });
+      const corruptedPath = path.join(cursorDir, "mcp.json");
+      const corruptedContent = "{\n  \"invalid\": true,\n  corrupted: [ missing quotes\n";
+      fs.writeFileSync(corruptedPath, corruptedContent, "utf-8");
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--targets",
+        "cursor",
+        "--json"
+      ]);
+
+      // Must exit with error to prevent data destruction
+      expect(proc.exitCode).toBe(1);
+
+      // Must NOT destroy the original file content
+      const contentAfter = fs.readFileSync(corruptedPath, "utf-8");
+      expect(contentAfter).toBe(corruptedContent);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.status).toBe("error");
+      expect(parsed.targets[0].status).toBe("error");
+      expect(parsed.targets[0].error).toContain("JSON");
+    });
+
+    it("achieves true idempotence on already configured targets without redundant disk writes (AC-2.2)", async () => {
+      const geminiDir = path.join(tempDir, ".gemini");
+      fs.mkdirSync(geminiDir, { recursive: true });
+      const configPath = path.join(geminiDir, "settings.json");
+
+      const readyConfig = {
+        mcpServers: {
+          "codebase-memory-mcp": {
+            command: "bunx",
+            args: ["codebase-memory-mcp"]
+          }
+        }
+      };
+      fs.writeFileSync(configPath, JSON.stringify(readyConfig, null, 2) + "\n", "utf-8");
+
+      // Mark file as read-only (0o444)
+      fs.chmodSync(configPath, 0o444);
+
+      try {
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "mcp",
+          "wire",
+          tempDir,
+          "--targets",
+          "gemini",
+          "--json"
+        ]);
+
+        // If wireMcpTargets attempted to rewrite the unchanged file, it would fail with EACCES
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.targets[0].action).toBe("unchanged");
+        expect(parsed.targets[0].status).toBe("unchanged");
+      } finally {
+        // Restore permissions for cleanup
+        fs.chmodSync(configPath, 0o644);
+      }
+    });
   });
 
   describe("Scenario 3: Dry-Run Mode and Structured Output", () => {
@@ -268,6 +469,77 @@ describe("SPEC-7: MCP Auto-Wiring & Observability (baba mcp wire)", () => {
       const stdout = proc.stdout.toString();
       expect(stdout.toLowerCase()).toContain("dry-run");
       expect(stdout).toContain(".cursor/mcp.json");
+    });
+
+    it("accurately reports planned actions (create, update, unchanged) in dry-run without writing to disk", async () => {
+      const cursorDir = path.join(tempDir, ".cursor");
+      const geminiDir = path.join(tempDir, ".gemini");
+      fs.mkdirSync(cursorDir, { recursive: true });
+      fs.mkdirSync(geminiDir, { recursive: true });
+
+      // Cursor: already configured -> unchanged
+      fs.writeFileSync(
+        path.join(cursorDir, "mcp.json"),
+        JSON.stringify({
+          mcpServers: {
+            "codebase-memory-mcp": {
+              command: "bunx",
+              args: ["codebase-memory-mcp"]
+            }
+          }
+        })
+      );
+
+      // Gemini: outdated -> update
+      fs.writeFileSync(
+        path.join(geminiDir, "settings.json"),
+        JSON.stringify({
+          mcpServers: {
+            "codebase-memory-mcp": {
+              command: "bunx",
+              args: ["old-version"]
+            }
+          }
+        })
+      );
+
+      // Claude: does not exist -> create
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "mcp",
+        "wire",
+        tempDir,
+        "--dry-run",
+        "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      // Verify no Claude directory was created
+      expect(fs.existsSync(path.join(tempDir, ".claude"))).toBe(false);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.status).toBe("planned");
+      expect(parsed.dryRun).toBe(true);
+
+      const cursorTarget = parsed.targets.find((t: any) => t.target === "cursor");
+      const geminiTarget = parsed.targets.find((t: any) => t.target === "gemini");
+      const claudeTarget = parsed.targets.find((t: any) => t.target === "claude");
+
+      expect(cursorTarget.action).toBe("unchanged");
+      expect(cursorTarget.status).toBe("planned");
+
+      expect(geminiTarget.action).toBe("update");
+      expect(geminiTarget.status).toBe("planned");
+
+      expect(claudeTarget.action).toBe("create");
+      expect(claudeTarget.status).toBe("planned");
+
+      // Verify original files were untouched
+      const geminiRaw = JSON.parse(fs.readFileSync(path.join(geminiDir, "settings.json"), "utf-8"));
+      expect(geminiRaw.mcpServers["codebase-memory-mcp"].args).toEqual(["old-version"]);
     });
   });
 

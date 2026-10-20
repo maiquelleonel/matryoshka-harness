@@ -55,18 +55,45 @@ export function wireMcpTargets(
     let action: "create" | "update" | "unchanged" = "create";
     const fileExisted = fs.existsSync(filePath);
     let finalContent: Record<string, any> = {};
+    let parseError: string | undefined;
 
     if (fileExisted) {
+      let raw = "";
       try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          finalContent = parsed;
-        } else {
+        raw = fs.readFileSync(filePath, "utf-8");
+      } catch (err: any) {
+        parseError = `Failed to read file ${def.relativePath}: ${err?.message || String(err)}`;
+      }
+
+      if (!parseError) {
+        if (raw.trim().length === 0) {
           finalContent = {};
+        } else {
+          try {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+              finalContent = parsed;
+            } else {
+              parseError = `Invalid JSON root structure in ${def.relativePath}: expected object, received ${Array.isArray(parsed) ? "array" : typeof parsed}`;
+            }
+          } catch (err: any) {
+            parseError = `Malformed JSON in ${def.relativePath}: ${err?.message || String(err)}`;
+          }
         }
-      } catch {
-        finalContent = {};
+      }
+
+      if (parseError) {
+        // Zero destructive overwrites: Do NOT touch or overwrite corrupted file!
+        results.push({
+          name: def.name,
+          target: def.target,
+          path: filePath,
+          relativePath: def.relativePath,
+          action: "update",
+          status: "error",
+          error: parseError,
+        });
+        continue;
       }
 
       if (
@@ -108,24 +135,27 @@ export function wireMcpTargets(
     let targetError: string | undefined;
 
     if (!dryRun) {
-      try {
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
+      if (action === "unchanged") {
+        // True idempotence: If configuration is already 100% matched, skip redundant disk write
+        status = "unchanged";
+      } else {
+        try {
+          if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+          }
+          fs.writeFileSync(
+            filePath,
+            JSON.stringify(finalContent, null, 2) + "\n",
+            "utf-8"
+          );
+          status =
+            action === "create"
+              ? "created"
+              : "updated";
+        } catch (err: any) {
+          status = "error";
+          targetError = err?.message || String(err);
         }
-        fs.writeFileSync(
-          filePath,
-          JSON.stringify(finalContent, null, 2) + "\n",
-          "utf-8"
-        );
-        status =
-          action === "create"
-            ? "created"
-            : action === "update"
-            ? "updated"
-            : "unchanged";
-      } catch (err: any) {
-        status = "error";
-        targetError = err?.message || String(err);
       }
     } else {
       status = "planned";
@@ -169,7 +199,10 @@ export function formatMcpWireHumanOutput(result: McpWireResult): string {
     lines.push(`  ${pc.dim("•")} ${pc.bold("Simulated Actions:")}`);
 
     for (const t of result.targets) {
-      const actionBadge = pc.yellow(`[dry-run: ${t.action}]`);
+      const actionBadge =
+        t.status === "error"
+          ? pc.red(`[error: ${t.error || "failed"}]`)
+          : pc.yellow(`[dry-run: ${t.action}]`);
       lines.push(`    - ${pc.bold(t.name)}: ${t.relativePath} ${actionBadge}`);
     }
 

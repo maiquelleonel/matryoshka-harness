@@ -247,6 +247,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         }
       }
 
+      for (const arg of mcpArgs) {
+        if (arg.startsWith("--targets=")) {
+          const val = arg.slice("--targets=".length);
+          targets = val
+            .split(",")
+            .map((t) => t.trim().toLowerCase() as McpTargetName)
+            .filter(Boolean);
+        } else if (arg.startsWith("--target=")) {
+          const val = arg.slice("--target=".length);
+          targets = [val.trim().toLowerCase() as McpTargetName];
+        }
+      }
+
       const positional = mcpArgs.filter((arg, idx) => {
         if (arg.startsWith("-")) return false;
         if (idx > 0 && (mcpArgs[idx - 1] === "--targets" || mcpArgs[idx - 1] === "--target")) return false;

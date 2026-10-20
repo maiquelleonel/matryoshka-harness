@@ -47,9 +47,10 @@ If omitted, all 3 targets are configured by default.
 When target file writing fails (e.g. read-only filesystem or invalid permissions), the error is isolated per target with `status: "error"` and `error` description, setting the overall result status to `"error"`.
 
 ### 2.3. Subtask 3: Idempotence, Safety & Dry-Run
-- **Deep Merge:** If any target configuration file already exists, existing top-level keys, nested configurations, and existing `mcpServers` entries are strictly preserved.
-- **Idempotent Write:** Re-running the command does not duplicate or corrupt settings.
-- **Dry-Run Mode (`--dry-run`):** When `--dry-run` is specified, no directories are created and no files are written to disk.
+- **Deep Merge:** If any target configuration file already exists, existing top-level keys, nested configurations, and existing `mcpServers` entries are strictly preserved across all targets (Cursor, Gemini CLI, Claude Code).
+- **Idempotent Write:** Re-running the command does not duplicate or corrupt settings. When a target is already configured with identical parameters, no unnecessary disk writes are performed (`status: "unchanged"`).
+- **Zero Destructive Overwrites:** If an existing configuration file contains invalid/unparseable JSON, it must NOT be overwritten or wiped out; the error is safely isolated with `status: "error"`.
+- **Dry-Run Mode (`--dry-run`):** When `--dry-run` is specified, no directories are created and no files are written to disk. The simulation accurately computes actions (`create`, `update`, `unchanged`) with `status: "planned"`.
 - **Structured JSON Mode (`--json`):** Emits structured output detailing targeted files, planned/actual status, and root path. In `--dry-run`, `status` is `"planned"`.
 
 ### 2.4. Subtask 4: Dashboard-as-Code & Observability
@@ -126,6 +127,19 @@ When the command `baba mcp wire` is executed
 Then existing settings and user keys must be strictly preserved
 And `codebase-memory-mcp` must be injected/updated under `mcpServers`
 And no pre-existing data must be destroyed.
+
+### AC-2.1: Safety Against Corrupted Files (Zero Destructive Overwrite)
+Given an existing target configuration file contains malformed or unparseable JSON
+When `baba mcp wire` is executed
+Then the existing corrupted file must NOT be destroyed or overwritten
+And the affected target must report `status: "error"` with an explicit error description
+And the CLI must exit with code 1.
+
+### AC-2.2: True Idempotence on Unchanged Configurations
+Given a target configuration file is already correctly configured with `codebase-memory-mcp`
+When `baba mcp wire` is executed
+Then the target must report `action: "unchanged"` and `status: "unchanged"`
+And no unnecessary disk write is attempted (preserving read-only files).
 
 ### AC-3: Dry-Run Mode & Structured Output
 Given the command is executed with `--dry-run --json`
