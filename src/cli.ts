@@ -2,7 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
-import { generateAgents } from "./agents";
+import { generateAgents, profileArchetype } from "./agents";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
@@ -21,6 +21,7 @@ Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
   baba agents generate [path] [--force] [--dry-run] [--json]
+  baba agents profile [path] [--json]
   baba wrap [path]
 
 Commands:
@@ -185,14 +186,68 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const isDryRun = rest.includes("--dry-run");
       const positional = rest.filter((arg) => !arg.startsWith("-"));
 
+      let subcommand = "generate";
       let targetDir: string | undefined;
-      if (positional[0] === "generate") {
+      if (positional[0] === "generate" || positional[0] === "profile" || positional[0] === "seams") {
+        subcommand = positional[0];
         targetDir = positional[1] || process.cwd();
       } else {
         targetDir = positional[0] || process.cwd();
       }
 
       const resolvedPath = path.resolve(targetDir);
+
+      if (subcommand === "profile" || subcommand === "seams") {
+        try {
+          const profile = profileArchetype(resolvedPath);
+          if (isJson) {
+            console.log(JSON.stringify(profile, null, 2));
+          } else {
+            console.log(pc.bold(pc.cyan("\n🪆 Matryoshka Archetype Profiler & Seam Discovery")));
+            console.log(`  ${pc.dim("•")} ${pc.bold("Root Path:")}     ${resolvedPath}`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Archetype:")}     ${pc.magenta(profile.archetype)}`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Runtime:")}       ${profile.runtime} (${profile.packageManager})`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Test Runner:")}   ${profile.testCommand}`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Build / Lint:")}  ${profile.buildCommand} | ${profile.lintCommand}`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Active Skills:")} ${profile.activeSkills.join(", ")}`);
+            console.log(pc.bold(pc.cyan("  Discovered Seams:")));
+            console.log(
+              `    ${pc.dim("•")} Backend:   ${profile.seams.hasBackend ? pc.green("yes") : pc.dim("no")} (${profile.seams.routes.length} routes, ${profile.seams.controllers.length} controllers, ${profile.seams.services.length} services)`
+            );
+            console.log(
+              `    ${pc.dim("•")} Database:  ${profile.seams.hasDatabase ? pc.green("yes") : pc.dim("no")} (${profile.seams.models.length} models)`
+            );
+            console.log(
+              `    ${pc.dim("•")} Frontend:  ${profile.seams.hasFrontend ? pc.green("yes") : pc.dim("no")} (${profile.seams.views.length} views)`
+            );
+            console.log(
+              `    ${pc.dim("•")} Testing:   ${profile.seams.hasTesting ? pc.green("yes") : pc.dim("no")} (${profile.seams.tests.length} tests)`
+            );
+            console.log(
+              `    ${pc.dim("•")} Security:  ${profile.seams.hasSecurity ? pc.green("yes") : pc.dim("no")}\n`
+            );
+          }
+          process.exit(0);
+        } catch (error: any) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "agents profile",
+                  rootPath: resolvedPath,
+                  message: error?.message || "Archetype profiling failed",
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(pc.red(`\nProfiling failed: ${error?.message || "Unknown error"}\n`));
+          }
+          process.exit(1);
+        }
+      }
 
       try {
         const result = generateAgents(resolvedPath, {
