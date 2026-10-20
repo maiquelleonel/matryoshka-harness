@@ -36,4 +36,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # orchestrator ephemeral files
 task_context.json
 review_context.json
+ouroboros_usage.json
 
