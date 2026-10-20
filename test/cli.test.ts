@@ -174,18 +174,65 @@ describe("CLI Commands and Aliases (src/cli.ts & index.ts)", () => {
       expect(proc.stderr.toString()).toContain("Unknown command 'unknown-command'");
     });
 
-    it("supports scan and wrap subcommands with pending JSON responses", async () => {
-      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
-      expect(procScan.exitCode).toBe(0);
-      const scanParsed = JSON.parse(procScan.stdout.toString().trim());
-      expect(scanParsed.status).toBe("pending");
-      expect(scanParsed.command).toBe("scan");
-
+    it("supports wrap subcommand with pending JSON responses", async () => {
       const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--json"]);
       expect(procWrap.exitCode).toBe(0);
       const wrapParsed = JSON.parse(procWrap.stdout.toString().trim());
       expect(wrapParsed.status).toBe("pending");
       expect(wrapParsed.command).toBe("wrap");
+    });
+
+    it("supports scan subcommand with structured JSON output", async () => {
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(procScan.exitCode).toBe(0);
+      const scanParsed = JSON.parse(procScan.stdout.toString().trim());
+      expect(scanParsed.status).toBe("success");
+      expect(scanParsed.command).toBe("scan");
+      expect(scanParsed.primaryStack).toBe("unknown");
+      expect(scanParsed.oracleScore).toBeDefined();
+      expect(scanParsed.oracleLevel).toBe("L0");
+      expect(Array.isArray(scanParsed.remediationIssues)).toBe(true);
+      expect(Array.isArray(scanParsed.remediation_issues)).toBe(true);
+    });
+
+    it("supports scan subcommand with human-readable terminal output", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-scan-app",
+          dependencies: { next: "^14.0.0" },
+          scripts: { test: "bun test" },
+        })
+      );
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# CLI App");
+
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir]);
+      expect(procScan.exitCode).toBe(0);
+      const stdout = procScan.stdout.toString();
+      expect(stdout).toContain("Matryoshka Maturity Scanner");
+      expect(stdout).toContain("typescript");
+      expect(stdout).toContain("nextjs");
+      expect(stdout).toContain("Remediation Plan");
+    });
+
+    it("ensures scan alias parity across baba, bbyg, and matryoshka invocations", async () => {
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.status).toBe("success");
+      expect(parsedBbyg.status).toBe("success");
+      expect(parsedMatryoshka.status).toBe("success");
+      expect(parsedBaba.oracleScore).toBe(parsedBbyg.oracleScore);
+      expect(parsedBaba.oracleScore).toBe(parsedMatryoshka.oracleScore);
     });
   });
 });
