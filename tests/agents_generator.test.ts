@@ -243,4 +243,81 @@ dependencies = [
       expect(parsedBaba.archetype).toBe("fullstack_hybrid");
     });
   });
+
+  describe("Unit & Archetype Profiling Tests", () => {
+    it("profiles systems_microservice for Rust without web UI", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "Cargo.toml"),
+        `[package]\nname = "microservice"\nversion = "0.1.0"\n`
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.archetype).toBe("systems_microservice");
+    });
+
+    it("profiles systems_microservice for Go without web UI", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "go.mod"),
+        `module microservice\n\ngo 1.22\n`
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.archetype).toBe("systems_microservice");
+    });
+
+    it("profiles opinionated_monolith for Django", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "requirements.txt"),
+        `django>=4.2\n`
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.archetype).toBe("opinionated_monolith");
+    });
+
+    it("profiles reactive_frontend for React without backend/database", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "react-app",
+          dependencies: { react: "^18.2.0" }
+        })
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.archetype).toBe("reactive_frontend");
+    });
+
+    it("renders terminal output cleanly for non-json dry-run", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "cli-test", dependencies: { express: "^4.18.0" } })
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(stdout).toContain("Archetype:");
+      expect(stdout).toContain("Token Savings:");
+    });
+  });
 });
