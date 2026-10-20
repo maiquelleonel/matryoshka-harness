@@ -456,7 +456,7 @@ const SKILL_TITLE_MAP: Record<SkillName, string> = {
 };
 
 /**
- * Compiles the ultra-lean root AGENTS.md index strictly under 250 tokens (< 200 target).
+ * Compiles the ultra-lean root AGENTS.md index strictly under 200 tokens.
  */
 export function compileRootAgents(profile: {
   archetype: AgentArchetype;
@@ -480,12 +480,12 @@ export function compileRootAgents(profile: {
 * **Build / Lint:** \`${profile.buildCommand}\` | \`${profile.lintCommand}\`
 
 ## 🛡️ Anti-Slop Core Invariants
-* **YAGNI & DRY First:** Prefer simple composable functions over speculative class hierarchies.
-* **No Unprompted Refactoring:** Preserve existing working patterns; surgical edits only.
-* **Verification First:** Never declare completion without executing test suite evidence.
+* **YAGNI & DRY First:** Prefer composable functions over speculative class hierarchies.
+* **No Unprompted Refactoring:** Preserve working patterns; surgical edits only.
+* **Verification First:** Never declare completion without test suite evidence.
 
 ## 🧭 On-Demand Specialized Skills
-Load specialized guidelines only when touching respective domains:
+Load guidelines only when touching respective domains:
 ${skillsList}
 `;
 }
