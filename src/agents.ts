@@ -17,6 +17,31 @@ export type SkillName =
   | "skill-security"
   | "skill-testing";
 
+export interface DiscoveredSeams {
+  hasBackend: boolean;
+  hasFrontend: boolean;
+  hasDatabase: boolean;
+  hasSecurity: boolean;
+  hasTesting: boolean;
+  routes: string[];
+  models: string[];
+  controllers: string[];
+  services: string[];
+  views: string[];
+  tests: string[];
+}
+
+export interface ArchetypeProfile {
+  archetype: AgentArchetype;
+  runtime: string;
+  packageManager: string;
+  testCommand: string;
+  buildCommand: string;
+  lintCommand: string;
+  activeSkills: SkillName[];
+  seams: DiscoveredSeams;
+}
+
 export interface SkillDefinition {
   name: SkillName;
   fileName: string;
@@ -79,6 +104,8 @@ export interface GenerateAgentsResult {
   estimated_token_savings: EstimatedTokenSavings;
   skillsIndex?: SkillsMetadataIndex;
   message?: string;
+  seams?: DiscoveredSeams;
+  profile?: ArchetypeProfile;
 }
 
 /**
@@ -91,19 +118,219 @@ export function estimateTokens(text: string): number {
 }
 
 /**
+ * Discovers architectural seams across the repository by inspecting directory structures and file markers.
+ */
+export function discoverSeams(projectPath: string): DiscoveredSeams {
+  const root = path.resolve(projectPath);
+  const routes: string[] = [];
+  const models: string[] = [];
+  const controllers: string[] = [];
+  const services: string[] = [];
+  const views: string[] = [];
+  const tests: string[] = [];
+
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    return {
+      hasBackend: false,
+      hasFrontend: false,
+      hasDatabase: false,
+      hasSecurity: false,
+      hasTesting: false,
+      routes,
+      models,
+      controllers,
+      services,
+      views,
+      tests,
+    };
+  }
+
+  const ignoreDirs = new Set([
+    "node_modules",
+    ".git",
+    ".bun-install",
+    "vendor",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".idea",
+    ".vscode",
+    "coverage",
+    ".next",
+    ".turbo",
+    ".agents",
+  ]);
+
+  let totalFiles = 0;
+
+  function walk(currentDir: string, depth: number): void {
+    if (depth > 5) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith(".")) {
+          walk(path.join(currentDir, entry.name), depth + 1);
+        }
+      } else if (entry.isFile()) {
+        totalFiles++;
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+        const lowerRel = relPath.toLowerCase();
+
+        // Testing patterns
+        if (
+          lowerRel.includes("/tests/") ||
+          lowerRel.startsWith("tests/") ||
+          lowerRel.includes("/test/") ||
+          lowerRel.startsWith("test/") ||
+          lowerRel.includes("/__tests__/") ||
+          lowerRel.startsWith("__tests__/") ||
+          lowerRel.includes("/spec/") ||
+          lowerRel.startsWith("spec/") ||
+          lowerRel.endsWith(".test.ts") ||
+          lowerRel.endsWith(".test.js") ||
+          lowerRel.endsWith(".spec.ts") ||
+          lowerRel.endsWith(".spec.js") ||
+          lowerRel.endsWith("_test.go") ||
+          lowerRel.endsWith("_test.py") ||
+          lowerRel.endsWith("conftest.py") ||
+          lowerRel.endsWith("pytest.ini")
+        ) {
+          tests.push(relPath);
+        }
+
+        // Route patterns
+        if (
+          lowerRel.includes("/routes/") ||
+          lowerRel.startsWith("routes/") ||
+          lowerRel.includes("/api/") ||
+          lowerRel.startsWith("api/") ||
+          lowerRel.includes("/endpoints/") ||
+          lowerRel.startsWith("endpoints/") ||
+          lowerRel.includes("router.") ||
+          lowerRel.includes("route.") ||
+          lowerRel.endsWith("urls.py")
+        ) {
+          routes.push(relPath);
+        }
+
+        // Model / Database patterns
+        if (
+          lowerRel.includes("/models/") ||
+          lowerRel.startsWith("models/") ||
+          lowerRel.includes("/entities/") ||
+          lowerRel.startsWith("entities/") ||
+          lowerRel.includes("/schemas/") ||
+          lowerRel.startsWith("schemas/") ||
+          lowerRel.includes("/migrations/") ||
+          lowerRel.startsWith("migrations/") ||
+          lowerRel.includes("model.") ||
+          lowerRel.includes("entity.") ||
+          lowerRel.includes("schema.") ||
+          lowerRel.endsWith("schema.prisma")
+        ) {
+          models.push(relPath);
+        }
+
+        // Controller patterns
+        if (
+          lowerRel.includes("/controllers/") ||
+          lowerRel.startsWith("controllers/") ||
+          lowerRel.includes("/handlers/") ||
+          lowerRel.startsWith("handlers/") ||
+          lowerRel.includes("controller.") ||
+          lowerRel.includes("handler.")
+        ) {
+          controllers.push(relPath);
+        }
+
+        // Service patterns
+        if (
+          lowerRel.includes("/services/") ||
+          lowerRel.startsWith("services/") ||
+          lowerRel.includes("/domain/") ||
+          lowerRel.startsWith("domain/") ||
+          lowerRel.includes("/usecases/") ||
+          lowerRel.startsWith("usecases/") ||
+          lowerRel.includes("service.")
+        ) {
+          services.push(relPath);
+        }
+
+        // Frontend / View patterns
+        if (
+          lowerRel.includes("/views/") ||
+          lowerRel.startsWith("views/") ||
+          lowerRel.includes("/templates/") ||
+          lowerRel.startsWith("templates/") ||
+          lowerRel.includes("/components/") ||
+          lowerRel.startsWith("components/") ||
+          lowerRel.includes("/pages/") ||
+          lowerRel.startsWith("pages/") ||
+          lowerRel.includes("/static/") ||
+          lowerRel.startsWith("static/") ||
+          lowerRel.includes("/app/views/") ||
+          lowerRel.startsWith("app/views/") ||
+          lowerRel.includes("/resources/views/") ||
+          lowerRel.startsWith("resources/views/") ||
+          lowerRel.endsWith(".html") ||
+          lowerRel.endsWith(".jsx") ||
+          lowerRel.endsWith(".tsx") ||
+          lowerRel.endsWith(".vue") ||
+          lowerRel.endsWith(".svelte") ||
+          lowerRel.endsWith(".erb")
+        ) {
+          views.push(relPath);
+        }
+      }
+    }
+  }
+
+  walk(root, 0);
+
+  routes.sort();
+  models.sort();
+  controllers.sort();
+  services.sort();
+  views.sort();
+  tests.sort();
+
+  const hasBackend = routes.length > 0 || controllers.length > 0 || services.length > 0;
+  const hasFrontend = views.length > 0;
+  const hasDatabase = models.length > 0;
+  const hasTesting = tests.length > 0;
+  const hasSecurity = totalFiles > 0;
+
+  return {
+    hasBackend,
+    hasFrontend,
+    hasDatabase,
+    hasSecurity,
+    hasTesting,
+    routes,
+    models,
+    controllers,
+    services,
+    views,
+    tests,
+  };
+}
+
+/**
  * Deterministically profiles a repository and classifies it into a canonical archetype.
  */
-export function profileArchetype(projectPath: string): {
-  archetype: AgentArchetype;
-  runtime: string;
-  packageManager: string;
-  testCommand: string;
-  buildCommand: string;
-  lintCommand: string;
-  activeSkills: SkillName[];
-} {
+export function profileArchetype(projectPath: string): ArchetypeProfile {
   const root = path.resolve(projectPath);
   const stack = detectStack(root);
+  const seams = discoverSeams(root);
 
   let archetype: AgentArchetype = "api_backend";
   let runtime = "unknown";
@@ -142,42 +369,77 @@ export function profileArchetype(projectPath: string): {
   const composerJsonPath = path.join(root, "composer.json");
   const hasPhp = fs.existsSync(composerJsonPath);
 
-  if (hasPython) {
-    runtime = "python";
-    packageManager = "pip";
-    if (fs.existsSync(path.join(root, "poetry.lock"))) {
-      packageManager = "poetry";
-    } else if (fs.existsSync(path.join(root, "Pipfile"))) {
-      packageManager = "pipenv";
-    } else if (fs.existsSync(path.join(root, "uv.lock"))) {
-      packageManager = "uv";
-    }
+  // Check monorepo subdirectories (e.g. apps/*, packages/*, frontend, backend, client, server)
+  const candidateSubdirs = [
+    "apps/web",
+    "apps/frontend",
+    "apps/ui",
+    "apps/client",
+    "frontend",
+    "client",
+    "web",
+    "packages/ui",
+    "packages/web",
+    "apps/api",
+    "apps/backend",
+    "apps/server",
+    "backend",
+    "server",
+    "api",
+    "packages/api",
+    "packages/server",
+  ];
 
-    let pythonContent = "";
-    if (fs.existsSync(pyprojectPath)) {
+  let monorepoHasFrontend = false;
+  let monorepoHasBackend = false;
+
+  for (const rel of candidateSubdirs) {
+    const full = path.join(root, rel);
+    if (!fs.existsSync(full)) continue;
+
+    const subPkg = path.join(full, "package.json");
+    if (fs.existsSync(subPkg)) {
       try {
-        pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+        const pkg = JSON.parse(fs.readFileSync(subPkg, "utf-8"));
+        const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+        if (
+          "next" in deps ||
+          "react" in deps ||
+          "vue" in deps ||
+          "svelte" in deps ||
+          "@sveltejs/kit" in deps ||
+          "nuxt" in deps ||
+          "astro" in deps
+        ) {
+          monorepoHasFrontend = true;
+        }
+        if (
+          "express" in deps ||
+          "fastify" in deps ||
+          "prisma" in deps ||
+          "drizzle-orm" in deps ||
+          "@nestjs/core" in deps
+        ) {
+          monorepoHasBackend = true;
+        }
       } catch {}
     }
-    if (fs.existsSync(requirementsPath)) {
-      try {
-        pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
-      } catch {}
-    }
 
-    if (/django/i.test(pythonContent)) {
-      archetype = "opinionated_monolith";
-    } else {
-      archetype = "api_backend";
+    if (
+      fs.existsSync(path.join(full, "pyproject.toml")) ||
+      fs.existsSync(path.join(full, "requirements.txt")) ||
+      fs.existsSync(path.join(full, "go.mod")) ||
+      fs.existsSync(path.join(full, "Cargo.toml"))
+    ) {
+      monorepoHasBackend = true;
     }
+  }
 
-    testCommand = testCommand !== "none" ? testCommand : "pytest";
-    lintCommand = /ruff/i.test(pythonContent)
-      ? "ruff check ."
-      : /flake8/i.test(pythonContent)
-      ? "flake8"
-      : "none";
-  } else if (hasPackageJson) {
+  // Inspect JS/TS package.json
+  let hasFrontendFramework = false;
+  let hasDatabaseOrBackend = false;
+
+  if (hasPackageJson) {
     let pkg: any = {};
     try {
       pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
@@ -188,7 +450,7 @@ export function profileArchetype(projectPath: string): {
     const allDeps: Record<string, string> = {
       ...(pkg.dependencies || {}),
       ...(pkg.devDependencies || {}),
-      ...(pkg.peerDependencies || {})
+      ...(pkg.peerDependencies || {}),
     };
     const scripts = pkg.scripts || {};
 
@@ -210,16 +472,20 @@ export function profileArchetype(projectPath: string): {
     buildCommand = scripts.build ? `${packageManager === "npm" ? "npm run build" : `${packageManager} run build`}` : "none";
     lintCommand = scripts.lint ? `${packageManager === "npm" ? "npm run lint" : `${packageManager} run lint`}` : "none";
 
-    const hasFrontendFramework =
+    hasFrontendFramework =
       "next" in allDeps ||
       "react" in allDeps ||
       "vue" in allDeps ||
       "svelte" in allDeps ||
       "@sveltejs/kit" in allDeps ||
       "nuxt" in allDeps ||
-      "astro" in allDeps;
+      "astro" in allDeps ||
+      "angular" in allDeps ||
+      "@angular/core" in allDeps ||
+      "solid-js" in allDeps ||
+      "preact" in allDeps;
 
-    const hasDatabaseOrBackend =
+    hasDatabaseOrBackend =
       "prisma" in allDeps ||
       "@prisma/client" in allDeps ||
       "drizzle-orm" in allDeps ||
@@ -231,6 +497,77 @@ export function profileArchetype(projectPath: string): {
       "better-sqlite3" in allDeps ||
       "express" in allDeps ||
       "fastify" in allDeps;
+  }
+
+  // Inspect Python content
+  let pythonContent = "";
+  if (hasPython) {
+    if (fs.existsSync(pyprojectPath)) {
+      try {
+        pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+      } catch {}
+    }
+    if (fs.existsSync(requirementsPath)) {
+      try {
+        pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+      } catch {}
+    }
+  }
+
+  const isDjangoNinja = /django[-_]ninja/i.test(pythonContent) || /ninja/i.test(pythonContent);
+  const isDjango = !isDjangoNinja && /django/i.test(pythonContent);
+  const hasPythonWebFramework =
+    isDjango ||
+    isDjangoNinja ||
+    /fastapi|flask|pyramid|tornado|sanic|aiohttp|falcon|starlette|litestar/i.test(pythonContent);
+
+  // Check if monorepo / fullstack hybrid
+  const isHybridMonorepo =
+    (monorepoHasFrontend && monorepoHasBackend) ||
+    (hasFrontendFramework && (hasPython || hasGo || hasRust)) ||
+    (hasFrontendFramework && hasDatabaseOrBackend);
+
+  if (isHybridMonorepo) {
+    archetype = "fullstack_hybrid";
+    if (runtime === "unknown") {
+      runtime = hasPackageJson ? (packageManager === "bun" ? "bun" : "node") : (hasPython ? "python" : "unknown");
+    }
+  } else if (hasPython) {
+    runtime = "python";
+    packageManager = "pip";
+    if (fs.existsSync(path.join(root, "poetry.lock"))) {
+      packageManager = "poetry";
+    } else if (fs.existsSync(path.join(root, "Pipfile"))) {
+      packageManager = "pipenv";
+    } else if (fs.existsSync(path.join(root, "uv.lock"))) {
+      packageManager = "uv";
+    }
+
+    if (isDjango) {
+      archetype = "opinionated_monolith";
+    } else if (hasPythonWebFramework) {
+      archetype = "api_backend";
+    } else {
+      archetype = "systems_microservice";
+    }
+
+    testCommand = testCommand !== "none" ? testCommand : "pytest";
+    lintCommand = /ruff/i.test(pythonContent)
+      ? "ruff check ."
+      : /flake8/i.test(pythonContent)
+      ? "flake8"
+      : "none";
+  } else if (hasPackageJson) {
+    let pkg: any = {};
+    try {
+      pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+    } catch {
+      pkg = {};
+    }
+    const allDeps = {
+      ...(pkg.dependencies || {}),
+      ...(pkg.devDependencies || {}),
+    };
 
     if ("@nestjs/core" in allDeps || "nestjs" in allDeps) {
       archetype = "opinionated_monolith";
@@ -298,32 +635,59 @@ export function profileArchetype(projectPath: string): {
     archetype = "opinionated_monolith";
   }
 
-  // Determine active skill modules based on archetype
+  // Determine active skill modules based on archetype and discovered seams
   const activeSkills: SkillName[] = [];
   switch (archetype) {
     case "api_backend":
       activeSkills.push("skill-backend", "skill-database", "skill-security", "skill-testing");
+      seams.hasBackend = true;
+      seams.hasDatabase = true;
+      seams.hasSecurity = true;
+      seams.hasTesting = true;
       break;
     case "fullstack_hybrid":
       activeSkills.push("skill-frontend", "skill-backend", "skill-database", "skill-security", "skill-testing");
+      seams.hasFrontend = true;
+      seams.hasBackend = true;
+      seams.hasDatabase = true;
+      seams.hasSecurity = true;
+      seams.hasTesting = true;
       break;
     case "opinionated_monolith":
       activeSkills.push("skill-backend", "skill-database", "skill-security", "skill-testing");
+      seams.hasBackend = true;
+      seams.hasDatabase = true;
+      seams.hasSecurity = true;
+      seams.hasTesting = true;
+
       // Include frontend if templates/views or client directories exist
-      if (
+      const hasMonolithFrontend =
         fs.existsSync(path.join(root, "templates")) ||
         fs.existsSync(path.join(root, "views")) ||
         fs.existsSync(path.join(root, "static")) ||
-        fs.existsSync(path.join(root, "frontend"))
-      ) {
+        fs.existsSync(path.join(root, "frontend")) ||
+        fs.existsSync(path.join(root, "app", "views")) ||
+        fs.existsSync(path.join(root, "app", "assets")) ||
+        fs.existsSync(path.join(root, "resources", "views")) ||
+        fs.existsSync(path.join(root, "resources", "js")) ||
+        seams.views.length > 0;
+
+      if (hasMonolithFrontend) {
         activeSkills.unshift("skill-frontend");
+        seams.hasFrontend = true;
       }
       break;
     case "reactive_frontend":
       activeSkills.push("skill-frontend", "skill-security", "skill-testing");
+      seams.hasFrontend = true;
+      seams.hasSecurity = true;
+      seams.hasTesting = true;
       break;
     case "systems_microservice":
       activeSkills.push("skill-backend", "skill-security", "skill-testing");
+      seams.hasBackend = true;
+      seams.hasSecurity = true;
+      seams.hasTesting = true;
       break;
   }
 
@@ -334,7 +698,8 @@ export function profileArchetype(projectPath: string): {
     testCommand,
     buildCommand,
     lintCommand,
-    activeSkills
+    activeSkills,
+    seams,
   };
 }
 
@@ -718,7 +1083,9 @@ export function generateAgents(
       planned_files: plannedFiles,
       estimatedTokenSavings: estimatedSavings,
       estimated_token_savings: estimatedSavings,
-      skillsIndex
+      skillsIndex,
+      seams: profile.seams,
+      profile,
     };
   }
 
@@ -757,6 +1124,8 @@ export function generateAgents(
     planned_files: plannedFiles,
     estimatedTokenSavings: estimatedSavings,
     estimated_token_savings: estimatedSavings,
-    skillsIndex
+    skillsIndex,
+    seams: profile.seams,
+    profile,
   };
 }
