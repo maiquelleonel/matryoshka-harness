@@ -1,11 +1,17 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { detectStack } from "./detector";
 import type {
+  CodebaseEntities,
   GovernanceAxis,
   HarnessGap,
   HarnessScoreOptions,
   HarnessScoreResult,
   MaturityLevel,
+  ProjectStack,
+  RemediationIssue,
+  RemediationPriority,
+  SemanticReconciliation,
 } from "./types";
 
 /**
@@ -422,3 +428,451 @@ export async function executeHarnessScore(
     "harness-score binary not found in PATH or environment, and allowFallback is false."
   );
 }
+
+/**
+ * Scans a target repository directory for actual routes, models, and controllers.
+ * Operates safely with depth bounds and skips heavy or alien directories.
+ */
+export function discoverCodebaseEntities(targetDir: string): CodebaseEntities {
+  const routes: string[] = [];
+  const models: string[] = [];
+  const controllers: string[] = [];
+
+  const root = path.resolve(targetDir);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    return { routes, models, controllers };
+  }
+
+  const ignoreDirs = new Set([
+    "node_modules",
+    ".git",
+    ".bun-install",
+    "vendor",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".idea",
+    ".vscode",
+    "coverage",
+    ".next",
+    ".turbo",
+  ]);
+
+  function walk(currentDir: string, depth: number): void {
+    if (depth > 5) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith(".")) {
+          walk(path.join(currentDir, entry.name), depth + 1);
+        }
+      } else if (entry.isFile()) {
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+        const lowerRel = relPath.toLowerCase();
+
+        // Route patterns
+        if (
+          lowerRel.includes("/routes/") ||
+          lowerRel.startsWith("routes/") ||
+          lowerRel.includes("/api/") ||
+          lowerRel.startsWith("api/") ||
+          lowerRel.includes("/endpoints/") ||
+          lowerRel.startsWith("endpoints/") ||
+          lowerRel.includes("router.") ||
+          lowerRel.includes("route.") ||
+          lowerRel.endsWith("urls.py")
+        ) {
+          routes.push(relPath);
+        }
+
+        // Model patterns
+        if (
+          lowerRel.includes("/models/") ||
+          lowerRel.startsWith("models/") ||
+          lowerRel.includes("/entities/") ||
+          lowerRel.startsWith("entities/") ||
+          lowerRel.includes("/schemas/") ||
+          lowerRel.startsWith("schemas/") ||
+          lowerRel.includes("model.") ||
+          lowerRel.includes("entity.") ||
+          lowerRel.includes("schema.")
+        ) {
+          models.push(relPath);
+        }
+
+        // Controller patterns
+        if (
+          lowerRel.includes("/controllers/") ||
+          lowerRel.startsWith("controllers/") ||
+          lowerRel.includes("/handlers/") ||
+          lowerRel.startsWith("handlers/") ||
+          lowerRel.includes("controller.") ||
+          lowerRel.includes("handler.")
+        ) {
+          controllers.push(relPath);
+        }
+      }
+    }
+  }
+
+  walk(root, 0);
+
+  routes.sort();
+  models.sort();
+  controllers.sort();
+
+  return { routes, models, controllers };
+}
+
+/**
+ * Maps an oracle governance gap to a language-tailored remediation issue.
+ */
+export function generateRemediationIssue(
+  gap: HarnessGap,
+  stack: ProjectStack,
+  entities?: CodebaseEntities
+): RemediationIssue {
+  const gapUpper = gap.id.toUpperCase();
+  const axis = gap.axis || inferGovernanceAxis(gap.id);
+
+  // Determine priority
+  let priority: RemediationPriority = "medium";
+  if (gapUpper === "CTX-01" || gapUpper === "SNS-01" || gapUpper === "SNS-02") {
+    priority = "critical";
+  } else if (gapUpper === "CI-01" || gapUpper === "GRD-01" || gapUpper === "SNS-05") {
+    priority = "high";
+  } else if (
+    gapUpper === "CTX-03" ||
+    gapUpper === "HYG-01" ||
+    gapUpper === "HYG-02" ||
+    gapUpper === "HYG-05"
+  ) {
+    priority = "low";
+  }
+
+  // 1. Context Fence: CTX-01
+  if (gapUpper === "CTX-01") {
+    let action = "";
+    let desc = gap.description || "Codebase lacks root operational guidelines for coding agents.";
+
+    if (entities && entities.routes.length > 0) {
+      desc += ` Existing routes detected: ${entities.routes.join(", ")}.`;
+    }
+    if (entities && entities.models.length > 0) {
+      desc += ` Existing models detected: ${entities.models.join(", ")}.`;
+    }
+
+    if (stack.primary === "typescript") {
+      if (stack.archetype === "reactive-frontend") {
+        action = `Generate root AGENTS.md with TypeScript and ${stack.frameworks.join("/") || "React"} conventions (reactive state patterns, component bounds, zero forced SOLID OOP abstractions, test runner: ${stack.testRunner || "bun test"}).`;
+      } else if (stack.archetype === "opinionated-framework") {
+        action = `Generate root AGENTS.md with NestJS/TypeScript architecture (controllers, services, repositories, strict DTO validation, test runner: ${stack.testRunner || "bun test"}).`;
+      } else {
+        action = `Generate root AGENTS.md with TypeScript strict typing conventions, modular boundaries, zero forced SOLID abstractions, test runner: ${stack.testRunner || "bun test"}.`;
+      }
+    } else if (stack.primary === "python") {
+      if (stack.frameworks.includes("fastapi")) {
+        action = `Generate root AGENTS.md with Python conventions (PEP 8, type annotations, FastAPI async route handlers, Pydantic v2 schemas, test runner: ${stack.testRunner || "pytest"}).`;
+      } else if (stack.frameworks.includes("django")) {
+        action = `Generate root AGENTS.md with Python/Django conventions (PEP 8, MTV architecture, ORM migrations, test runner: ${stack.testRunner || "pytest"}).`;
+      } else {
+        action = `Generate root AGENTS.md with Python conventions (PEP 8, type hints, modular package architecture, test runner: ${stack.testRunner || "pytest"}).`;
+      }
+    } else if (stack.primary === "php") {
+      if (
+        stack.archetype === "procedural-cms" ||
+        stack.frameworks.includes("wordpress") ||
+        stack.frameworks.includes("drupal")
+      ) {
+        action = `Generate root AGENTS.md with pragmatic procedural CMS guidelines (Zero forced SOLID, prioritize DRY and YAGNI, respect native hooks and filters, avoid excessive class hierarchies, test runner: ${stack.testRunner || "phpunit"}).`;
+      } else if (stack.frameworks.includes("laravel")) {
+        action = `Generate root AGENTS.md with Laravel conventions (service providers, typed repository/actions, Eloquent models, test runner: ${stack.testRunner || "pest"}).`;
+      } else {
+        action = `Generate root AGENTS.md with PHP standards (PSR-12, strict types, test runner: ${stack.testRunner || "phpunit"}).`;
+      }
+    } else if (stack.primary === "go") {
+      action = `Generate root AGENTS.md with Go idioms (gofmt, small interfaces, explicit error handling 'if err != nil', no panics in services, test runner: ${stack.testRunner || "go test"}).`;
+    } else if (stack.primary === "rust") {
+      action = `Generate root AGENTS.md with Rust idioms (strict ownership, Result/Option error handling without unwrap(), cargo test, bounded concurrency).`;
+    } else if (stack.primary === "ruby") {
+      action = `Generate root AGENTS.md with Ruby and ${stack.frameworks.includes("rails") ? "Rails conventions (MVC, ActiveRecord best practices)" : "clean modular design"}, test runner: ${stack.testRunner || "rspec"}.`;
+    } else {
+      action = `Generate root AGENTS.md establishing pragmatic code conventions, architecture overview, and operational boundaries.`;
+    }
+
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Generate Context Fence (AGENTS.md)",
+      description: desc,
+      targetFiles: ["AGENTS.md"],
+      stack: stack.primary,
+      priority: "critical",
+      suggestedAction: action,
+    };
+  }
+
+  // 2. CI Pipeline: CI-01
+  if (gapUpper === "CI-01") {
+    let action = "";
+    if (stack.primary === "typescript") {
+      action = `Configure GitHub Actions CI workflow with Bun/Node setup and '${stack.testRunner || "bun test"}' execution.`;
+    } else if (stack.primary === "python") {
+      action = `Configure GitHub Actions CI workflow with Python setup, dependency installation, and '${stack.testRunner || "pytest"}' execution.`;
+    } else if (stack.primary === "go") {
+      action = `Configure GitHub Actions CI workflow with Go setup and '${stack.testRunner || "go test ./..."}' execution.`;
+    } else if (stack.primary === "rust") {
+      action = `Configure GitHub Actions CI workflow with Rust toolchain and '${stack.testRunner || "cargo test"}' execution.`;
+    } else if (stack.primary === "ruby") {
+      action = `Configure GitHub Actions CI workflow with Ruby setup, bundle install, and '${stack.testRunner || "bundle exec rake test"}' execution.`;
+    } else if (stack.primary === "php") {
+      action = `Configure GitHub Actions CI workflow with PHP setup, composer install, and '${stack.testRunner || "vendor/bin/phpunit"}' execution.`;
+    } else {
+      action = `Configure baseline GitHub Actions CI workflow with automated test and lint steps.`;
+    }
+
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Configure Continuous Integration Pipeline",
+      description: gap.description || "No CI workflow configurations found in repository.",
+      targetFiles: [".github/workflows/ci.yml"],
+      stack: stack.primary,
+      priority: "high",
+      suggestedAction: action,
+    };
+  }
+
+  // 3. Test Runner / Suite: SNS-01 or SNS-05
+  if (gapUpper === "SNS-01" || gapUpper === "SNS-05") {
+    let action = "";
+    let targets: string[] = [];
+
+    if (stack.primary === "typescript") {
+      targets = ["tests/index.test.ts"];
+      action = `Configure ${stack.testRunner || "bun test"} and initialize unit test suite in tests/.`;
+    } else if (stack.primary === "python") {
+      targets = ["tests/test_main.py"];
+      action = `Configure ${stack.testRunner || "pytest"} and initialize test suite in tests/.`;
+    } else if (stack.primary === "go") {
+      targets = ["main_test.go"];
+      action = `Configure ${stack.testRunner || "go test"} and add initial '*_test.go' files.`;
+    } else if (stack.primary === "rust") {
+      targets = ["tests/integration_test.rs"];
+      action = `Configure ${stack.testRunner || "cargo test"} and scaffold integration test suite.`;
+    } else if (stack.primary === "ruby") {
+      targets = [stack.testRunner === "rspec" ? "spec/spec_helper.rb" : "test/test_helper.rb"];
+      action = `Initialize test harness with ${stack.testRunner || "rspec"}.`;
+    } else if (stack.primary === "php") {
+      targets = ["tests/TestCase.php"];
+      action = `Initialize test suite with ${stack.testRunner || "pest"}.`;
+    } else {
+      targets = ["tests/test_basic"];
+      action = `Configure automated test runner and test directory.`;
+    }
+
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: gapUpper === "SNS-01" ? "Initialize Test Suite Directory" : "Configure Automated Test Runner",
+      description: gap.description || "Missing test directory or test runner configuration.",
+      targetFiles: targets,
+      stack: stack.primary,
+      priority,
+      suggestedAction: action,
+    };
+  }
+
+  // 4. Linter / Formatter: GRD-03
+  if (gapUpper === "GRD-03") {
+    let targets: string[] = [];
+    if (stack.primary === "typescript") targets = ["biome.json"];
+    else if (stack.primary === "python") targets = ["ruff.toml"];
+    else if (stack.primary === "go") targets = [".golangci.yml"];
+    else if (stack.primary === "rust") targets = ["rustfmt.toml"];
+    else if (stack.primary === "ruby") targets = [".rubocop.yml"];
+    else if (stack.primary === "php") targets = [".php-cs-fixer.php"];
+    else targets = [".editorconfig"];
+
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Configure Static Linter and Formatter",
+      description: gap.description || "No automated linter or code formatting configuration detected.",
+      targetFiles: targets,
+      stack: stack.primary,
+      priority: "medium",
+      suggestedAction: `Configure native linter and formatter for ${stack.primary}.`,
+    };
+  }
+
+  // 5. Living Documentation: DOC-02
+  if (gapUpper === "DOC-02") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Establish Living Documentation and Specs",
+      description: gap.description || "Missing living documentation or technical specifications.",
+      targetFiles: ["docs/specs/SPEC-1.md"],
+      stack: stack.primary,
+      priority: "medium",
+      suggestedAction: `Create formal SDD specification in docs/specs/ documenting ${stack.primary} architecture, contracts, and BDD acceptance criteria.`,
+    };
+  }
+
+  // 6. Agent Skills: SKL-01
+  if (gapUpper === "SKL-01") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Scaffold Agent Skills Manifests",
+      description: gap.description || "No modular skills or slash command configurations detected.",
+      targetFiles: ["skills/matryoshka/SKILL.md", "gemini-extension.json", ".claude-plugin/plugin.json"],
+      stack: stack.primary,
+      priority: "medium",
+      suggestedAction: `Scaffold agent skills directory and dual manifest (Claude & Gemini CLI) with ${stack.primary} execution commands.`,
+    };
+  }
+
+  // 7. Git Guardrail: GRD-01
+  if (gapUpper === "GRD-01") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Create .gitignore Guardrail",
+      description: gap.description || "No .gitignore found to prevent artifact pollution.",
+      targetFiles: [".gitignore"],
+      stack: stack.primary,
+      priority: "high",
+      suggestedAction: `Create .gitignore configured for ${stack.primary} artifacts and environment files.`,
+    };
+  }
+
+  // 8. License: HYG-01
+  if (gapUpper === "HYG-01") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Add Open-Source License",
+      description: gap.description || "No LICENSE file present in repository root.",
+      targetFiles: ["LICENSE"],
+      stack: stack.primary,
+      priority: "low",
+      suggestedAction: "Add standard open-source LICENSE file (e.g. MIT).",
+    };
+  }
+
+  // 9. Architecture Blueprint: CTX-02
+  if (gapUpper === "CTX-02") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Create Architecture Blueprint",
+      description: gap.description || "No ARCHITECTURE.md found defining system boundaries.",
+      targetFiles: ["ARCHITECTURE.md"],
+      stack: stack.primary,
+      priority: "medium",
+      suggestedAction: `Create ARCHITECTURE.md outlining ${stack.primary} project components, data flows, and architectural boundaries.`,
+    };
+  }
+
+  // 10. Readme: CTX-03
+  if (gapUpper === "CTX-03") {
+    return {
+      id: `REM-${gap.id}`,
+      gapId: gap.id,
+      axis,
+      title: "Create README Documentation",
+      description: gap.description || "No README.md documentation file found.",
+      targetFiles: ["README.md"],
+      stack: stack.primary,
+      priority: "low",
+      suggestedAction: `Add README.md with project overview, installation, and usage instructions for ${stack.primary}.`,
+    };
+  }
+
+  // Generic fallback
+  return {
+    id: `REM-${gap.id}`,
+    gapId: gap.id,
+    axis,
+    title: gap.title || `Remediate ${gap.id}`,
+    description: gap.description || `Governance gap ${gap.id} identified by oracle.`,
+    targetFiles: ["docs/REMEDIATION.md"],
+    stack: stack.primary,
+    priority,
+    suggestedAction: gap.remediation || `Remediate governance gap ${gap.id} (${gap.title}).`,
+  };
+}
+
+/**
+ * Semantically reconciles oracle governance gaps with the polyglot stack and discovered codebase entities.
+ */
+export function reconcileGapsWithStack(
+  oracleResult: HarnessScoreResult,
+  stack: ProjectStack,
+  projectPath?: string
+): SemanticReconciliation {
+  const entities: CodebaseEntities = projectPath
+    ? discoverCodebaseEntities(projectPath)
+    : { models: [], routes: [], controllers: [] };
+
+  const priorityOrder: Record<RemediationPriority, number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+
+  const remediationIssues: RemediationIssue[] = oracleResult.gaps
+    .map((gap) => generateRemediationIssue(gap, stack, entities))
+    .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+  return {
+    primaryStack: stack.primary,
+    archetype: stack.archetype,
+    frameworks: stack.frameworks,
+    testRunner: stack.testRunner,
+    oracleScore: oracleResult.score,
+    oracleLevel: oracleResult.level,
+    totalGaps: oracleResult.gaps.length,
+    remediationIssues,
+    entities,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Top-level maturity scan pipeline coordinating stack detection, oracle execution, and semantic reconciliation.
+ */
+export async function runMaturityScan(
+  targetDir: string = process.cwd(),
+  options?: HarnessScoreOptions
+): Promise<SemanticReconciliation> {
+  const resolvedPath = path.resolve(targetDir);
+  const stack = detectStack(resolvedPath);
+  const oracleResult = await executeHarnessScore(resolvedPath, {
+    allowFallback: true,
+    ...options,
+  });
+  return reconcileGapsWithStack(oracleResult, stack, resolvedPath);
+}
+

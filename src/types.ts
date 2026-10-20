@@ -65,3 +65,38 @@ export interface HarnessScoreResult {
   source: "subprocess" | "fallback";
   executionTimeMs: number;
 }
+
+export type RemediationPriority = "critical" | "high" | "medium" | "low";
+
+export interface RemediationIssue {
+  id: string;
+  gapId: string;
+  axis: GovernanceAxis;
+  title: string;
+  description: string;
+  targetFiles: string[];
+  stack: PrimaryStack;
+  priority: RemediationPriority;
+  suggestedAction: string;
+  snippet?: string;
+}
+
+export interface CodebaseEntities {
+  models: string[];
+  routes: string[];
+  controllers: string[];
+}
+
+export interface SemanticReconciliation {
+  primaryStack: PrimaryStack;
+  archetype: ProjectArchetype;
+  frameworks: string[];
+  testRunner: string | null;
+  oracleScore: number;
+  oracleLevel: MaturityLevel;
+  totalGaps: number;
+  remediationIssues: RemediationIssue[];
+  entities: CodebaseEntities;
+  timestamp: string;
+}
+

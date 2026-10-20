@@ -3,16 +3,25 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+  discoverCodebaseEntities,
+  evaluateInMemoryFallback,
   executeHarnessScore,
+  generateRemediationIssue,
   normalizeMaturityLevel,
+  reconcileGapsWithStack,
   resolveHarnessScoreBinary,
   runHarnessScoreSubprocess,
+  runMaturityScan,
 } from "../src/scanner";
 import type {
+  CodebaseEntities,
   HarnessGap,
   HarnessScoreOptions,
   HarnessScoreResult,
   MaturityLevel,
+  ProjectStack,
+  RemediationIssue,
+  SemanticReconciliation,
 } from "../src/types";
 
 describe("Maturity Oracle Integration (src/scanner.ts)", () => {
@@ -256,6 +265,324 @@ process.exit(0);
       expect(["L0", "L1", "L2", "L3", "L4"]).toContain(result.level);
       expect(Array.isArray(result.gaps)).toBe(true);
       expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe("AC-5: Semantic Reconciliation of Gaps with Polyglot Stack", () => {
+    it("reconciles gaps for TypeScript/Next.js reactive frontend stack", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 35,
+        maxScore: 105,
+        level: "L1",
+        gaps: [
+          { id: "CTX-01", axis: "context", title: "Missing AGENTS.md" },
+          { id: "CI-01", axis: "guardrails", title: "Missing CI workflow" },
+          { id: "SNS-05", axis: "sensors", title: "Missing test runner" },
+          { id: "DOC-02", axis: "hygiene", title: "Missing living docs" },
+        ],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 10,
+      };
+
+      const stack: ProjectStack = {
+        primary: "typescript",
+        frameworks: ["nextjs", "react"],
+        testRunner: "bun test",
+        archetype: "reactive-frontend",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+
+      expect(reconciliation).toBeDefined();
+      expect(reconciliation.primaryStack).toBe("typescript");
+      expect(reconciliation.archetype).toBe("reactive-frontend");
+      expect(reconciliation.oracleScore).toBe(35);
+      expect(reconciliation.totalGaps).toBe(4);
+      expect(reconciliation.remediationIssues.length).toBe(4);
+
+      // Verify CTX-01 issue
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue).toBeDefined();
+      expect(ctxIssue?.targetFiles).toContain("AGENTS.md");
+      expect(ctxIssue?.priority).toBe("critical");
+      expect(ctxIssue?.suggestedAction.toLowerCase()).toContain("reactive");
+      expect(ctxIssue?.suggestedAction.toLowerCase()).toContain("solid");
+
+      // Verify CI-01 issue
+      const ciIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CI-01");
+      expect(ciIssue).toBeDefined();
+      expect(ciIssue?.targetFiles).toContain(".github/workflows/ci.yml");
+      expect(ciIssue?.priority).toBe("high");
+      expect(ciIssue?.suggestedAction).toContain("bun test");
+
+      // Verify SNS-05 issue
+      const snsIssue = reconciliation.remediationIssues.find((i) => i.gapId === "SNS-05");
+      expect(snsIssue).toBeDefined();
+      expect(snsIssue?.priority).toBe("high");
+      expect(snsIssue?.suggestedAction).toContain("bun test");
+
+      // Verify priority ordering: critical -> high -> medium -> low
+      const priorities = reconciliation.remediationIssues.map((i) => i.priority);
+      const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+      for (let i = 0; i < priorities.length - 1; i++) {
+        expect(priorityOrder[priorities[i]!]).toBeLessThanOrEqual(priorityOrder[priorities[i + 1]!]);
+      }
+    });
+
+    it("reconciles gaps for Python/FastAPI stack with pytest", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 40,
+        maxScore: 105,
+        level: "L1",
+        gaps: [
+          { id: "CTX-01", axis: "context", title: "Missing AGENTS.md" },
+          { id: "CI-01", axis: "guardrails", title: "Missing CI" },
+          { id: "GRD-03", axis: "guardrails", title: "Missing linter" },
+          { id: "HYG-01", axis: "hygiene", title: "Missing LICENSE" },
+        ],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 12,
+      };
+
+      const stack: ProjectStack = {
+        primary: "python",
+        frameworks: ["fastapi"],
+        testRunner: "pytest",
+        archetype: "generic",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue?.suggestedAction).toContain("FastAPI");
+      expect(ctxIssue?.suggestedAction).toContain("pytest");
+
+      const ciIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CI-01");
+      expect(ciIssue?.suggestedAction).toContain("pytest");
+
+      const grdIssue = reconciliation.remediationIssues.find((i) => i.gapId === "GRD-03");
+      expect(grdIssue?.targetFiles).toContain("ruff.toml");
+
+      const hygIssue = reconciliation.remediationIssues.find((i) => i.gapId === "HYG-01");
+      expect(hygIssue?.priority).toBe("low");
+    });
+
+    it("reconciles gaps for PHP procedural CMS (WordPress) enforcing anti-slop rules", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 20,
+        maxScore: 105,
+        level: "L0",
+        gaps: [{ id: "CTX-01", axis: "context", title: "Missing AGENTS.md" }],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 8,
+      };
+
+      const stack: ProjectStack = {
+        primary: "php",
+        frameworks: ["wordpress"],
+        testRunner: "phpunit",
+        archetype: "procedural-cms",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+
+      // Verify zero forced SOLID rule is explicitly embedded for procedural CMS
+      expect(ctxIssue?.suggestedAction.toLowerCase()).toContain("zero forced solid");
+      expect(ctxIssue?.suggestedAction.toLowerCase()).toContain("hooks");
+    });
+
+    it("reconciles gaps for Go distributed systems stack", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 50,
+        maxScore: 105,
+        level: "L2",
+        gaps: [
+          { id: "CTX-01", axis: "context", title: "Missing AGENTS.md" },
+          { id: "CI-01", axis: "guardrails", title: "Missing CI" },
+        ],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 5,
+      };
+
+      const stack: ProjectStack = {
+        primary: "go",
+        frameworks: ["gin"],
+        testRunner: "go test",
+        archetype: "distributed-systems",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue?.suggestedAction).toContain("Go");
+      expect(ctxIssue?.suggestedAction).toContain("error handling");
+
+      const ciIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CI-01");
+      expect(ciIssue?.suggestedAction).toContain("go test");
+    });
+
+    it("reconciles gaps for Rust stack with Cargo test", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 50,
+        maxScore: 105,
+        level: "L2",
+        gaps: [
+          { id: "CTX-01", axis: "context", title: "Missing AGENTS.md" },
+          { id: "CI-01", axis: "guardrails", title: "Missing CI" },
+        ],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 5,
+      };
+
+      const stack: ProjectStack = {
+        primary: "rust",
+        frameworks: ["axum"],
+        testRunner: "cargo test",
+        archetype: "distributed-systems",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue?.suggestedAction).toContain("Rust");
+      expect(ctxIssue?.suggestedAction).toContain("ownership");
+
+      const ciIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CI-01");
+      expect(ciIssue?.suggestedAction).toContain("cargo test");
+    });
+
+    it("reconciles gaps for Ruby on Rails stack", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 50,
+        maxScore: 105,
+        level: "L2",
+        gaps: [{ id: "CTX-01", axis: "context", title: "Missing AGENTS.md" }],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 5,
+      };
+
+      const stack: ProjectStack = {
+        primary: "ruby",
+        frameworks: ["rails"],
+        testRunner: "rspec",
+        archetype: "opinionated-framework",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue?.suggestedAction).toContain("Ruby");
+      expect(ctxIssue?.suggestedAction).toContain("Rails");
+    });
+
+    it("handles unharnessed unknown stack gracefully without crashing", () => {
+      const mockOracleResult: HarnessScoreResult = {
+        score: 0,
+        maxScore: 105,
+        level: "L0",
+        gaps: [
+          { id: "CTX-01", axis: "context", title: "Missing AGENTS.md" },
+          { id: "CI-01", axis: "guardrails", title: "Missing CI" },
+        ],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 2,
+      };
+
+      const stack: ProjectStack = {
+        primary: "unknown",
+        frameworks: [],
+        testRunner: null,
+        archetype: "generic",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack);
+      expect(reconciliation.primaryStack).toBe("unknown");
+      expect(reconciliation.remediationIssues.length).toBe(2);
+      expect(reconciliation.remediationIssues[0]?.targetFiles).toContain("AGENTS.md");
+    });
+  });
+
+  describe("AC-6: Codebase Entity Discovery & Anti-Slop Fencing", () => {
+    it("discovers existing routes, models, and controllers in target repository", () => {
+      fs.mkdirSync(path.join(tempDir, "src", "routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "src", "models"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "src", "controllers"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src", "routes", "api.ts"), "export const routes = [];");
+      fs.writeFileSync(path.join(tempDir, "src", "models", "user.ts"), "export interface User {}");
+      fs.writeFileSync(path.join(tempDir, "src", "controllers", "auth.ts"), "export class AuthController {}");
+
+      const entities = discoverCodebaseEntities(tempDir);
+
+      expect(entities.routes).toContain("src/routes/api.ts");
+      expect(entities.models).toContain("src/models/user.ts");
+      expect(entities.controllers).toContain("src/controllers/auth.ts");
+    });
+
+    it("returns empty arrays when scanning empty directory without crashing", () => {
+      const entities = discoverCodebaseEntities(tempDir);
+      expect(entities.routes).toEqual([]);
+      expect(entities.models).toEqual([]);
+      expect(entities.controllers).toEqual([]);
+    });
+
+    it("incorporates discovered codebase entities into reconciliation context", () => {
+      fs.mkdirSync(path.join(tempDir, "routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "models"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "routes", "users.py"), "# routes");
+      fs.writeFileSync(path.join(tempDir, "models", "user.py"), "# models");
+
+      const mockOracleResult: HarnessScoreResult = {
+        score: 25,
+        maxScore: 105,
+        level: "L1",
+        gaps: [{ id: "CTX-01", axis: "context", title: "Missing AGENTS.md" }],
+        passed: [],
+        source: "fallback",
+        executionTimeMs: 5,
+      };
+
+      const stack: ProjectStack = {
+        primary: "python",
+        frameworks: ["fastapi"],
+        testRunner: "pytest",
+        archetype: "generic",
+      };
+
+      const reconciliation = reconcileGapsWithStack(mockOracleResult, stack, tempDir);
+
+      expect(reconciliation.entities.routes).toContain("routes/users.py");
+      expect(reconciliation.entities.models).toContain("models/user.py");
+
+      const ctxIssue = reconciliation.remediationIssues.find((i) => i.gapId === "CTX-01");
+      expect(ctxIssue?.description).toContain("routes/users.py");
+      expect(ctxIssue?.description).toContain("models/user.py");
+    });
+
+    it("runMaturityScan executes end-to-end detection and reconciliation", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "sample-app",
+          dependencies: { next: "^14.0.0", react: "^18.0.0" },
+          scripts: { test: "bun test" },
+        })
+      );
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Sample App");
+
+      const scanResult = await runMaturityScan(tempDir, { allowFallback: true });
+
+      expect(scanResult).toBeDefined();
+      expect(scanResult.primaryStack).toBe("typescript");
+      expect(scanResult.frameworks).toContain("nextjs");
+      expect(scanResult.oracleScore).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(scanResult.remediationIssues)).toBe(true);
+      expect(scanResult.entities).toBeDefined();
     });
   });
 });

@@ -57,6 +57,43 @@ export interface HarnessScoreResult {
 4. System PATH resolution via `Bun.which("harness-score")`
 5. In-memory fallback evaluator if `allowFallback` is enabled
 
+### 2.3 Semantic Reconciliation Contract & Remediation Issue Mapping
+```typescript
+export type RemediationPriority = "critical" | "high" | "medium" | "low";
+
+export interface RemediationIssue {
+  id: string; // e.g. "REM-CTX-01"
+  gapId: string; // e.g. "CTX-01"
+  axis: GovernanceAxis;
+  title: string;
+  description: string;
+  targetFiles: string[];
+  stack: PrimaryStack;
+  priority: RemediationPriority;
+  suggestedAction: string;
+  snippet?: string;
+}
+
+export interface CodebaseEntities {
+  models: string[];
+  routes: string[];
+  controllers: string[];
+}
+
+export interface SemanticReconciliation {
+  primaryStack: PrimaryStack;
+  archetype: ProjectArchetype;
+  frameworks: string[];
+  testRunner: string | null;
+  oracleScore: number;
+  oracleLevel: MaturityLevel;
+  totalGaps: number;
+  remediationIssues: RemediationIssue[];
+  entities: CodebaseEntities;
+  timestamp: string;
+}
+```
+
 ---
 
 ## ✅ 3. Acceptance Criteria (BDD)
@@ -81,11 +118,21 @@ export interface HarnessScoreResult {
 * **When** `runHarnessScoreSubprocess` is invoked with `allowFallback: true` (or via `executeHarnessScore`),
 * **Then** it must gracefully fall back to an in-memory structural evaluation without crashing.
 
+### AC-5: Semantic Reconciliation of Gaps with Polyglot Stack
+* **Given** an oracle evaluation result containing governance gaps (`CTX-01`, `CI-01`, `SNS-05`, `DOC-02`),
+* **When** `reconcileGapsWithStack(oracleResult, stack, projectPath)` is executed,
+* **Then** it must correlate the gaps with the detected primary stack (`python`, `typescript`, `go`, `rust`, `ruby`, `php`), producing tailored remediation issues with targeted files, stack-specific guidance, and priority ranking without hallucinating fictional structures.
+
+### AC-6: Codebase Entity Discovery & Anti-Slop Fencing
+* **Given** a repository with existing routes, models, or controllers,
+* **When** semantic reconciliation inspects the repository layout,
+* **Then** discovered entities must be incorporated into the reconciliation payload (`entities.routes`, `entities.models`, `entities.controllers`) and referenced in the remediation actions for AGENTS.md, adhering to the anti-slop archetype rules (e.g. Zero forced SOLID in WordPress procedural CMS).
+
 ---
 
 ## 📋 4. Subtasks & Delivery Checklist
 - [x] Subtask 1: Execute `paladini/harness-score` (or local equivalent binary) against host repo via Bun subprocess
-- [ ] Subtask 2: Perform semantic reconciliation: map L0-L4 gaps with detected polyglot stack
+- [x] Subtask 2: Perform semantic reconciliation: map L0-L4 gaps with detected polyglot stack
 - [ ] Subtask 3: Expose human-readable terminal output and structured `--json`
 - [ ] Subtask 4: Support SVG badge generation via `--badge`
 - [ ] Subtask 5: Graceful in-memory fallback when oracle is not globally installed
