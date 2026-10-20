@@ -37,3 +37,9 @@ ouroboros_usage.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# orchestrator ephemeral files
+task_context.json
+review_context.json
+ouroboros_usage.json
+

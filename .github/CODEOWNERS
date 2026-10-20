@@ -1,0 +1,5 @@
+# GitHub Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Only authorized maintainers (@maiquelleonel) can approve and merge PRs into main
+* @maiquelleonel
