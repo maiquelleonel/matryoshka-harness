@@ -144,6 +144,6 @@ export interface SemanticReconciliation {
 ## 📋 4. Subtasks & Delivery Checklist
 - [x] Subtask 1: Execute `paladini/harness-score` (or local equivalent binary) against host repo via Bun subprocess
 - [x] Subtask 2: Perform semantic reconciliation: map L0-L4 gaps with detected polyglot stack
-- [ ] Subtask 3: Expose human-readable terminal output and structured `--json`
+- [x] Subtask 3: Expose human-readable terminal output and structured `--json`
 - [ ] Subtask 4: Support SVG badge generation via `--badge`
 - [ ] Subtask 5: Graceful in-memory fallback when oracle is not globally installed
