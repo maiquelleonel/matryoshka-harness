@@ -23,7 +23,8 @@ import {
   generateHarnessBadgeSvg,
   runMaturityScan,
 } from "./scanner";
-import type { DetectResult, ProjectStack } from "./types";
+import { formatMcpWireHumanOutput, wireMcpTargets } from "./mcp";
+import type { DetectResult, McpTargetName, ProjectStack } from "./types";
 
 const VERSION = "0.1.0";
 
@@ -38,20 +39,23 @@ Usage:
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents skill <name> [path] [--json]
   baba wrap [path]
+  baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
 
 Commands:
   detect   Inspect codebase and detect primary stack, frameworks, and test runner
   scan     Execute maturity audit and semantic AST reconciliation
   agents   Generate adaptive AGENTS.md and modular skills
   wrap     Apply adaptive context fence and inject AGENTS.md / SKILLS.md
+  mcp wire Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
 
 Options:
-  --force, -f    Overwrite existing files (creates .bak of pre-existing AGENTS.md)
-  --dry-run      Simulate generation without writing to disk
-  --json         Output strictly valid JSON
-  --badge [path] Generate maturity SVG badge (default: ./harness-badge.svg)
-  -h, --help     Show help information
-  -v, --version  Show version
+  --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
+  --dry-run          Simulate execution without modifying files on disk
+  --json             Output strictly valid JSON
+  --targets <list>   Comma-separated target environments (cursor, gemini, claude)
+  --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  -h, --help         Show help information
+  -v, --version      Show version
 `.trim();
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -540,6 +544,96 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         );
       }
       process.exit(0);
+      break;
+    }
+
+    case "mcp": {
+      const [subcommand, ...mcpArgs] = rest;
+
+      if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp wire [path] [--dry-run] [--json]"));
+        process.exit(1);
+      }
+
+      if (subcommand !== "wire") {
+        console.error(
+          pc.red(
+            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp wire [path] [--dry-run] [--json]`
+          )
+        );
+        process.exit(1);
+      }
+
+      const isDryRun = mcpArgs.includes("--dry-run");
+
+      let targets: McpTargetName[] | undefined;
+      const targetsIdx = mcpArgs.indexOf("--targets");
+      const targetIdx = mcpArgs.indexOf("--target");
+
+      if (targetsIdx !== -1) {
+        const nextVal = mcpArgs[targetsIdx + 1];
+        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+          targets = nextVal
+            .split(",")
+            .map((t) => t.trim().toLowerCase() as McpTargetName)
+            .filter(Boolean);
+        }
+      } else if (targetIdx !== -1) {
+        const nextVal = mcpArgs[targetIdx + 1];
+        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+          targets = [nextVal.trim().toLowerCase() as McpTargetName];
+        }
+      }
+
+      for (const arg of mcpArgs) {
+        if (arg.startsWith("--targets=")) {
+          const val = arg.slice("--targets=".length);
+          targets = val
+            .split(",")
+            .map((t) => t.trim().toLowerCase() as McpTargetName)
+            .filter(Boolean);
+        } else if (arg.startsWith("--target=")) {
+          const val = arg.slice("--target=".length);
+          targets = [val.trim().toLowerCase() as McpTargetName];
+        }
+      }
+
+      const positional = mcpArgs.filter((arg, idx) => {
+        if (arg.startsWith("-")) return false;
+        if (idx > 0 && (mcpArgs[idx - 1] === "--targets" || mcpArgs[idx - 1] === "--target")) return false;
+        return true;
+      });
+      const targetDir = positional[0] || process.cwd();
+      const resolvedPath = path.resolve(targetDir);
+
+      try {
+        const wireResult = wireMcpTargets(resolvedPath, { dryRun: isDryRun, targets });
+
+        if (isJson) {
+          console.log(JSON.stringify(wireResult, null, 2));
+        } else {
+          console.log(formatMcpWireHumanOutput(wireResult));
+        }
+        process.exit(wireResult.status === "error" ? 1 : 0);
+      } catch (error: any) {
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "error",
+                command: "mcp wire",
+                rootPath: resolvedPath,
+                message: error?.message || "MCP wire failed",
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(pc.red(`\nMCP wire failed: ${error?.message || "Unknown error"}\n`));
+        }
+        process.exit(1);
+      }
       break;
     }
 
