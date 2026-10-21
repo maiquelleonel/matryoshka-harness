@@ -5,6 +5,8 @@ import pc from "picocolors";
 import {
   compileBackendSkill,
   compileDatabaseSkill,
+  compileFrontendSkill,
+  compileSecuritySkill,
   generateAgents,
   inspectTokenBudget,
   MAX_ROOT_AGENTS_TOKENS,
@@ -259,6 +261,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           content = compileBackendSkill({ projectPath: resolvedPath });
         } else if (normalizedSkill === "skill-database") {
           content = compileDatabaseSkill({ projectPath: resolvedPath });
+        } else if (normalizedSkill === "skill-frontend") {
+          content = compileFrontendSkill({ projectPath: resolvedPath });
+        } else if (normalizedSkill === "skill-security") {
+          content = compileSecuritySkill({ projectPath: resolvedPath });
         } else if (SKILL_DEFINITIONS[normalizedSkill]) {
           content = SKILL_DEFINITIONS[normalizedSkill].content;
         } else {
