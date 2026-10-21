@@ -1,0 +1,8 @@
+---
+description: "Regras de confinamento e integridade de sandbox"
+globs: ["src/**", "tests/**"]
+alwaysApply: false
+---
+# Confinamento de Sandbox
+- Operações restritas ao diretório do workspace.
+- Zero dependências de rede externa não cacheadas.

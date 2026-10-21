@@ -1,0 +1,8 @@
+---
+description: "Diretrizes gerais de governança, TDD e SDD para agentes"
+globs: ["*"]
+alwaysApply: false
+---
+# Governança Agêntica Matryoshka
+- Práticas de Red-to-Green obrigatórias.
+- Nenhuma supressão de warnings ou tipagem fraca.

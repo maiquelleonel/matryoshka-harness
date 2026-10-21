@@ -1,0 +1,31 @@
+# 🛡️ Matryoshka Auto-Ignore Gate — Context-Fencing for Wild Repositories (Issue #26)
+# Bloqueia leitura de arquivos massivos/blobs por ferramentas de IA sem afetar testes ou compilação
+
+# Dumps e bancos de dados
+*.sql
+*.dump
+*.sqlite
+*.db
+*.backup
+
+# Bundles minificados
+*.min.js
+*.min.css
+*bundle*.js
+vendor/
+
+# Fixtures e dados massivos
+fixtures/**/*.json
+*.csv
+*.parquet
+*.xlsx
+
+# Logs e temporários legados
+storage/logs/
+*.log
+tmp/
+
+# Binários rastreados por engano
+*.zip
+*.tar.gz
+*.pdf

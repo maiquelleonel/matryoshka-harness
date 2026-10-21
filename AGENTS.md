@@ -1,16 +1,32 @@
-# 🤖 AGENTS.md — Governance & Operational Directives for Matryoshka-Harness
+# 🤖 AGENTS.md — Contrato de Governança e Harness Agêntico
+## Protocolo de Supervisão, Engenharia e Guardrails Arquiteturais
 
-## 🌐 Language Policy (Strictly Enforced)
-* All source code, identifiers, types, comments, tests, commit messages, PR titles, and technical documentation **MUST be written exclusively in English**.
-* Do not introduce Portuguese in code files, test descriptions, or documentation.
+Este repositório é gerenciado e civilizado sob o protocolo da **Matryoshka Agentic Factory**.
+Qualquer agente autônomo operando nesta base deve seguir rigorosamente as regras abaixo:
 
-## 🛠️ Stack & Runtime Standards
-* **Runtime:** [Bun](https://bun.com) v1.3+ (Do NOT use Node.js, npm, or npx directly).
-* **Package Management:** `bun install`, `bun add`.
-* **Testing:** `bun test` (Strict Red-to-Green cycle: write failing tests in `tests/*.test.ts` before writing code).
-* **Code Style:** Pure TypeScript, zero gratuitous dependencies, no unhandled promises, sub-15ms execution.
+---
 
-## 🏛️ Architectural Invariants
-1. **Never reinvent paladini/harness-score:** Consume it directly as an evaluation oracle.
-2. **Never force unidiomatic SOLID:** Adapt conventions to the detected framework (pragmatic-first).
-3. **Dual Alias Parity:** `baba`, `bbyg`, and `matryoshka` must share identical execution paths.
+## 🏛️ 1. Princípios Inegociáveis de Engenharia
+1. **A Regra de Ouro (Red-to-Green Obrigatório):**
+   - Nunca aplique correções no código de produção sem antes reproduzir em teste automatizado.
+   - Todo ciclo inicia com teste falhando (RED) e conclui com teste passando (GREEN).
+2. **Preservação Sagrada de Testes:**
+   - É estritamente proibido afrouxar, suprimir ou deletar testes existentes.
+3. **Zero Truques de Linter / Zero Supressores:**
+   - Proibido usar `# noqa`, `eslint-disable`, `@ts-ignore` ou casts arbitrários.
+4. **Knowledge Graph MCP First:**
+   - Utilize consultas estruturadas via MCP antes de varreduras extensivas de texto.
+
+---
+
+## 🛠️ 2. Comandos Canônicos de Build e Teste
+- **Testes:** `bun test` ou `pytest -q`
+- **Linter & Formatação:** `bunx biome check .` ou `ruff check .`
+- **Validação de Harness:** `bunx harness-score --json`
+
+---
+
+## 🛡️ 3. Governança & HITL (Human-in-the-Loop)
+- Commits atômicos e descritivos no padrão Conventional Commits.
+- Mudanças de alto impacto exigem validação prévia de contratos antes da implementação.
+- Pausas preventivas em caso de desvio de escopo (Blast Radius Guard).
