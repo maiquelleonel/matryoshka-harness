@@ -199,7 +199,27 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     case "agents": {
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
-      const positional = rest.filter((arg) => !arg.startsWith("-"));
+      const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
+
+      let maxTokens: number | undefined;
+      const positional: string[] = [];
+      for (let i = 0; i < rest.length; i++) {
+        const arg = rest[i];
+        if (!arg) continue;
+        if (arg === "--max-tokens") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            maxTokens = Number.parseInt(nextVal, 10);
+            i++;
+          }
+        } else if (arg.startsWith("--max-tokens=")) {
+          maxTokens = Number.parseInt(arg.slice("--max-tokens=".length), 10);
+        } else if (arg.startsWith("-")) {
+          // flag, ignore
+        } else {
+          positional.push(arg);
+        }
+      }
 
       let subcommand = "generate";
       let targetDir: string | undefined;
@@ -318,21 +338,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
       if (subcommand === "check" || subcommand === "guard") {
         const agentsFilePath = path.join(resolvedPath, "AGENTS.md");
-        let maxTokens = MAX_ROOT_AGENTS_TOKENS;
-        for (let i = 0; i < rest.length; i++) {
-          const arg = rest[i];
-          if (!arg) continue;
-          if (arg === "--max-tokens") {
-            const nextVal = rest[i + 1];
-            if (nextVal) {
-              maxTokens = Number.parseInt(nextVal, 10) || MAX_ROOT_AGENTS_TOKENS;
-            }
-          } else if (arg.startsWith("--max-tokens=")) {
-            maxTokens =
-              Number.parseInt(arg.slice("--max-tokens=".length), 10) ||
-              MAX_ROOT_AGENTS_TOKENS;
-          }
-        }
+        const effectiveMaxTokens = maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
 
         if (!fs.existsSync(agentsFilePath)) {
           if (isJson) {
@@ -356,7 +362,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         }
 
         const fileContent = fs.readFileSync(agentsFilePath, "utf-8");
-        const report = inspectTokenBudget(fileContent, maxTokens);
+        const report = inspectTokenBudget(fileContent, effectiveMaxTokens);
 
         if (isJson) {
           console.log(
@@ -456,6 +462,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           force: isForce,
           dryRun: isDryRun,
           json: isJson,
+          maxTokens,
+          strictTokenGuard: isStrict,
         });
 
         if (isJson) {
@@ -467,6 +475,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           console.log(
             `  ${pc.dim("•")} ${pc.bold("Root AGENTS:")}   ${pc.green(result.rootAgentsPath)} (${pc.yellow(result.rootTokens.toString())} tokens)`
           );
+          if (result.backupCreated && result.backupPath) {
+            console.log(
+              `  ${pc.dim("•")} ${pc.bold("Backup:")}        ${pc.yellow(result.backupPath)}`
+            );
+          }
           console.log(`  ${pc.dim("•")} ${pc.bold("Skills Dir:")}    ${pc.blue(result.skillsDir)}`);
           console.log(pc.bold(pc.cyan("  Planned / Generated Files:")));
           for (const file of result.plannedFiles) {
