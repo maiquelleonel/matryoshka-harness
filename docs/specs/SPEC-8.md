@@ -1,7 +1,7 @@
 # 📐 SPEC-8: feat(agents): context-aware adaptive AGENTS.md and modular skills engine
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 4: Root AGENTS.md Template Engine & Token Guard)  
+**Status:** in_progress (Subtask 5: Backend & Database Skill Compilers)  
 **Gatilho:** Issue #8  
 **Target:** Bun + TypeScript  
 
@@ -81,6 +81,36 @@ export class TokenBudgetExceededError extends Error {
   public readonly exceededBy: number;
 }
 ```
+
+### 2.5 Contratos dos Compiladores de Backend & Database (Subtask 5)
+```typescript
+export interface BackendSkillCompilerOptions {
+  framework?: string;
+  orm?: string;
+  runtime?: string;
+  asyncSafety?: boolean;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export interface DatabaseSkillCompilerOptions {
+  databaseEngine?: string;
+  orm?: string;
+  hasMigrations?: boolean;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export function compileBackendSkill(options?: BackendSkillCompilerOptions): string;
+export function compileDatabaseSkill(options?: DatabaseSkillCompilerOptions): string;
+export function detectBackendOrm(projectPath: string): string | null;
+export function detectDatabaseEngine(projectPath: string): string | null;
+```
+
+- CLI subcommand: `baba agents skill <backend|database> [path] [--json]`
+
 
 ---
 
