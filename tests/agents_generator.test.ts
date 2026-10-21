@@ -4,6 +4,10 @@ import * as path from "node:path";
 import * as os from "node:os";
 import {
   compileRootAgents,
+  compileBackendSkill,
+  compileDatabaseSkill,
+  detectBackendOrm,
+  detectDatabaseEngine,
   estimateTokens,
   parseSkillFrontmatter,
   validateSkillFrontmatter,
@@ -22,7 +26,9 @@ import {
   type ArchetypeProfile,
   type DiscoveredSeams,
   type TokenGuardReport,
-  type RootAgentsTemplateOptions
+  type RootAgentsTemplateOptions,
+  type BackendSkillCompilerOptions,
+  type DatabaseSkillCompilerOptions
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -1077,6 +1083,341 @@ dependencies = [
         expect(resBaba.valid).toBe(resBbyg.valid);
         expect(resBaba.valid).toBe(resMatryoshka.valid);
         expect(resBaba.tokenGuard.tokenCount).toBe(resBbyg.tokenGuard.tokenCount);
+      });
+    });
+  });
+
+  describe("Subtask 5: Backend & Database Skill Compilers (with YAML Frontmatter)", () => {
+    describe("compileBackendSkill() Compiler & Invariants", () => {
+      it("compiles canonical backend skill with valid YAML frontmatter and core invariants", () => {
+        const compiled = compileBackendSkill();
+
+        // Valid YAML frontmatter delimiters
+        expect(compiled.startsWith("---\n")).toBe(true);
+        expect(compiled).toContain("\n---\n");
+
+        const parsed = parseSkillFrontmatter(compiled);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.name).toBe("skill-backend");
+        expect(parsed?.description).toBeDefined();
+        expect(parsed?.description.length).toBeGreaterThan(20);
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+
+        // Core required invariants
+        expect(compiled).toContain("Anti-N+1 Query Invariant");
+        expect(compiled).toContain("Transactional Boundaries & Atomic Persistence");
+        expect(compiled).toContain("Async Safety & Non-Blocking Persistence");
+        expect(compiled).toContain("Idiomatic Layer Seams");
+      });
+
+      it("adapts backend guidance dynamically for Prisma ORM", () => {
+        const compiled = compileBackendSkill({ orm: "prisma" });
+        expect(compiled).toContain("Prisma");
+        expect(compiled).toContain("include");
+        expect(compiled).toContain("select");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for SQLAlchemy ORM", () => {
+        const compiled = compileBackendSkill({ orm: "sqlalchemy" });
+        expect(compiled).toContain("SQLAlchemy");
+        expect(compiled).toContain("selectinload");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for Django ORM", () => {
+        const compiled = compileBackendSkill({ orm: "django-orm" });
+        expect(compiled).toContain("Django ORM");
+        expect(compiled).toContain("select_related");
+        expect(compiled).toContain("prefetch_related");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for Diesel (Rust)", () => {
+        const compiled = compileBackendSkill({ orm: "diesel" });
+        expect(compiled).toContain("Diesel");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for GORM (Go)", () => {
+        const compiled = compileBackendSkill({ orm: "gorm" });
+        expect(compiled).toContain("GORM");
+        expect(compiled).toContain("Preload");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for ActiveRecord (Ruby)", () => {
+        const compiled = compileBackendSkill({ orm: "active_record" });
+        expect(compiled).toContain("ActiveRecord");
+        expect(compiled).toContain("includes");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts backend guidance dynamically for Eloquent (PHP)", () => {
+        const compiled = compileBackendSkill({ orm: "eloquent" });
+        expect(compiled).toContain("Eloquent");
+        expect(compiled).toContain("with");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("injects custom backend rules into compiled output", () => {
+        const compiled = compileBackendSkill({
+          customRules: [
+            "* **Repository Pattern Only:** Never call database clients directly inside route handlers.",
+            "* **Tenant Isolation:** Enforce tenant_id filtering on every query."
+          ]
+        });
+
+        expect(compiled).toContain("* **Repository Pattern Only:** Never call database clients directly inside route handlers.");
+        expect(compiled).toContain("* **Tenant Isolation:** Enforce tenant_id filtering on every query.");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("auto-detects backend ORM from projectPath when options are omitted", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "prisma-proj", dependencies: { prisma: "^5.0.0" } })
+        );
+
+        const compiled = compileBackendSkill({ projectPath: tempDir });
+        expect(compiled).toContain("Prisma");
+        expect(compiled).toContain("include");
+      });
+    });
+
+    describe("compileDatabaseSkill() Compiler & Invariants", () => {
+      it("compiles canonical database skill with valid YAML frontmatter and core invariants", () => {
+        const compiled = compileDatabaseSkill();
+
+        expect(compiled.startsWith("---\n")).toBe(true);
+        expect(compiled).toContain("\n---\n");
+
+        const parsed = parseSkillFrontmatter(compiled);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.name).toBe("skill-database");
+        expect(parsed?.description).toBeDefined();
+        expect(parsed?.description.length).toBeGreaterThan(20);
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+
+        // Core required invariants
+        expect(compiled).toContain("Zero-Downtime Migration Contract");
+        expect(compiled).toContain("Lock Safety & Non-Blocking DDL");
+        expect(compiled).toContain("Query & Index Hygiene");
+      });
+
+      it("adapts database guidance dynamically for PostgreSQL", () => {
+        const compiled = compileDatabaseSkill({ databaseEngine: "postgresql" });
+        expect(compiled).toContain("PostgreSQL");
+        expect(compiled).toContain("CREATE INDEX CONCURRENTLY");
+        expect(compiled).toContain("lock_timeout");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts database guidance dynamically for MySQL", () => {
+        const compiled = compileDatabaseSkill({ databaseEngine: "mysql" });
+        expect(compiled).toContain("MySQL");
+        expect(compiled).toContain("ALGORITHM=INPLACE");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("adapts database guidance dynamically for SQLite", () => {
+        const compiled = compileDatabaseSkill({ databaseEngine: "sqlite" });
+        expect(compiled).toContain("SQLite");
+        expect(compiled).toContain("WAL");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("injects custom database rules into compiled output", () => {
+        const compiled = compileDatabaseSkill({
+          customRules: [
+            "* **Strict Foreign Keys:** Foreign keys must explicitly specify ON DELETE CASCADE or RESTRICT.",
+            "* **Audit Logging:** Every table must contain created_at and updated_at UTC timestamps."
+          ]
+        });
+
+        expect(compiled).toContain("* **Strict Foreign Keys:** Foreign keys must explicitly specify ON DELETE CASCADE or RESTRICT.");
+        expect(compiled).toContain("* **Audit Logging:** Every table must contain created_at and updated_at UTC timestamps.");
+        expect(validateSkillFrontmatter(compiled)).toBe(true);
+      });
+
+      it("auto-detects database engine from projectPath when options are omitted", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "asyncpg-demo"\ndependencies = ["asyncpg>=0.28.0"]\n`
+        );
+
+        const compiled = compileDatabaseSkill({ projectPath: tempDir });
+        expect(compiled).toContain("PostgreSQL");
+        expect(compiled).toContain("CREATE INDEX CONCURRENTLY");
+      });
+    });
+
+    describe("Context Detection Helpers (detectBackendOrm & detectDatabaseEngine)", () => {
+      it("detects Prisma ORM in package.json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "test", dependencies: { prisma: "5.0.0" } })
+        );
+        expect(detectBackendOrm(tempDir)).toBe("prisma");
+      });
+
+      it("detects SQLAlchemy in pyproject.toml", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\nname = "test"\ndependencies = ["sqlalchemy>=2.0.0"]\n`
+        );
+        expect(detectBackendOrm(tempDir)).toBe("sqlalchemy");
+      });
+
+      it("detects Django ORM in requirements.txt", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "requirements.txt"),
+          `django>=4.2\n`
+        );
+        expect(detectBackendOrm(tempDir)).toBe("django-orm");
+      });
+
+      it("detects GORM in go.mod", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "go.mod"),
+          `module test\n\ngo 1.22\n\nrequire gorm.io/gorm v1.25.0\n`
+        );
+        expect(detectBackendOrm(tempDir)).toBe("gorm");
+      });
+
+      it("detects Diesel in Cargo.toml", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "Cargo.toml"),
+          `[package]\nname = "test"\nversion = "0.1.0"\n\n[dependencies]\ndiesel = { version = "2.1.0" }\n`
+        );
+        expect(detectBackendOrm(tempDir)).toBe("diesel");
+      });
+
+      it("detects ActiveRecord in Gemfile", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "Gemfile"),
+          `source 'https://rubygems.org'\ngem 'rails', '~> 7.0'\n`
+        );
+        expect(detectBackendOrm(tempDir)).toBe("active_record");
+      });
+
+      it("detects Eloquent in composer.json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "composer.json"),
+          JSON.stringify({ require: { "laravel/framework": "^10.0" } })
+        );
+        expect(detectBackendOrm(tempDir)).toBe("eloquent");
+      });
+
+      it("returns null when no ORM is found", () => {
+        expect(detectBackendOrm(tempDir)).toBeNull();
+      });
+
+      it("detects PostgreSQL from asyncpg in pyproject.toml", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\ndependencies = ["asyncpg>=0.28.0"]\n`
+        );
+        expect(detectDatabaseEngine(tempDir)).toBe("postgresql");
+      });
+
+      it("detects MySQL from mysql2 in package.json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ dependencies: { mysql2: "^3.0.0" } })
+        );
+        expect(detectDatabaseEngine(tempDir)).toBe("mysql");
+      });
+
+      it("detects SQLite from sqlite3 in package.json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ dependencies: { sqlite3: "^5.1.0" } })
+        );
+        expect(detectDatabaseEngine(tempDir)).toBe("sqlite");
+      });
+
+      it("returns null when no database engine is found", () => {
+        expect(detectDatabaseEngine(tempDir)).toBeNull();
+      });
+    });
+
+    describe("CLI 'agents skill' subcommand", () => {
+      it("supports 'baba agents skill backend [path]' to render compiled backend skill", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "backend-cli", dependencies: { prisma: "5.0.0" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "backend", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("name: skill-backend");
+        expect(stdout).toContain("Anti-N+1 Query Invariant");
+        expect(stdout).toContain("Prisma");
+      });
+
+      it("supports 'baba agents skill database [path]' to render compiled database skill", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "db-cli", dependencies: { pg: "8.0.0" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "database", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("name: skill-database");
+        expect(stdout).toContain("Zero-Downtime Migration Contract");
+        expect(stdout).toContain("PostgreSQL");
+      });
+
+      it("supports 'baba agents skill backend [path] --json' with structured output", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\ndependencies = ["fastapi", "sqlalchemy"]\n`
+        );
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "skill", "backend", tempDir, "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.skill).toBe("skill-backend");
+        expect(parsed.frontmatter.name).toBe("skill-backend");
+        expect(parsed.content).toContain("SQLAlchemy");
+      });
+
+      it("ensures alias parity across baba, bbyg, and matryoshka for agents skill database --json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "pyproject.toml"),
+          `[project]\ndependencies = ["asyncpg"]\n`
+        );
+
+        const procBaba = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "skill", "database", tempDir, "--json"
+        ]);
+        const procBbyg = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "skill", "database", tempDir, "--json"
+        ]);
+        const procMatryoshka = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "skill", "database", tempDir, "--json"
+        ]);
+
+        expect(procBaba.exitCode).toBe(0);
+        expect(procBbyg.exitCode).toBe(0);
+        expect(procMatryoshka.exitCode).toBe(0);
+
+        const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+        const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+        const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+        expect(resBaba.skill).toBe(resBbyg.skill);
+        expect(resBaba.skill).toBe(resMatryoshka.skill);
+        expect(resBaba.frontmatter.name).toBe("skill-database");
       });
     });
   });

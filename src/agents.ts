@@ -128,6 +128,25 @@ export interface RootAgentsTemplateOptions {
   truncateCommands?: boolean;
 }
 
+export interface BackendSkillCompilerOptions {
+  framework?: string;
+  orm?: string;
+  runtime?: string;
+  asyncSafety?: boolean;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export interface DatabaseSkillCompilerOptions {
+  databaseEngine?: string;
+  orm?: string;
+  hasMigrations?: boolean;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
 export interface GenerateAgentsOptions {
   force?: boolean;
   dryRun?: boolean;
@@ -795,15 +814,214 @@ export function profileArchetype(projectPath: string): ArchetypeProfile {
 }
 
 /**
- * Catalog of specialized skills with YAML frontmatter.
+ * Detects the ORM or query builder used in the project by inspecting package manifests.
  */
-export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
-  "skill-backend": {
-    name: "skill-backend",
-    fileName: "skill-backend.md",
-    description:
-      "Framework-idiomatic ORM patterns, transactional boundaries, anti-N+1 query prevention, and async persistence rules. Use when modifying models, controllers, repositories, or database queries.",
-    content: `---
+export function detectBackendOrm(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("prisma" in deps || "@prisma/client" in deps) return "prisma";
+      if ("drizzle-orm" in deps) return "drizzle";
+      if ("typeorm" in deps) return "typeorm";
+      if ("mongoose" in deps) return "mongoose";
+      if ("kysely" in deps) return "kysely";
+      if ("mikro-orm" in deps || "@mikro-orm/core" in deps) return "mikro-orm";
+      if ("sequelize" in deps) return "sequelize";
+    } catch {}
+  }
+
+  // 2. Check Python manifests
+  const pyprojectPath = path.join(root, "pyproject.toml");
+  const requirementsPath = path.join(root, "requirements.txt");
+  let pythonContent = "";
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+    } catch {}
+  }
+  if (fs.existsSync(requirementsPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+    } catch {}
+  }
+  if (pythonContent) {
+    if (/sqlalchemy/i.test(pythonContent)) return "sqlalchemy";
+    if (/django/i.test(pythonContent)) return "django-orm";
+    if (/tortoise-orm/i.test(pythonContent)) return "tortoise";
+    if (/peewee/i.test(pythonContent)) return "peewee";
+  }
+
+  // 3. Check Go go.mod
+  const goModPath = path.join(root, "go.mod");
+  if (fs.existsSync(goModPath)) {
+    try {
+      const goContent = fs.readFileSync(goModPath, "utf-8");
+      if (/gorm\.io\/gorm/i.test(goContent)) return "gorm";
+      if (/entgo\.io\/ent/i.test(goContent)) return "ent";
+      if (/sqlx/i.test(goContent)) return "sqlx";
+    } catch {}
+  }
+
+  // 4. Check Rust Cargo.toml
+  const cargoTomlPath = path.join(root, "Cargo.toml");
+  if (fs.existsSync(cargoTomlPath)) {
+    try {
+      const cargoContent = fs.readFileSync(cargoTomlPath, "utf-8");
+      if (/diesel/i.test(cargoContent)) return "diesel";
+      if (/sea-orm/i.test(cargoContent)) return "sea-orm";
+      if (/sqlx/i.test(cargoContent)) return "sqlx";
+    } catch {}
+  }
+
+  // 5. Check Ruby Gemfile
+  const gemfilePath = path.join(root, "Gemfile");
+  if (fs.existsSync(gemfilePath)) {
+    try {
+      const gemContent = fs.readFileSync(gemfilePath, "utf-8");
+      if (/rails|activerecord/i.test(gemContent)) return "active_record";
+      if (/sequel/i.test(gemContent)) return "sequel";
+    } catch {}
+  }
+
+  // 6. Check PHP composer.json
+  const composerJsonPath = path.join(root, "composer.json");
+  if (fs.existsSync(composerJsonPath)) {
+    try {
+      const composer = JSON.parse(fs.readFileSync(composerJsonPath, "utf-8"));
+      const reqs = { ...(composer.require || {}), ...(composer["require-dev"] || {}) };
+      if ("laravel/framework" in reqs || "illuminate/database" in reqs) return "eloquent";
+      if ("doctrine/orm" in reqs) return "doctrine";
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Detects the database engine used in the project by inspecting package manifests and driver dependencies.
+ */
+export function detectDatabaseEngine(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("pg" in deps || "postgres" in deps || "@neondatabase/serverless" in deps) return "postgresql";
+      if ("mysql" in deps || "mysql2" in deps) return "mysql";
+      if ("sqlite3" in deps || "better-sqlite3" in deps) return "sqlite";
+      if ("mongodb" in deps || "mongoose" in deps) return "mongodb";
+    } catch {}
+  }
+
+  // 2. Check Python manifests
+  const pyprojectPath = path.join(root, "pyproject.toml");
+  const requirementsPath = path.join(root, "requirements.txt");
+  let pythonContent = "";
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+    } catch {}
+  }
+  if (fs.existsSync(requirementsPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+    } catch {}
+  }
+  if (pythonContent) {
+    if (/asyncpg|psycopg2|psycopg/i.test(pythonContent)) return "postgresql";
+    if (/mysqlclient|pymysql|asyncmy/i.test(pythonContent)) return "mysql";
+    if (/aiosqlite|sqlite3/i.test(pythonContent)) return "sqlite";
+    if (/motor|pymongo/i.test(pythonContent)) return "mongodb";
+  }
+
+  // 3. Check Go go.mod
+  const goModPath = path.join(root, "go.mod");
+  if (fs.existsSync(goModPath)) {
+    try {
+      const goContent = fs.readFileSync(goModPath, "utf-8");
+      if (/pgx|lib\/pq/i.test(goContent)) return "postgresql";
+      if (/go-sql-driver\/mysql/i.test(goContent)) return "mysql";
+      if (/mattn\/go-sqlite3/i.test(goContent)) return "sqlite";
+    } catch {}
+  }
+
+  // 4. Check Rust Cargo.toml
+  const cargoTomlPath = path.join(root, "Cargo.toml");
+  if (fs.existsSync(cargoTomlPath)) {
+    try {
+      const cargoContent = fs.readFileSync(cargoTomlPath, "utf-8");
+      if (/tokio-postgres|postgres/i.test(cargoContent)) return "postgresql";
+      if (/mysql_async|mysql/i.test(cargoContent)) return "mysql";
+      if (/rusqlite/i.test(cargoContent)) return "sqlite";
+    } catch {}
+  }
+
+  // 5. Check Ruby Gemfile
+  const gemfilePath = path.join(root, "Gemfile");
+  if (fs.existsSync(gemfilePath)) {
+    try {
+      const gemContent = fs.readFileSync(gemfilePath, "utf-8");
+      if (/\bpg\b/i.test(gemContent)) return "postgresql";
+      if (/mysql2/i.test(gemContent)) return "mysql";
+      if (/sqlite3/i.test(gemContent)) return "sqlite";
+    } catch {}
+  }
+
+  // 6. Check PHP composer.json
+  const composerJsonPath = path.join(root, "composer.json");
+  if (fs.existsSync(composerJsonPath)) {
+    try {
+      const composer = JSON.parse(fs.readFileSync(composerJsonPath, "utf-8"));
+      const reqs = { ...(composer.require || {}), ...(composer["require-dev"] || {}) };
+      if ("ext-pdo_pgsql" in reqs || "ext-pgsql" in reqs) return "postgresql";
+      if ("ext-pdo_mysql" in reqs || "ext-mysqli" in reqs) return "mysql";
+      if ("ext-pdo_sqlite" in reqs || "ext-sqlite3" in reqs) return "sqlite";
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Compiles context-aware backend engineering guidelines with YAML frontmatter.
+ */
+export function compileBackendSkill(options?: BackendSkillCompilerOptions): string {
+  let orm = options?.orm;
+  if (!orm && options?.projectPath) {
+    orm = detectBackendOrm(options.projectPath) || undefined;
+  }
+
+  let ormGuidance = "";
+  if (orm === "prisma") {
+    ormGuidance = `\n* **Prisma ORM Guidance:** Use Prisma \`include\` or \`select\` to eagerly load relations in single queries. Never execute sequential \`findUnique\` or \`findFirst\` calls inside loops.`;
+  } else if (orm === "sqlalchemy") {
+    ormGuidance = `\n* **SQLAlchemy ORM Guidance:** Use \`selectinload\` or \`joinedload\` to eagerly load relationships and avoid N+1 queries. Never access unloaded lazy attributes inside response serialization loops.`;
+  } else if (orm === "django-orm") {
+    ormGuidance = `\n* **Django ORM Guidance:** Use \`select_related\` for single-valued relationships (ForeignKey, OneToOne) and \`prefetch_related\` for multi-valued relations (ManyToMany, reverse relations) to eliminate N+1 queries.`;
+  } else if (orm === "diesel") {
+    ormGuidance = `\n* **Diesel (Rust) Guidance:** Use Diesel associations and explicit eager loading joins. Never execute point lookups inside iteration blocks.`;
+  } else if (orm === "gorm") {
+    ormGuidance = `\n* **GORM (Go) Guidance:** Use GORM \`Preload\` or \`Joins\` to batch load relational associations. Avoid queries within iteration loops.`;
+  } else if (orm === "active_record") {
+    ormGuidance = `\n* **ActiveRecord (Ruby) Guidance:** Use \`includes\`, \`preload\`, or \`eager_load\` to batch association queries. Never traverse unloaded associations in view rendering or loops.`;
+  } else if (orm === "eloquent") {
+    ormGuidance = `\n* **Eloquent (PHP) Guidance:** Use Eloquent \`with\` or \`load\` for eager loading relationships. Prevent N+1 query patterns in API resource transformations.`;
+  }
+
+  let customRulesSection = "";
+  if (options?.customRules && options.customRules.length > 0) {
+    customRulesSection = `\n\n## 5. Repository Custom Invariants\n${options.customRules.map((rule) => rule.trim()).join("\n")}`;
+  }
+
+  return `---
 name: skill-backend
 description: Framework-idiomatic ORM patterns, transactional boundaries, anti-N+1 query prevention, and async persistence rules. Use when modifying models, controllers, repositories, or database queries.
 ---
@@ -812,24 +1030,47 @@ description: Framework-idiomatic ORM patterns, transactional boundaries, anti-N+
 
 ## 1. Anti-N+1 Query Invariant
 * Never issue queries inside loops. Use eager loading, join fetches, or batched loaders (DataLoader / select_related / prefetch_related / Prisma include).
-* Explicitly define selection sets; avoid fetching unbounded columns or deep relation graphs.
+* Explicitly define selection sets; avoid fetching unbounded columns or deep relation graphs.${ormGuidance}
 
 ## 2. Transactional Boundaries & Atomic Persistence
 * Wrap multi-entity mutations inside explicit database transactions.
 * Ensure idempotency on distributed endpoints with unique deduplication keys.
 * Never leave open transactions across external HTTP calls or long-running async tasks.
 
-## 3. Idiomatic Layer Seams
+## 3. Async Safety & Non-Blocking Persistence
+* Never mix blocking synchronous database drivers with async event loops; use non-blocking drivers.
+* Bounded Connection Pooling: Configure connection pool timeouts and max-overflow guards to prevent thread starvation under load.
+
+## 4. Idiomatic Layer Seams
 * Maintain separation between HTTP transport/controllers, business domain services, and persistence repositories.
-* Fail fast with typed validation errors before touching domain logic or persistence.
-`
-  },
-  "skill-database": {
-    name: "skill-database",
-    fileName: "skill-database.md",
-    description:
-      "Zero-downtime migrations, lock safety, column additions, and indexing strategies. Use when modifying database schemas, migrations, or table structures.",
-    content: `---
+* Fail fast with typed validation errors before touching domain logic or persistence.${customRulesSection}
+`;
+}
+
+/**
+ * Compiles context-aware database and migration guidelines with YAML frontmatter.
+ */
+export function compileDatabaseSkill(options?: DatabaseSkillCompilerOptions): string {
+  let engine = options?.databaseEngine;
+  if (!engine && options?.projectPath) {
+    engine = detectDatabaseEngine(options.projectPath) || undefined;
+  }
+
+  let engineGuidance = "";
+  if (engine === "postgresql") {
+    engineGuidance = `\n* **PostgreSQL Invariant:** Always create indexes concurrently (\`CREATE INDEX CONCURRENTLY\`) outside transaction blocks to avoid locking table writes.\n* **Lock & Statement Timeouts:** Always configure strict \`lock_timeout\` and \`statement_timeout\` on migration transactions to prevent connection pool exhaustion.`;
+  } else if (engine === "mysql") {
+    engineGuidance = `\n* **MySQL Invariant:** Use non-blocking DDL (\`ALGORITHM=INPLACE, LOCK=NONE\`) for online schema modifications where supported to avoid table locks.`;
+  } else if (engine === "sqlite") {
+    engineGuidance = `\n* **SQLite Invariant:** Enable WAL mode (\`PRAGMA journal_mode=WAL\`) and keep write transactions short to minimize lock contention and busy errors.`;
+  }
+
+  let customRulesSection = "";
+  if (options?.customRules && options.customRules.length > 0) {
+    customRulesSection = `\n\n## 4. Repository Custom Invariants\n${options.customRules.map((rule) => rule.trim()).join("\n")}`;
+  }
+
+  return `---
 name: skill-database
 description: Zero-downtime migrations, lock safety, column additions, and indexing strategies. Use when modifying database schemas, migrations, or table structures.
 ---
@@ -839,16 +1080,37 @@ description: Zero-downtime migrations, lock safety, column additions, and indexi
 ## 1. Zero-Downtime Migration Contract
 * Never run destructive column drops or renames in a single release. Follow expand-and-contract phase transitions.
 * New columns must be nullable or have safe defaults that do not trigger full-table rewrites.
+* Backfill large datasets in batched asynchronous background workers rather than synchronous migration locks.
 
 ## 2. Lock Safety & Non-Blocking DDL
 * Create indexes concurrently (e.g., \`CREATE INDEX CONCURRENTLY\` in PostgreSQL).
 * Set strict lock timeouts on migration transactions to prevent cascading connection pool exhaustion.
-* Avoid heavy table locks during high-traffic operational windows.
+* Avoid heavy table locks during high-traffic operational windows.${engineGuidance}
 
 ## 3. Query & Index Hygiene
 * Ensure all foreign keys and frequently filtered columns have supporting indexes.
 * Audit query execution plans (EXPLAIN ANALYZE) before committing complex multi-table joins.
-`
+* Prune unused and redundant indexes to avoid write throughput penalties.${customRulesSection}
+`;
+}
+
+/**
+ * Catalog of specialized skills with YAML frontmatter.
+ */
+export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
+  "skill-backend": {
+    name: "skill-backend",
+    fileName: "skill-backend.md",
+    description:
+      "Framework-idiomatic ORM patterns, transactional boundaries, anti-N+1 query prevention, and async persistence rules. Use when modifying models, controllers, repositories, or database queries.",
+    content: compileBackendSkill()
+  },
+  "skill-database": {
+    name: "skill-database",
+    fileName: "skill-database.md",
+    description:
+      "Zero-downtime migrations, lock safety, column additions, and indexing strategies. Use when modifying database schemas, migrations, or table structures.",
+    content: compileDatabaseSkill()
   },
   "skill-frontend": {
     name: "skill-frontend",
@@ -1173,11 +1435,22 @@ export function generateAgents(
     }
   ];
 
+  const resolveSkillContent = (skillName: SkillName): string => {
+    if (skillName === "skill-backend") {
+      return compileBackendSkill({ projectPath: root, profile });
+    }
+    if (skillName === "skill-database") {
+      return compileDatabaseSkill({ projectPath: root, profile });
+    }
+    return SKILL_DEFINITIONS[skillName].content;
+  };
+
   for (const skillName of profile.activeSkills) {
     const def = SKILL_DEFINITIONS[skillName];
+    const skillContent = resolveSkillContent(skillName);
     plannedFiles.push({
       path: path.join(".agents", "skills", def.fileName),
-      tokens: estimateTokens(def.content),
+      tokens: estimateTokens(skillContent),
       type: "skill"
     });
   }
@@ -1237,7 +1510,8 @@ export function generateAgents(
   for (const skillName of profile.activeSkills) {
     const def = SKILL_DEFINITIONS[skillName];
     const skillFilePath = path.join(skillsDir, def.fileName);
-    fs.writeFileSync(skillFilePath, def.content, "utf-8");
+    const skillContent = resolveSkillContent(skillName);
+    fs.writeFileSync(skillFilePath, skillContent, "utf-8");
   }
 
   return {

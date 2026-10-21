@@ -3,10 +3,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import {
+  compileBackendSkill,
+  compileDatabaseSkill,
   generateAgents,
   inspectTokenBudget,
   MAX_ROOT_AGENTS_TOKENS,
+  parseSkillFrontmatter,
   profileArchetype,
+  SKILL_DEFINITIONS,
+  type SkillName,
 } from "./agents";
 import { detectStack } from "./detector";
 import {
@@ -28,6 +33,7 @@ Usage:
   baba agents generate [path] [--force] [--dry-run] [--json]
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
+  baba agents skill <name> [path] [--json]
   baba wrap [path]
 
 Commands:
@@ -194,7 +200,16 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
       let subcommand = "generate";
       let targetDir: string | undefined;
+      let skillArg: string | undefined;
+
       if (
+        positional[0] === "skill" ||
+        positional[0] === "skills"
+      ) {
+        subcommand = positional[0];
+        skillArg = positional[1];
+        targetDir = positional[2] || process.cwd();
+      } else if (
         positional[0] === "generate" ||
         positional[0] === "profile" ||
         positional[0] === "seams" ||
@@ -208,6 +223,88 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       const resolvedPath = path.resolve(targetDir);
+
+      if (subcommand === "skill" || subcommand === "skills") {
+        if (!skillArg) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "agents skill",
+                  rootPath: resolvedPath,
+                  message:
+                    "Skill name is required (e.g. backend, database, frontend, security, testing)",
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(
+              pc.red(
+                "\nError: Missing skill name. Usage: baba agents skill <name> [path] [--json]\n"
+              )
+            );
+          }
+          process.exit(1);
+        }
+
+        const normalizedSkill = (
+          skillArg.startsWith("skill-") ? skillArg : `skill-${skillArg}`
+        ) as SkillName;
+
+        let content = "";
+        if (normalizedSkill === "skill-backend") {
+          content = compileBackendSkill({ projectPath: resolvedPath });
+        } else if (normalizedSkill === "skill-database") {
+          content = compileDatabaseSkill({ projectPath: resolvedPath });
+        } else if (SKILL_DEFINITIONS[normalizedSkill]) {
+          content = SKILL_DEFINITIONS[normalizedSkill].content;
+        } else {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "agents skill",
+                  rootPath: resolvedPath,
+                  message: `Unknown skill '${skillArg}'. Available: backend, database, frontend, security, testing`,
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(
+              pc.red(
+                `\nError: Unknown skill '${skillArg}'. Available: backend, database, frontend, security, testing\n`
+              )
+            );
+          }
+          process.exit(1);
+        }
+
+        const frontmatter = parseSkillFrontmatter(content);
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "success",
+                skill: normalizedSkill,
+                rootPath: resolvedPath,
+                frontmatter,
+                content,
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.log(content);
+        }
+        process.exit(0);
+      }
 
       if (subcommand === "check" || subcommand === "guard") {
         const agentsFilePath = path.join(resolvedPath, "AGENTS.md");
