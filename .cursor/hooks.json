@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "bin/hooks/gate_check.sh"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "bin/hooks/post_edit_lint.sh"
+      }
+    ]
+  }
+}
