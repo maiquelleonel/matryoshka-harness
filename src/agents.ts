@@ -85,10 +85,55 @@ export interface EstimatedTokenSavings {
   savingsPercentage: number;
 }
 
+export const MAX_ROOT_AGENTS_TOKENS = 250;
+export const TARGET_ROOT_AGENTS_TOKENS = 200;
+
+export interface TokenGuardReport {
+  tokenCount: number;
+  maxTokens: number;
+  targetTokens: number;
+  withinBudget: boolean;
+  exceededBy: number;
+  savingsPercentage: number;
+}
+
+export class TokenBudgetExceededError extends Error {
+  public readonly tokenCount: number;
+  public readonly maxTokens: number;
+  public readonly exceededBy: number;
+
+  constructor(message: string, tokenCount: number, maxTokens: number) {
+    super(message);
+    this.name = "TokenBudgetExceededError";
+    this.tokenCount = tokenCount;
+    this.maxTokens = maxTokens;
+    this.exceededBy = Math.max(0, tokenCount - maxTokens);
+  }
+}
+
+export interface RootAgentsProfileInput {
+  archetype: AgentArchetype;
+  runtime?: string;
+  packageManager?: string;
+  testCommand?: string;
+  buildCommand?: string;
+  lintCommand?: string;
+  activeSkills?: SkillName[];
+  customInvariants?: string[];
+}
+
+export interface RootAgentsTemplateOptions {
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+  truncateCommands?: boolean;
+}
+
 export interface GenerateAgentsOptions {
   force?: boolean;
   dryRun?: boolean;
   json?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
 }
 
 export interface GenerateAgentsResult {
@@ -106,6 +151,8 @@ export interface GenerateAgentsResult {
   message?: string;
   seams?: DiscoveredSeams;
   profile?: ArchetypeProfile;
+  tokenGuard: TokenGuardReport;
+  token_guard: TokenGuardReport;
 }
 
 /**
@@ -115,6 +162,50 @@ export interface GenerateAgentsResult {
 export function estimateTokens(text: string): number {
   const matches = text.match(/\w+|[^\w\s]+/g);
   return matches ? matches.length : Math.ceil(text.length / 4);
+}
+
+/**
+ * Evaluates token budget compliance against strict maximum and target thresholds.
+ */
+export function inspectTokenBudget(
+  content: string,
+  maxTokens: number = MAX_ROOT_AGENTS_TOKENS
+): TokenGuardReport {
+  const tokenCount = estimateTokens(content);
+  const withinBudget = tokenCount <= maxTokens;
+  const exceededBy = withinBudget ? 0 : tokenCount - maxTokens;
+  const targetTokens = TARGET_ROOT_AGENTS_TOKENS;
+  const monolithicReference = 1500;
+  const savings = Math.max(0, monolithicReference - tokenCount);
+  const savingsPercentage = Math.round((savings / monolithicReference) * 100);
+
+  return {
+    tokenCount,
+    maxTokens,
+    targetTokens,
+    withinBudget,
+    exceededBy,
+    savingsPercentage,
+  };
+}
+
+/**
+ * Asserts that content complies with the token budget.
+ * Throws TokenBudgetExceededError if the token count exceeds maxTokens.
+ */
+export function assertTokenBudget(
+  content: string,
+  maxTokens: number = MAX_ROOT_AGENTS_TOKENS
+): TokenGuardReport {
+  const report = inspectTokenBudget(content, maxTokens);
+  if (!report.withinBudget) {
+    throw new TokenBudgetExceededError(
+      `Token budget exceeded: ${report.tokenCount} tokens exceeds maximum threshold of ${report.maxTokens} tokens (exceeded by ${report.exceededBy} tokens)`,
+      report.tokenCount,
+      report.maxTokens
+    );
+  }
+  return report;
 }
 
 /**
@@ -991,37 +1082,66 @@ export function loadSkillOnDemand(
 
 /**
  * Compiles the ultra-lean root AGENTS.md index strictly under 200 tokens.
+ * Enforces token guard and normalizes detected commands.
  */
-export function compileRootAgents(profile: {
-  archetype: AgentArchetype;
-  runtime: string;
-  packageManager: string;
-  testCommand: string;
-  buildCommand: string;
-  lintCommand: string;
-  activeSkills: SkillName[];
-}): string {
-  const skillsList = profile.activeSkills
-    .map((skillName) => `* ${SKILL_TITLE_MAP[skillName]}: \`.agents/skills/${SKILL_DEFINITIONS[skillName].fileName}\``)
-    .join("\n");
+export function compileRootAgents(
+  profile: RootAgentsProfileInput,
+  options?: RootAgentsTemplateOptions
+): string {
+  const sanitizeCmd = (cmd?: string): string => {
+    if (!cmd) return "none";
+    const cleaned = cmd.trim().replace(/\s+/g, " ");
+    return cleaned.length > 0 ? cleaned : "none";
+  };
 
-  return `# 🤖 Project Operational Directives
+  const runtime = profile.runtime?.trim() || "unknown";
+  const packageManager = profile.packageManager?.trim() || "unknown";
+  const testCommand = sanitizeCmd(profile.testCommand);
+  const buildCommand = sanitizeCmd(profile.buildCommand);
+  const lintCommand = sanitizeCmd(profile.lintCommand);
+
+  const activeSkills = profile.activeSkills || [];
+  const skillsList =
+    activeSkills.length > 0
+      ? activeSkills
+          .map((skillName) => {
+            const title = SKILL_TITLE_MAP[skillName] || skillName;
+            const def = SKILL_DEFINITIONS[skillName];
+            const fileName = def ? def.fileName : `${skillName}.md`;
+            return `* ${title}: \`.agents/skills/${fileName}\``;
+          })
+          .join("\n")
+      : "* No specialized skills required.";
+
+  let customInvariantsSection = "";
+  if (profile.customInvariants && profile.customInvariants.length > 0) {
+    customInvariantsSection =
+      "\n" + profile.customInvariants.map((inv) => inv.trim()).join("\n");
+  }
+
+  const content = `# 🤖 Project Operational Directives
 
 ## 🌐 Stack & Identity
 * **Archetype:** ${profile.archetype}
-* **Runtime:** ${profile.runtime} (${profile.packageManager})
-* **Test Runner:** \`${profile.testCommand}\`
-* **Build / Lint:** \`${profile.buildCommand}\` | \`${profile.lintCommand}\`
+* **Runtime:** ${runtime} (${packageManager})
+* **Test Runner:** \`${testCommand}\`
+* **Build / Lint:** \`${buildCommand}\` | \`${lintCommand}\`
 
 ## 🛡️ Anti-Slop Core Invariants
-* **YAGNI & DRY First:** Prefer composable functions over speculative class hierarchies.
+* **YAGNI & DRY First:** Prefer simple composable functions over speculative class hierarchies.
 * **No Unprompted Refactoring:** Preserve working patterns; surgical edits only.
-* **Verification First:** Never declare completion without test suite evidence.
+* **Verification First:** Never declare completion without executing test suite evidence.${customInvariantsSection}
 
 ## 🧭 On-Demand Specialized Skills
-Load guidelines only when touching respective domains:
+Load specialized guidelines only when touching respective domains:
 ${skillsList}
 `;
+
+  if (options?.strictTokenGuard) {
+    assertTokenBudget(content, options.maxTokens ?? MAX_ROOT_AGENTS_TOKENS);
+  }
+
+  return content;
 }
 
 /**
@@ -1033,8 +1153,13 @@ export function generateAgents(
 ): GenerateAgentsResult {
   const root = path.resolve(projectPath);
   const profile = profileArchetype(root);
-  const rootAgentsContent = compileRootAgents(profile);
+  const maxTokens = options.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
+  const rootAgentsContent = compileRootAgents(profile, {
+    maxTokens,
+    strictTokenGuard: options.strictTokenGuard,
+  });
   const rootTokens = estimateTokens(rootAgentsContent);
+  const tokenGuard = inspectTokenBudget(rootAgentsContent, maxTokens);
 
   const agentsPath = path.join(root, "AGENTS.md");
   const backupPath = path.join(root, "AGENTS.md.bak");
@@ -1086,6 +1211,8 @@ export function generateAgents(
       skillsIndex,
       seams: profile.seams,
       profile,
+      tokenGuard,
+      token_guard: tokenGuard,
     };
   }
 
@@ -1127,5 +1254,7 @@ export function generateAgents(
     skillsIndex,
     seams: profile.seams,
     profile,
+    tokenGuard,
+    token_guard: tokenGuard,
   };
 }
