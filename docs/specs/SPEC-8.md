@@ -1,7 +1,7 @@
 # 📐 SPEC-8: feat(agents): context-aware adaptive AGENTS.md and modular skills engine
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 6: Frontend & Security Skill Compilers)  
+**Status:** in_progress (Subtask 8: CLI Subcommand & Overwrite Guardrails)  
 **Gatilho:** Issue #8  
 **Target:** Bun + TypeScript  
 
@@ -138,6 +138,24 @@ export function detectAuthFramework(projectPath?: string): string | null;
 ```
 
 - CLI subcommand: `baba agents skill <backend|database|frontend|security> [path] [--json]`
+
+### 2.7 Contratos do Compilador de Testing & Verification (Subtask 7)
+```typescript
+export interface TestingSkillCompilerOptions {
+  testRunner?: string;
+  testFramework?: string;
+  e2eFramework?: string;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export function compileTestingSkill(options?: TestingSkillCompilerOptions): string;
+export function detectTestRunner(projectPath?: string): string | null;
+export function detectE2eFramework(projectPath?: string): string | null;
+```
+
+- CLI subcommand: `baba agents skill <backend|database|frontend|security|testing> [path] [--json]`
 
 
 ---
