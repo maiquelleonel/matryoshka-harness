@@ -1,7 +1,7 @@
 # 📐 SPEC-8: feat(agents): context-aware adaptive AGENTS.md and modular skills engine
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 8: CLI Subcommand & Overwrite Guardrails)  
+**Status:** completed (Subtask 8: CLI Subcommand & Overwrite Guardrails)  
 **Gatilho:** Issue #8  
 **Target:** Bun + TypeScript  
 

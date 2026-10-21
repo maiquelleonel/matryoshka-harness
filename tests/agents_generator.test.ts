@@ -39,7 +39,10 @@ import {
   compileTestingSkill,
   detectTestRunner,
   detectE2eFramework,
-  type TestingSkillCompilerOptions
+  type TestingSkillCompilerOptions,
+  generateAgents,
+  type GenerateAgentsResult,
+  type GenerateAgentsOptions
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -1431,8 +1434,9 @@ dependencies = [
         expect(resBaba.frontmatter.name).toBe("skill-database");
       });
     });
+  });
 
-    describe("Subtask 6: Frontend & Security Skill Compilers (with YAML Frontmatter)", () => {
+  describe("Subtask 6: Frontend & Security Skill Compilers (with YAML Frontmatter)", () => {
       describe("compileFrontendSkill() Compiler & Invariants", () => {
         it("compiles canonical frontend skill with valid YAML frontmatter and core invariants", () => {
           const compiled = compileFrontendSkill();
@@ -1893,7 +1897,7 @@ dependencies = [
       });
     });
 
-    describe("Subtask 7: Testing & Verification Skill Compiler (with YAML Frontmatter)", () => {
+  describe("Subtask 7: Testing & Verification Skill Compiler (with YAML Frontmatter)", () => {
       describe("compileTestingSkill() Compiler & Invariants", () => {
         it("compiles canonical testing skill with valid YAML frontmatter and core invariants", () => {
           const compiled = compileTestingSkill();
@@ -2208,6 +2212,234 @@ dependencies = [
           expect(testingContent).toContain("Vitest");
           expect(testingContent).toContain("Playwright");
         });
+      });
+    });
+
+  describe("Subtask 8: CLI Subcommand & Overwrite Guardrails", () => {
+    describe("generateAgents() Programmatic Guardrails", () => {
+      it("throws when AGENTS.md exists and force is not specified", () => {
+        const agentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(agentsPath, "# Custom Instructions\nDo not overwrite.", "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "app" }));
+
+        expect(() => {
+          generateAgents(tempDir, { force: false });
+        }).toThrow("Use --force (-f) to overwrite");
+
+        expect(fs.readFileSync(agentsPath, "utf-8")).toBe("# Custom Instructions\nDo not overwrite.");
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+      });
+
+      it("backs up AGENTS.md to AGENTS.md.bak and returns backupCreated: true with backupPath when force: true", () => {
+        const customContent = "# Critical Invariants\nCustom content preserved.";
+        const agentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(agentsPath, customContent, "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "app" }));
+
+        const result = generateAgents(tempDir, { force: true });
+        expect(result.status).toBe("success");
+        expect(result.backupCreated).toBe(true);
+        expect(result.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+        expect(fs.existsSync(backupPath)).toBe(true);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(customContent);
+
+        // New AGENTS.md generated cleanly
+        const newContent = fs.readFileSync(agentsPath, "utf-8");
+        expect(newContent).not.toBe(customContent);
+        expect(newContent).toContain("# 🤖 Project Operational Directives");
+      });
+
+      it("sets backupCreated: false and backupPath undefined when AGENTS.md does not previously exist", () => {
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "fresh-app" }));
+
+        const result = generateAgents(tempDir, { force: true });
+        expect(result.status).toBe("success");
+        expect(result.backupCreated).toBe(false);
+        expect(result.backupPath).toBeUndefined();
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+      });
+
+      it("sets backupCreated: false and touches no disk files in dry-run mode even if AGENTS.md exists", () => {
+        const customContent = "# Existing Directives";
+        const agentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(agentsPath, customContent, "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "dry-app" }));
+
+        const result = generateAgents(tempDir, { dryRun: true });
+        expect(result.status).toBe("success");
+        expect(result.dryRun).toBe(true);
+        expect(result.backupCreated).toBe(false);
+        expect(result.backupPath).toBeUndefined();
+        expect(fs.readFileSync(agentsPath, "utf-8")).toBe(customContent);
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+      });
+    });
+
+    describe("CLI Overwrite Guardrails & Error Reporting", () => {
+      it("fails with exit code 1 and structured error JSON when AGENTS.md exists without --force", () => {
+        const customContent = "# Protected Rules";
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), customContent, "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "test-pkg" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--json"
+        ]);
+        expect(proc.exitCode).toBe(1);
+
+        const stdout = proc.stdout.toString().trim();
+        const parsed = JSON.parse(stdout);
+        expect(parsed.status).toBe("error");
+        expect(parsed.command).toBe("agents");
+        expect(parsed.message).toContain("already exists");
+        expect(parsed.message).toContain("--force");
+
+        // Disk remains unmodified
+        expect(fs.readFileSync(path.join(tempDir, "AGENTS.md"), "utf-8")).toBe(customContent);
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+      });
+
+      it("supports short flag -f as alias for --force to backup and overwrite cleanly", () => {
+        const customContent = "# Short Flag Test Rules";
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), customContent, "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "short-flag-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "-f"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+        expect(fs.existsSync(backupPath)).toBe(true);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(customContent);
+      });
+
+      it("includes backupCreated: true and backupPath in CLI --json output when overwrite occurs", () => {
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Initial content", "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "json-backup-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--force", "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.backupCreated).toBe(true);
+        expect(parsed.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+      });
+
+      it("displays Backup path in human-readable terminal output when overwrite occurs", () => {
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Terminal content", "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "term-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--force"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("Backup:");
+        expect(stdout).toContain("AGENTS.md.bak");
+      });
+    });
+
+    describe("CLI Ergonomics, Shorthand & Option Parsing", () => {
+      it("supports shorthand invocation 'baba agents [path]' defaulting to generate", () => {
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "shorthand-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", tempDir, "--dry-run", "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.dryRun).toBe(true);
+        expect(parsed.plannedFiles.length).toBeGreaterThan(0);
+      });
+
+      it("supports options placed before positional directory", () => {
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "pos-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", "--dry-run", "--json", tempDir
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.rootAgentsPath).toBe(path.join(tempDir, "AGENTS.md"));
+      });
+
+      it("parses --max-tokens without misinterpreting the number as the target directory", () => {
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "max-tok-app" }));
+
+        const proc = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", "--max-tokens", "180", tempDir, "--dry-run", "--json"
+        ]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.tokenGuard.maxTokens).toBe(180);
+        expect(parsed.rootAgentsPath).toBe(path.join(tempDir, "AGENTS.md"));
+      });
+    });
+
+    describe("CLI Alias Parity for agents generate overwrite guardrails", () => {
+      it("ensures parity across baba, bbyg, and matryoshka for overwrite refusal error", () => {
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Protected", "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "parity-app" }));
+
+        const procBaba = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--json"
+        ]);
+        const procBbyg = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--json"
+        ]);
+        const procMatryoshka = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--json"
+        ]);
+
+        expect(procBaba.exitCode).toBe(1);
+        expect(procBbyg.exitCode).toBe(1);
+        expect(procMatryoshka.exitCode).toBe(1);
+
+        const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+        const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+        const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+        expect(resBaba.status).toBe("error");
+        expect(resBbyg.status).toBe("error");
+        expect(resMatryoshka.status).toBe("error");
+      });
+
+      it("ensures parity across baba, bbyg, and matryoshka for --force overwrite and backup", () => {
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Parity Custom Rules", "utf-8");
+        fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "parity-force-app" }));
+
+        const procBaba = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--force", "--json"
+        ]);
+        expect(procBaba.exitCode).toBe(0);
+        const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+        expect(resBaba.backupCreated).toBe(true);
+
+        const procBbyg = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "-f", "--json"
+        ]);
+        expect(procBbyg.exitCode).toBe(0);
+        const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+        expect(resBbyg.backupCreated).toBe(true);
+
+        const procMatryoshka = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--force", "--json"
+        ]);
+        expect(procMatryoshka.exitCode).toBe(0);
+        const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+        expect(resMatryoshka.backupCreated).toBe(true);
       });
     });
   });

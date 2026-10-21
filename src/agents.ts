@@ -198,6 +198,8 @@ export interface GenerateAgentsResult {
   profile?: ArchetypeProfile;
   tokenGuard: TokenGuardReport;
   token_guard: TokenGuardReport;
+  backupCreated: boolean;
+  backupPath?: string;
 }
 
 /**
@@ -1982,16 +1984,19 @@ export function generateAgents(
       profile,
       tokenGuard,
       token_guard: tokenGuard,
+      backupCreated: false,
     };
   }
 
   // Non-destructive overwrite protection
+  let backupCreated = false;
   if (fs.existsSync(agentsPath)) {
     if (!options.force) {
       throw new Error(`'AGENTS.md' already exists at ${agentsPath}. Use --force (-f) to overwrite.`);
     }
     // Backup existing AGENTS.md
     fs.copyFileSync(agentsPath, backupPath);
+    backupCreated = true;
   }
 
   // Ensure directories exist
@@ -2026,5 +2031,7 @@ export function generateAgents(
     profile,
     tokenGuard,
     token_guard: tokenGuard,
+    backupCreated,
+    ...(backupCreated ? { backupPath } : {}),
   };
 }
