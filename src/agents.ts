@@ -164,6 +164,15 @@ export interface SecuritySkillCompilerOptions {
   profile?: ArchetypeProfile;
 }
 
+export interface TestingSkillCompilerOptions {
+  testRunner?: string;
+  testFramework?: string;
+  e2eFramework?: string;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
 export interface GenerateAgentsOptions {
   force?: boolean;
   dryRun?: boolean;
@@ -1376,6 +1385,259 @@ description: OWASP Top 10 mitigation, strict input sanitization, secret leakage 
 }
 
 /**
+ * Detects the test runner used in the project by inspecting package manifests and test configs.
+ */
+export function detectTestRunner(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      const scripts = pkg.scripts || {};
+      const testScript = typeof scripts.test === "string" ? scripts.test : "";
+
+      if (testScript.includes("bun test")) return "bun test";
+      if (testScript.includes("vitest")) return "vitest";
+      if (testScript.includes("jest")) return "jest";
+
+      if ("vitest" in deps) return "vitest";
+      if ("jest" in deps) return "jest";
+      if (
+        fs.existsSync(path.join(root, "bun.lock")) ||
+        fs.existsSync(path.join(root, "bun.lockb")) ||
+        "@types/bun" in deps ||
+        "bun" in deps
+      ) {
+        return "bun test";
+      }
+    } catch {}
+  }
+
+  // Check config files for JS/TS
+  if (
+    fs.existsSync(path.join(root, "vitest.config.ts")) ||
+    fs.existsSync(path.join(root, "vitest.config.js")) ||
+    fs.existsSync(path.join(root, "vitest.config.mjs"))
+  ) {
+    return "vitest";
+  }
+  if (
+    fs.existsSync(path.join(root, "jest.config.ts")) ||
+    fs.existsSync(path.join(root, "jest.config.js")) ||
+    fs.existsSync(path.join(root, "jest.config.json")) ||
+    fs.existsSync(path.join(root, "jest.config.mjs"))
+  ) {
+    return "jest";
+  }
+
+  // 2. Check Python manifests
+  const pyprojectPath = path.join(root, "pyproject.toml");
+  const requirementsPath = path.join(root, "requirements.txt");
+  let pythonContent = "";
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+    } catch {}
+  }
+  if (fs.existsSync(requirementsPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+    } catch {}
+  }
+  if (
+    /pytest/i.test(pythonContent) ||
+    fs.existsSync(path.join(root, "pytest.ini")) ||
+    fs.existsSync(path.join(root, "conftest.py"))
+  ) {
+    return "pytest";
+  }
+
+  // 3. Check Go go.mod
+  if (fs.existsSync(path.join(root, "go.mod"))) {
+    return "go test";
+  }
+
+  // 4. Check Rust Cargo.toml
+  if (fs.existsSync(path.join(root, "Cargo.toml"))) {
+    return "cargo test";
+  }
+
+  // 5. Check Ruby Gemfile
+  const gemfilePath = path.join(root, "Gemfile");
+  if (fs.existsSync(gemfilePath)) {
+    let gemContent = "";
+    try {
+      gemContent = fs.readFileSync(gemfilePath, "utf-8");
+    } catch {}
+    if (
+      /rspec/i.test(gemContent) ||
+      fs.existsSync(path.join(root, ".rspec")) ||
+      fs.existsSync(path.join(root, "spec"))
+    ) {
+      return "rspec";
+    }
+  }
+
+  // 6. Check PHP composer.json
+  const composerJsonPath = path.join(root, "composer.json");
+  if (fs.existsSync(composerJsonPath)) {
+    try {
+      const composer = JSON.parse(fs.readFileSync(composerJsonPath, "utf-8"));
+      const reqs = { ...(composer.require || {}), ...(composer["require-dev"] || {}) };
+      if ("pestphp/pest" in reqs) return "pest";
+      if ("phpunit/phpunit" in reqs || fs.existsSync(path.join(root, "phpunit.xml"))) return "phpunit";
+    } catch {}
+  }
+
+  // Fallback to detectStack testRunner
+  try {
+    const stack = detectStack(root);
+    if (stack.testRunner) return stack.testRunner;
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Detects the E2E testing framework used in the project.
+ */
+export function detectE2eFramework(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("@playwright/test" in deps || "playwright" in deps) return "playwright";
+      if ("cypress" in deps) return "cypress";
+    } catch {}
+  }
+
+  // Check config files
+  if (
+    fs.existsSync(path.join(root, "playwright.config.ts")) ||
+    fs.existsSync(path.join(root, "playwright.config.js")) ||
+    fs.existsSync(path.join(root, "playwright.config.mjs"))
+  ) {
+    return "playwright";
+  }
+
+  if (
+    fs.existsSync(path.join(root, "cypress.config.ts")) ||
+    fs.existsSync(path.join(root, "cypress.config.js")) ||
+    fs.existsSync(path.join(root, "cypress.json"))
+  ) {
+    return "cypress";
+  }
+
+  // 2. Check Python manifests
+  const pyprojectPath = path.join(root, "pyproject.toml");
+  const requirementsPath = path.join(root, "requirements.txt");
+  let pythonContent = "";
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+    } catch {}
+  }
+  if (fs.existsSync(requirementsPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+    } catch {}
+  }
+  if (pythonContent && /playwright/i.test(pythonContent)) {
+    return "playwright";
+  }
+
+  return null;
+}
+
+/**
+ * Compiles context-aware testing and verification guidelines with YAML frontmatter.
+ */
+export function compileTestingSkill(options?: TestingSkillCompilerOptions): string {
+  let testRunner = options?.testRunner;
+  if (!testRunner && options?.projectPath) {
+    testRunner = detectTestRunner(options.projectPath) || undefined;
+  }
+  if (!testRunner && options?.profile?.testCommand && options.profile.testCommand !== "none") {
+    testRunner = options.profile.testCommand;
+  }
+
+  let e2eFramework = options?.e2eFramework;
+  if (!e2eFramework && options?.projectPath) {
+    e2eFramework = detectE2eFramework(options.projectPath) || undefined;
+  }
+
+  const normalizedRunner = testRunner ? testRunner.toLowerCase().trim() : "";
+  let runnerGuidance = "";
+
+  if (normalizedRunner.includes("vitest")) {
+    runnerGuidance = `\n* **Vitest Guidance:** Utilize Vitest in-source testing and ESM native mocking (\`vi.mock\`, \`vi.fn\`). Configure happy-dom or jsdom for isolated component and DOM testing.`;
+  } else if (normalizedRunner.includes("jest")) {
+    runnerGuidance = `\n* **Jest Guidance:** Ensure \`jest.clearAllMocks()\` or \`jest.restoreAllMocks()\` is executed in teardown hooks. Avoid unhandled asynchronous promises and memory leaks in test runs.`;
+  } else if (normalizedRunner.includes("pytest")) {
+    runnerGuidance = `\n* **Pytest Guidance:** Use explicit fixtures with clean teardown (\`yield\` fixtures). Avoid monkeypatching production modules when pure dependency injection is viable.`;
+  } else if (normalizedRunner.includes("bun")) {
+    runnerGuidance = `\n* **Bun Test Guidance:** Leverage \`bun:test\` native matchers, snapshot testing, and lifecycle hooks (\`beforeEach\`, \`afterEach\`). Run in fast watch or silent modes (\`bun test --bail\`).`;
+  } else if (normalizedRunner.includes("cargo")) {
+    runnerGuidance = `\n* **Rust Cargo Test Guidance:** Structure integration tests in \`tests/\` and unit tests in \`mod tests\` with \`#[cfg(test)]\`. Ensure tests do not rely on parallel file lock races.`;
+  } else if (normalizedRunner.includes("go test") || normalizedRunner === "go") {
+    runnerGuidance = `\n* **Go Test Guidance:** Use table-driven tests (\`t.Run\`) with \`t.Parallel()\` where state is isolated. Check error contracts with \`errors.Is\` or \`errors.As\`.`;
+  } else if (normalizedRunner.includes("rspec")) {
+    runnerGuidance = `\n* **RSpec Guidance:** Use explicit \`let\` / \`let!\` bindings and clean factories over direct database records. Never disable transactional fixtures.`;
+  } else if (normalizedRunner.includes("pest")) {
+    runnerGuidance = `\n* **Pest Guidance:** Follow expressive fluent expectations. Isolate database mutations using RefreshDatabase traits.`;
+  } else if (normalizedRunner.includes("phpunit")) {
+    runnerGuidance = `\n* **PHPUnit Guidance:** Clean up mock objects and assertions in \`tearDown()\`. Utilize data providers for boundary edge testing.`;
+  }
+
+  let e2eGuidance = "";
+  if (e2eFramework === "playwright") {
+    e2eGuidance = `\n* **Playwright E2E Guidance:** Prioritize user-facing locators (\`getByRole\`, \`getByText\`). Avoid arbitrary timeouts (\`page.waitForTimeout\`); use locator-based assertions.`;
+  } else if (e2eFramework === "cypress") {
+    e2eGuidance = `\n* **Cypress E2E Guidance:** Chain commands off retryable queries. Avoid unconditional waits; rely on route interception (\`cy.intercept\`) and aliasing.`;
+  }
+
+  let customRulesSection = "";
+  if (options?.customRules && options.customRules.length > 0) {
+    customRulesSection = `\n\n## 5. Repository Custom Invariants\n${options.customRules.map((rule) => rule.trim()).join("\n")}`;
+  }
+
+  return `---
+name: skill-testing
+description: The Seam contract, Red-to-Green TDD discipline, deterministic test fixtures, and mock isolation boundaries. Use when writing tests, refactoring, or verifying bugfixes.
+---
+
+# 🧪 Testing & Verification Guidelines
+
+## 1. The Seam Contract (Red-to-Green)
+* Always produce a failing deterministic test (RED) proving the bug or missing capability before altering production code.
+* Verify green state empirically through native test execution (\`bun test\`, \`pytest\`, \`cargo test\`, \`go test\`).
+* Never mark an issue or task complete without reproducing and greening test suite evidence.${runnerGuidance}
+
+## 2. Deterministic Fixtures & Isolation
+* Tests must run in full isolation; tests must never depend on shared mutable state or execution ordering.
+* Clean up all temporary files, test databases, and mocked timers in \`afterEach\` / teardown hooks.
+* Avoid global state leakage across test cases; reset singletons and memoized caches between test runs.
+
+## 3. Mock Boundaries & Test Doubles
+* Only mock external system boundaries (network calls, external third-party APIs, clock shifts).
+* Never mock the unit or domain logic under test. Prefer in-memory fakes over complex stubbing.
+* Verify contract boundaries: mock at the seam edge, not deep within internal implementation details.
+
+## 4. Test Suite Hygiene & Speed
+* Keep unit test suites blazing fast (< 5s feedback loop).
+* Decouple fast unit tests from slow integration or end-to-end (E2E) suites.
+* Avoid brittle assertions: assert on behavior and observable state rather than private internal implementation details.${e2eGuidance}${customRulesSection}
+`;
+}
+
+/**
  * Catalog of specialized skills with YAML frontmatter.
  */
 export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
@@ -1412,25 +1674,7 @@ export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
     fileName: "skill-testing.md",
     description:
       "The Seam contract, Red-to-Green TDD discipline, deterministic test fixtures, and mock isolation boundaries. Use when writing tests, refactoring, or verifying bugfixes.",
-    content: `---
-name: skill-testing
-description: The Seam contract, Red-to-Green TDD discipline, deterministic test fixtures, and mock isolation boundaries. Use when writing tests, refactoring, or verifying bugfixes.
----
-
-# 🧪 Testing & Verification Guidelines
-
-## 1. The Seam Contract (Red-to-Green)
-* Always produce a failing deterministic test (RED) proving the bug or missing capability before altering production code.
-* Verify green state empirically through native test execution (\`bun test\`, \`pytest\`, \`cargo test\`, \`go test\`).
-
-## 2. Deterministic Fixtures & Isolation
-* Tests must run in full isolation; tests must never depend on shared mutable state or execution ordering.
-* Clean up all temporary files, test databases, and mocked timers in \`afterEach\` / teardown hooks.
-
-## 3. Mock Boundaries
-* Only mock external system boundaries (network calls, external third-party APIs, clock shifts).
-* Never mock the unit or domain logic under test. Prefer in-memory fakes over complex stubbing.
-`
+    content: compileTestingSkill()
   }
 };
 
@@ -1681,19 +1925,20 @@ export function generateAgents(
   ];
 
   const resolveSkillContent = (skillName: SkillName): string => {
-    if (skillName === "skill-backend") {
-      return compileBackendSkill({ projectPath: root, profile });
+    switch (skillName) {
+      case "skill-backend":
+        return compileBackendSkill({ projectPath: root, profile });
+      case "skill-database":
+        return compileDatabaseSkill({ projectPath: root, profile });
+      case "skill-frontend":
+        return compileFrontendSkill({ projectPath: root, profile });
+      case "skill-security":
+        return compileSecuritySkill({ projectPath: root, profile });
+      case "skill-testing":
+        return compileTestingSkill({ projectPath: root, profile });
+      default:
+        return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
     }
-    if (skillName === "skill-database") {
-      return compileDatabaseSkill({ projectPath: root, profile });
-    }
-    if (skillName === "skill-frontend") {
-      return compileFrontendSkill({ projectPath: root, profile });
-    }
-    if (skillName === "skill-security") {
-      return compileSecuritySkill({ projectPath: root, profile });
-    }
-    return SKILL_DEFINITIONS[skillName].content;
   };
 
   for (const skillName of profile.activeSkills) {

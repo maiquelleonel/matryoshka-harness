@@ -7,6 +7,7 @@ import {
   compileDatabaseSkill,
   compileFrontendSkill,
   compileSecuritySkill,
+  compileTestingSkill,
   generateAgents,
   inspectTokenBudget,
   MAX_ROOT_AGENTS_TOKENS,
@@ -252,9 +253,12 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           process.exit(1);
         }
 
-        const normalizedSkill = (
-          skillArg.startsWith("skill-") ? skillArg : `skill-${skillArg}`
-        ) as SkillName;
+        const normalizedSkill =
+          skillArg === "test" || skillArg === "testing" || skillArg === "skill-testing"
+            ? "skill-testing"
+            : skillArg.startsWith("skill-")
+            ? skillArg
+            : `skill-${skillArg}`;
 
         let content = "";
         if (normalizedSkill === "skill-backend") {
@@ -265,8 +269,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           content = compileFrontendSkill({ projectPath: resolvedPath });
         } else if (normalizedSkill === "skill-security") {
           content = compileSecuritySkill({ projectPath: resolvedPath });
-        } else if (SKILL_DEFINITIONS[normalizedSkill]) {
-          content = SKILL_DEFINITIONS[normalizedSkill].content;
+        } else if (normalizedSkill === "skill-testing") {
+          content = compileTestingSkill({ projectPath: resolvedPath });
         } else {
           if (isJson) {
             console.log(

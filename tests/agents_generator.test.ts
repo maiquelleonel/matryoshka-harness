@@ -35,7 +35,11 @@ import {
   detectStylingSystem,
   detectAuthFramework,
   type FrontendSkillCompilerOptions,
-  type SecuritySkillCompilerOptions
+  type SecuritySkillCompilerOptions,
+  compileTestingSkill,
+  detectTestRunner,
+  detectE2eFramework,
+  type TestingSkillCompilerOptions
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -1888,6 +1892,325 @@ dependencies = [
         });
       });
     });
+
+    describe("Subtask 7: Testing & Verification Skill Compiler (with YAML Frontmatter)", () => {
+      describe("compileTestingSkill() Compiler & Invariants", () => {
+        it("compiles canonical testing skill with valid YAML frontmatter and core invariants", () => {
+          const compiled = compileTestingSkill();
+
+          expect(compiled.startsWith("---\n")).toBe(true);
+          expect(compiled).toContain("\n---\n");
+
+          const parsed = parseSkillFrontmatter(compiled);
+          expect(parsed).not.toBeNull();
+          expect(parsed?.name).toBe("skill-testing");
+          expect(parsed?.description).toBeDefined();
+          expect(parsed?.description.length).toBeGreaterThan(20);
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+
+          // Core required invariants
+          expect(compiled).toContain("The Seam Contract (Red-to-Green)");
+          expect(compiled).toContain("Deterministic Fixtures & Isolation");
+          expect(compiled).toContain("Mock Boundaries & Test Doubles");
+          expect(compiled).toContain("Test Suite Hygiene & Speed");
+        });
+
+        it("adapts testing guidance dynamically for Vitest", () => {
+          const compiled = compileTestingSkill({ testRunner: "vitest" });
+          expect(compiled).toContain("Vitest");
+          expect(compiled).toContain("vi.mock");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Jest", () => {
+          const compiled = compileTestingSkill({ testRunner: "jest" });
+          expect(compiled).toContain("Jest");
+          expect(compiled).toContain("clearAllMocks");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Pytest", () => {
+          const compiled = compileTestingSkill({ testRunner: "pytest" });
+          expect(compiled).toContain("Pytest");
+          expect(compiled).toContain("yield");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Bun Test", () => {
+          const compiled = compileTestingSkill({ testRunner: "bun test" });
+          expect(compiled).toContain("Bun Test");
+          expect(compiled).toContain("bun:test");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Cargo Test (Rust)", () => {
+          const compiled = compileTestingSkill({ testRunner: "cargo test" });
+          expect(compiled).toContain("Rust Cargo Test");
+          expect(compiled).toContain("#[cfg(test)]");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Go Test", () => {
+          const compiled = compileTestingSkill({ testRunner: "go test" });
+          expect(compiled).toContain("Go Test");
+          expect(compiled).toContain("t.Parallel");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for RSpec (Ruby)", () => {
+          const compiled = compileTestingSkill({ testRunner: "rspec" });
+          expect(compiled).toContain("RSpec");
+          expect(compiled).toContain("transactional fixtures");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Pest (PHP)", () => {
+          const compiled = compileTestingSkill({ testRunner: "pest" });
+          expect(compiled).toContain("Pest");
+          expect(compiled).toContain("RefreshDatabase");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Playwright E2E", () => {
+          const compiled = compileTestingSkill({ e2eFramework: "playwright" });
+          expect(compiled).toContain("Playwright");
+          expect(compiled).toContain("getByRole");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts testing guidance dynamically for Cypress E2E", () => {
+          const compiled = compileTestingSkill({ e2eFramework: "cypress" });
+          expect(compiled).toContain("Cypress");
+          expect(compiled).toContain("cy.intercept");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("injects custom testing rules into compiled output", () => {
+          const compiled = compileTestingSkill({
+            customRules: [
+              "* **Zero Flakiness Tolerance:** Flaky tests must be quarantined immediately.",
+              "* **Mutation Testing Target:** Mutation score must exceed 80% on core services."
+            ]
+          });
+
+          expect(compiled).toContain("* **Zero Flakiness Tolerance:** Flaky tests must be quarantined immediately.");
+          expect(compiled).toContain("* **Mutation Testing Target:** Mutation score must exceed 80% on core services.");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("auto-detects test runner and E2E from projectPath when options are omitted", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({
+              name: "vitest-proj",
+              devDependencies: {
+                vitest: "^1.0.0",
+                "@playwright/test": "^1.40.0"
+              }
+            })
+          );
+
+          const compiled = compileTestingSkill({ projectPath: tempDir });
+          expect(compiled).toContain("Vitest");
+          expect(compiled).toContain("vi.mock");
+          expect(compiled).toContain("Playwright");
+          expect(compiled).toContain("getByRole");
+        });
+      });
+
+      describe("Context Detection Helpers (detectTestRunner & detectE2eFramework)", () => {
+        it("detects Vitest in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", devDependencies: { vitest: "^1.0.0" } })
+          );
+          expect(detectTestRunner(tempDir)).toBe("vitest");
+        });
+
+        it("detects Jest in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", devDependencies: { jest: "^29.0.0" } })
+          );
+          expect(detectTestRunner(tempDir)).toBe("jest");
+        });
+
+        it("detects Pytest in pyproject.toml", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "pyproject.toml"),
+            `[project]\nname = "test"\ndependencies = ["pytest>=7.0.0"]\n`
+          );
+          expect(detectTestRunner(tempDir)).toBe("pytest");
+        });
+
+        it("detects Cargo test in Cargo.toml", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "Cargo.toml"),
+            `[package]\nname = "rust-app"\nversion = "0.1.0"\n`
+          );
+          expect(detectTestRunner(tempDir)).toBe("cargo test");
+        });
+
+        it("detects Go test in go.mod", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "go.mod"),
+            `module go-app\n\ngo 1.22\n`
+          );
+          expect(detectTestRunner(tempDir)).toBe("go test");
+        });
+
+        it("detects RSpec in Gemfile", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "Gemfile"),
+            `source 'https://rubygems.org'\ngem 'rspec-rails', '~> 6.0'\n`
+          );
+          expect(detectTestRunner(tempDir)).toBe("rspec");
+        });
+
+        it("detects Pest in composer.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "composer.json"),
+            JSON.stringify({ "require-dev": { "pestphp/pest": "^2.0" } })
+          );
+          expect(detectTestRunner(tempDir)).toBe("pest");
+        });
+
+        it("detects Playwright from package.json dependencies", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ devDependencies: { "@playwright/test": "^1.40.0" } })
+          );
+          expect(detectE2eFramework(tempDir)).toBe("playwright");
+        });
+
+        it("detects Playwright from playwright.config.ts existence", () => {
+          fs.writeFileSync(path.join(tempDir, "playwright.config.ts"), "export default {};");
+          expect(detectE2eFramework(tempDir)).toBe("playwright");
+        });
+
+        it("detects Cypress from package.json dependencies", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ devDependencies: { cypress: "^13.0.0" } })
+          );
+          expect(detectE2eFramework(tempDir)).toBe("cypress");
+        });
+
+        it("returns null when no e2e framework is found", () => {
+          expect(detectE2eFramework(tempDir)).toBeNull();
+        });
+      });
+
+      describe("CLI 'agents skill testing' and 'agents skill test' subcommands", () => {
+        it("supports 'baba agents skill testing [path]' to render compiled testing skill", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "vitest-cli", devDependencies: { vitest: "^1.0.0" } })
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "testing", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("name: skill-testing");
+          expect(stdout).toContain("The Seam Contract (Red-to-Green)");
+          expect(stdout).toContain("Vitest");
+        });
+
+        it("supports 'baba agents skill test [path]' alias for testing skill", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "pyproject.toml"),
+            `[project]\ndependencies = ["pytest>=7.4.0"]\n`
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "test", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("name: skill-testing");
+          expect(stdout).toContain("The Seam Contract (Red-to-Green)");
+          expect(stdout).toContain("Pytest");
+        });
+
+        it("supports 'baba agents skill testing [path] --json' with structured output", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ devDependencies: { vitest: "^1.0.0" } })
+          );
+
+          const proc = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "testing", tempDir, "--json"
+          ]);
+          expect(proc.exitCode).toBe(0);
+
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.status).toBe("success");
+          expect(parsed.skill).toBe("skill-testing");
+          expect(parsed.frontmatter.name).toBe("skill-testing");
+          expect(parsed.content).toContain("Vitest");
+        });
+
+        it("ensures alias parity across baba, bbyg, and matryoshka for agents skill testing --json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ devDependencies: { vitest: "^1.0.0" } })
+          );
+
+          const procBaba = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "testing", tempDir, "--json"
+          ]);
+          const procBbyg = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "testing", tempDir, "--json"
+          ]);
+          const procMatryoshka = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "testing", tempDir, "--json"
+          ]);
+
+          expect(procBaba.exitCode).toBe(0);
+          expect(procBbyg.exitCode).toBe(0);
+          expect(procMatryoshka.exitCode).toBe(0);
+
+          const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+          const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+          const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+          expect(resBaba.skill).toBe(resBbyg.skill);
+          expect(resBaba.skill).toBe(resMatryoshka.skill);
+          expect(resBaba.frontmatter.name).toBe("skill-testing");
+        });
+
+        it("integrates adapted testing skill during generateAgents() execution", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({
+              name: "tested-app",
+              dependencies: {
+                express: "^4.18.0"
+              },
+              devDependencies: {
+                vitest: "^1.0.0",
+                "@playwright/test": "^1.40.0"
+              }
+            })
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const skillsDir = path.join(tempDir, ".agents", "skills");
+          const testingPath = path.join(skillsDir, "skill-testing.md");
+
+          expect(fs.existsSync(testingPath)).toBe(true);
+
+          const testingContent = fs.readFileSync(testingPath, "utf-8");
+          expect(testingContent).toContain("name: skill-testing");
+          expect(testingContent).toContain("The Seam Contract (Red-to-Green)");
+          expect(testingContent).toContain("Vitest");
+          expect(testingContent).toContain("Playwright");
+        });
+      });
+    });
   });
 });
+
 
