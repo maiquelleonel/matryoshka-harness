@@ -28,7 +28,14 @@ import {
   type TokenGuardReport,
   type RootAgentsTemplateOptions,
   type BackendSkillCompilerOptions,
-  type DatabaseSkillCompilerOptions
+  type DatabaseSkillCompilerOptions,
+  compileFrontendSkill,
+  compileSecuritySkill,
+  detectFrontendFramework,
+  detectStylingSystem,
+  detectAuthFramework,
+  type FrontendSkillCompilerOptions,
+  type SecuritySkillCompilerOptions
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -1420,5 +1427,404 @@ dependencies = [
         expect(resBaba.frontmatter.name).toBe("skill-database");
       });
     });
+
+    describe("Subtask 6: Frontend & Security Skill Compilers (with YAML Frontmatter)", () => {
+      describe("compileFrontendSkill() Compiler & Invariants", () => {
+        it("compiles canonical frontend skill with valid YAML frontmatter and core invariants", () => {
+          const compiled = compileFrontendSkill();
+
+          expect(compiled.startsWith("---\n")).toBe(true);
+          expect(compiled).toContain("\n---\n");
+
+          const parsed = parseSkillFrontmatter(compiled);
+          expect(parsed).not.toBeNull();
+          expect(parsed?.name).toBe("skill-frontend");
+          expect(parsed?.description).toBeDefined();
+          expect(parsed?.description.length).toBeGreaterThan(20);
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+
+          // Core required invariants
+          expect(compiled).toContain("Pure Rendering & Reactivity Invariants");
+          expect(compiled).toContain("Cumulative Layout Shifts (CLS) & Performance");
+          expect(compiled).toContain("Accessibility (A11y) & Semantic Markup");
+          expect(compiled).toContain("Component Architecture & State Hygiene");
+        });
+
+        it("adapts frontend guidance dynamically for Next.js", () => {
+          const compiled = compileFrontendSkill({ framework: "next" });
+          expect(compiled).toContain("Next.js");
+          expect(compiled).toContain("'use client'");
+          expect(compiled).toContain("next/image");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts frontend guidance dynamically for React", () => {
+          const compiled = compileFrontendSkill({ framework: "react" });
+          expect(compiled).toContain("React");
+          expect(compiled).toContain("hook dependency");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts frontend guidance dynamically for Vue", () => {
+          const compiled = compileFrontendSkill({ framework: "vue" });
+          expect(compiled).toContain("Vue");
+          expect(compiled).toContain("reactivity");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts frontend guidance dynamically for Svelte", () => {
+          const compiled = compileFrontendSkill({ framework: "svelte" });
+          expect(compiled).toContain("Svelte");
+          expect(compiled).toContain("runes");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts frontend guidance dynamically for Astro", () => {
+          const compiled = compileFrontendSkill({ framework: "astro" });
+          expect(compiled).toContain("Astro");
+          expect(compiled).toContain("client:");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts frontend guidance dynamically for Angular", () => {
+          const compiled = compileFrontendSkill({ framework: "angular" });
+          expect(compiled).toContain("Angular");
+          expect(compiled).toContain("OnPush");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts styling guidance dynamically for Tailwind", () => {
+          const compiled = compileFrontendSkill({ styling: "tailwind" });
+          expect(compiled).toContain("Tailwind CSS");
+          expect(compiled).toContain("utility classes");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("injects custom frontend rules into compiled output", () => {
+          const compiled = compileFrontendSkill({
+            customRules: [
+              "* **Design Tokens Only:** Never hardcode hex color codes outside tailwind.config.",
+              "* **Strict A11y Audit:** All form inputs must have associated <label> tags."
+            ]
+          });
+
+          expect(compiled).toContain("* **Design Tokens Only:** Never hardcode hex color codes outside tailwind.config.");
+          expect(compiled).toContain("* **Strict A11y Audit:** All form inputs must have associated <label> tags.");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("auto-detects frontend framework from projectPath when options are omitted", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "next-proj", dependencies: { next: "^14.0.0", react: "^18.0.0" } })
+          );
+
+          const compiled = compileFrontendSkill({ projectPath: tempDir });
+          expect(compiled).toContain("Next.js");
+          expect(compiled).toContain("'use client'");
+        });
+      });
+
+      describe("compileSecuritySkill() Compiler & Invariants", () => {
+        it("compiles canonical security skill with valid YAML frontmatter and core invariants", () => {
+          const compiled = compileSecuritySkill();
+
+          expect(compiled.startsWith("---\n")).toBe(true);
+          expect(compiled).toContain("\n---\n");
+
+          const parsed = parseSkillFrontmatter(compiled);
+          expect(parsed).not.toBeNull();
+          expect(parsed?.name).toBe("skill-security");
+          expect(parsed?.description).toBeDefined();
+          expect(parsed?.description.length).toBeGreaterThan(20);
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+
+          // Core required invariants
+          expect(compiled).toContain("Zero Secret Leakage Invariant & DLP");
+          expect(compiled).toContain("Strict Input Sanitization & Parameterization");
+          expect(compiled).toContain("Authentication & Authorization Guardrails");
+          expect(compiled).toContain("Defense-in-Depth & Dependency Security");
+        });
+
+        it("adapts security guidance dynamically for Next-Auth", () => {
+          const compiled = compileSecuritySkill({ authFramework: "next-auth" });
+          expect(compiled).toContain("Next-Auth");
+          expect(compiled).toContain("getServerSession");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts security guidance dynamically for JWT", () => {
+          const compiled = compileSecuritySkill({ authFramework: "jwt" });
+          expect(compiled).toContain("JWT");
+          expect(compiled).toContain("signature");
+          expect(compiled).toContain("exp");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts security guidance dynamically for Clerk", () => {
+          const compiled = compileSecuritySkill({ authFramework: "clerk" });
+          expect(compiled).toContain("Clerk");
+          expect(compiled).toContain("userId");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts security guidance dynamically for Supabase Auth", () => {
+          const compiled = compileSecuritySkill({ authFramework: "supabase-auth" });
+          expect(compiled).toContain("Supabase Auth");
+          expect(compiled).toContain("Row-Level Security");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts security guidance dynamically for Django Allauth", () => {
+          const compiled = compileSecuritySkill({ authFramework: "django-allauth" });
+          expect(compiled).toContain("Django Auth");
+          expect(compiled).toContain("CSRF");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("adapts security guidance dynamically for Passport", () => {
+          const compiled = compileSecuritySkill({ authFramework: "passport" });
+          expect(compiled).toContain("Passport");
+          expect(compiled).toContain("session serialization");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("injects custom security rules into compiled output", () => {
+          const compiled = compileSecuritySkill({
+            customRules: [
+              "* **Zero Trust Perimeter:** mTLS required on all internal microservice calls.",
+              "* **PII Encryption at Rest:** Encrypt user tax IDs and phone numbers using AES-256-GCM."
+            ]
+          });
+
+          expect(compiled).toContain("* **Zero Trust Perimeter:** mTLS required on all internal microservice calls.");
+          expect(compiled).toContain("* **PII Encryption at Rest:** Encrypt user tax IDs and phone numbers using AES-256-GCM.");
+          expect(validateSkillFrontmatter(compiled)).toBe(true);
+        });
+
+        it("auto-detects auth framework from projectPath when options are omitted", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "clerk-proj", dependencies: { "@clerk/nextjs": "^4.0.0" } })
+          );
+
+          const compiled = compileSecuritySkill({ projectPath: tempDir });
+          expect(compiled).toContain("Clerk");
+          expect(compiled).toContain("userId");
+        });
+      });
+
+      describe("Context Detection Helpers (detectFrontendFramework, detectStylingSystem, detectAuthFramework)", () => {
+        it("detects Next.js in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { next: "^14.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("next");
+        });
+
+        it("detects React in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { react: "^18.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("react");
+        });
+
+        it("detects Vue in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { vue: "^3.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("vue");
+        });
+
+        it("detects Nuxt in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { nuxt: "^3.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("nuxt");
+        });
+
+        it("detects Svelte in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { svelte: "^4.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("svelte");
+        });
+
+        it("detects Astro in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { astro: "^4.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("astro");
+        });
+
+        it("detects Angular in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { "@angular/core": "^17.0.0" } })
+          );
+          expect(detectFrontendFramework(tempDir)).toBe("angular");
+        });
+
+        it("detects Tailwind CSS from package.json and config file", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", devDependencies: { tailwindcss: "^3.0.0" } })
+          );
+          expect(detectStylingSystem(tempDir)).toBe("tailwind");
+        });
+
+        it("detects Next-Auth in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { "next-auth": "^4.0.0" } })
+          );
+          expect(detectAuthFramework(tempDir)).toBe("next-auth");
+        });
+
+        it("detects Clerk in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { "@clerk/nextjs": "^5.0.0" } })
+          );
+          expect(detectAuthFramework(tempDir)).toBe("clerk");
+        });
+
+        it("detects Supabase Auth in package.json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "app", dependencies: { "@supabase/supabase-js": "^2.0.0" } })
+          );
+          expect(detectAuthFramework(tempDir)).toBe("supabase-auth");
+        });
+
+        it("detects JWT in pyproject.toml", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "pyproject.toml"),
+            `[project]\nname = "test"\ndependencies = ["pyjwt>=2.8.0"]\n`
+          );
+          expect(detectAuthFramework(tempDir)).toBe("jwt");
+        });
+
+        it("detects Django Allauth in requirements.txt", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "requirements.txt"),
+            `django-allauth>=0.54.0\n`
+          );
+          expect(detectAuthFramework(tempDir)).toBe("django-allauth");
+        });
+
+        it("returns null when no frontend framework is found", () => {
+          expect(detectFrontendFramework(tempDir)).toBeNull();
+        });
+
+        it("returns null when no auth framework is found", () => {
+          expect(detectAuthFramework(tempDir)).toBeNull();
+        });
+      });
+
+      describe("CLI 'agents skill frontend' and 'agents skill security' subcommands", () => {
+        it("supports 'baba agents skill frontend [path]' to render compiled frontend skill", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "frontend-cli", dependencies: { next: "14.0.0", react: "18.0.0" } })
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "frontend", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("name: skill-frontend");
+          expect(stdout).toContain("Pure Rendering & Reactivity Invariants");
+          expect(stdout).toContain("Next.js");
+        });
+
+        it("supports 'baba agents skill security [path]' to render compiled security skill", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "sec-cli", dependencies: { "next-auth": "4.0.0" } })
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "skill", "security", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("name: skill-security");
+          expect(stdout).toContain("Zero Secret Leakage Invariant & DLP");
+          expect(stdout).toContain("Next-Auth");
+        });
+
+        it("supports 'baba agents skill frontend [path] --json' with structured output", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ name: "frontend-json", dependencies: { vue: "^3.0.0" } })
+          );
+
+          const proc = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "frontend", tempDir, "--json"
+          ]);
+          expect(proc.exitCode).toBe(0);
+
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.status).toBe("success");
+          expect(parsed.skill).toBe("skill-frontend");
+          expect(parsed.frontmatter.name).toBe("skill-frontend");
+          expect(parsed.content).toContain("Vue");
+        });
+
+        it("supports 'baba agents skill security [path] --json' with structured output", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "pyproject.toml"),
+            `[project]\ndependencies = ["fastapi", "pyjwt"]\n`
+          );
+
+          const proc = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "security", tempDir, "--json"
+          ]);
+          expect(proc.exitCode).toBe(0);
+
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.status).toBe("success");
+          expect(parsed.skill).toBe("skill-security");
+          expect(parsed.frontmatter.name).toBe("skill-security");
+          expect(parsed.content).toContain("JWT");
+        });
+
+        it("ensures alias parity across baba, bbyg, and matryoshka for agents skill frontend --json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ dependencies: { svelte: "^4.0.0" } })
+          );
+
+          const procBaba = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "frontend", tempDir, "--json"
+          ]);
+          const procBbyg = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "frontend", tempDir, "--json"
+          ]);
+          const procMatryoshka = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "frontend", tempDir, "--json"
+          ]);
+
+          expect(procBaba.exitCode).toBe(0);
+          expect(procBbyg.exitCode).toBe(0);
+          expect(procMatryoshka.exitCode).toBe(0);
+
+          const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+          const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+          const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+          expect(resBaba.skill).toBe(resBbyg.skill);
+          expect(resBaba.skill).toBe(resMatryoshka.skill);
+          expect(resBaba.frontmatter.name).toBe("skill-frontend");
+        });
+      });
+    });
   });
 });
+
