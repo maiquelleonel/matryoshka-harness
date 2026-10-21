@@ -2,7 +2,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
-import { generateAgents, profileArchetype } from "./agents";
+import {
+  generateAgents,
+  inspectTokenBudget,
+  MAX_ROOT_AGENTS_TOKENS,
+  profileArchetype,
+} from "./agents";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
@@ -22,6 +27,7 @@ Usage:
   baba scan [path] [--json] [--badge [path]]
   baba agents generate [path] [--force] [--dry-run] [--json]
   baba agents profile [path] [--json]
+  baba agents check [path] [--json] [--max-tokens <num>]
   baba wrap [path]
 
 Commands:
@@ -188,7 +194,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
       let subcommand = "generate";
       let targetDir: string | undefined;
-      if (positional[0] === "generate" || positional[0] === "profile" || positional[0] === "seams") {
+      if (
+        positional[0] === "generate" ||
+        positional[0] === "profile" ||
+        positional[0] === "seams" ||
+        positional[0] === "check" ||
+        positional[0] === "guard"
+      ) {
         subcommand = positional[0];
         targetDir = positional[1] || process.cwd();
       } else {
@@ -196,6 +208,89 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       const resolvedPath = path.resolve(targetDir);
+
+      if (subcommand === "check" || subcommand === "guard") {
+        const agentsFilePath = path.join(resolvedPath, "AGENTS.md");
+        let maxTokens = MAX_ROOT_AGENTS_TOKENS;
+        for (let i = 0; i < rest.length; i++) {
+          const arg = rest[i];
+          if (!arg) continue;
+          if (arg === "--max-tokens") {
+            const nextVal = rest[i + 1];
+            if (nextVal) {
+              maxTokens = Number.parseInt(nextVal, 10) || MAX_ROOT_AGENTS_TOKENS;
+            }
+          } else if (arg.startsWith("--max-tokens=")) {
+            maxTokens =
+              Number.parseInt(arg.slice("--max-tokens=".length), 10) ||
+              MAX_ROOT_AGENTS_TOKENS;
+          }
+        }
+
+        if (!fs.existsSync(agentsFilePath)) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "agents check",
+                  valid: false,
+                  rootPath: resolvedPath,
+                  message: `AGENTS.md not found at ${agentsFilePath}`,
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(pc.red(`\nError: AGENTS.md not found at ${agentsFilePath}\n`));
+          }
+          process.exit(1);
+        }
+
+        const fileContent = fs.readFileSync(agentsFilePath, "utf-8");
+        const report = inspectTokenBudget(fileContent, maxTokens);
+
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: report.withinBudget ? "success" : "error",
+                command: "agents check",
+                valid: report.withinBudget,
+                rootPath: resolvedPath,
+                tokenGuard: report,
+                token_guard: report,
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.log(pc.bold(pc.cyan("\n🪆 Matryoshka AGENTS.md Token Guard Audit")));
+          console.log(`  ${pc.dim("•")} ${pc.bold("File:")}      ${agentsFilePath}`);
+          console.log(
+            `  ${pc.dim("•")} ${pc.bold("Status:")}    ${
+              report.withinBudget
+                ? pc.green("PASSED (within budget)")
+                : pc.red(`FAILED (exceeded by ${report.exceededBy} tokens)`)
+            }`
+          );
+          console.log(
+            `  ${pc.dim("•")} ${pc.bold("Tokens:")}    ${
+              report.withinBudget
+                ? pc.green(report.tokenCount.toString())
+                : pc.red(report.tokenCount.toString())
+            } / ${report.maxTokens} (target: <${report.targetTokens})`
+          );
+          console.log(
+            `  ${pc.dim("•")} ${pc.bold("Savings:")}   ${pc.green(
+              `${report.savingsPercentage}% vs monolithic instructions`
+            )}\n`
+          );
+        }
+        process.exit(report.withinBudget ? 0 : 1);
+      }
 
       if (subcommand === "profile" || subcommand === "seams") {
         try {

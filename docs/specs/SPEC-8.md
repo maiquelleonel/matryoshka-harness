@@ -1,7 +1,7 @@
 # 📐 SPEC-8: feat(agents): context-aware adaptive AGENTS.md and modular skills engine
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 3: Archetype Profiler & Seam Discovery)  
+**Status:** in_progress (Subtask 4: Root AGENTS.md Template Engine & Token Guard)  
 **Gatilho:** Issue #8  
 **Target:** Bun + TypeScript  
 
@@ -50,11 +50,37 @@ export interface ArchetypeProfile {
 }
 ```
 
-### 2.3 Funções do Profiler & Seam Discovery
+### 2.3 Funções do Profiler, Template Engine & Token Guard
 - `discoverSeams(projectPath: string): DiscoveredSeams`
 - `profileArchetype(projectPath: string): ArchetypeProfile`
+- `compileRootAgents(profile: RootAgentsProfileInput, options?: RootAgentsTemplateOptions): string`
+- `inspectTokenBudget(content: string, maxTokens?: number): TokenGuardReport`
+- `assertTokenBudget(content: string, maxTokens?: number): TokenGuardReport`
+- `generateAgents(projectPath?: string, options?: GenerateAgentsOptions): GenerateAgentsResult`
 - CLI subcommand: `baba agents profile [path] [--json]`
+- CLI subcommand: `baba agents check [path] [--json] [--max-tokens <num>]`
 - CLI subcommand: `baba agents generate [path] [--force] [--dry-run] [--json]`
+
+### 2.4 Contratos de Token Guard
+```typescript
+export const MAX_ROOT_AGENTS_TOKENS = 250;
+export const TARGET_ROOT_AGENTS_TOKENS = 200;
+
+export interface TokenGuardReport {
+  tokenCount: number;
+  maxTokens: number;
+  targetTokens: number;
+  withinBudget: boolean;
+  exceededBy: number;
+  savingsPercentage: number;
+}
+
+export class TokenBudgetExceededError extends Error {
+  public readonly tokenCount: number;
+  public readonly maxTokens: number;
+  public readonly exceededBy: number;
+}
+```
 
 ---
 

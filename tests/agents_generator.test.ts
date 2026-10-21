@@ -12,10 +12,17 @@ import {
   discoverSeams,
   profileArchetype,
   SKILL_DEFINITIONS,
+  MAX_ROOT_AGENTS_TOKENS,
+  TARGET_ROOT_AGENTS_TOKENS,
+  TokenBudgetExceededError,
+  inspectTokenBudget,
+  assertTokenBudget,
   type AgentArchetype,
   type SkillName,
   type ArchetypeProfile,
-  type DiscoveredSeams
+  type DiscoveredSeams,
+  type TokenGuardReport,
+  type RootAgentsTemplateOptions
 } from "../src/agents";
 
 describe("Adaptive Context-Aware AGENTS.md & Modular Skills Engine (SPEC-8)", () => {
@@ -803,6 +810,273 @@ dependencies = [
         expect(parsed).toHaveProperty("profile");
         expect(parsed.profile.archetype).toBe("fullstack_hybrid");
         expect(parsed.seams.hasFrontend).toBe(true);
+      });
+    });
+  });
+
+  describe("Subtask 4: Root AGENTS.md Template Engine & Token Guard", () => {
+    describe("Token Guard Constants & Error Contract", () => {
+      it("defines canonical MAX_ROOT_AGENTS_TOKENS = 250 and TARGET_ROOT_AGENTS_TOKENS = 200", () => {
+        expect(MAX_ROOT_AGENTS_TOKENS).toBe(250);
+        expect(TARGET_ROOT_AGENTS_TOKENS).toBe(200);
+      });
+
+      it("instantiates TokenBudgetExceededError with proper metadata", () => {
+        const error = new TokenBudgetExceededError("Budget exceeded", 280, 250);
+        expect(error.name).toBe("TokenBudgetExceededError");
+        expect(error.message).toContain("Budget exceeded");
+        expect(error.tokenCount).toBe(280);
+        expect(error.maxTokens).toBe(250);
+        expect(error.exceededBy).toBe(30);
+      });
+    });
+
+    describe("inspectTokenBudget() & assertTokenBudget()", () => {
+      it("evaluates lean content within token budget (< 250 tokens)", () => {
+        const sampleText = "# Lean Operational Directives\n* Run: bun test\n* Anti-slop: YAGNI first.";
+        const report: TokenGuardReport = inspectTokenBudget(sampleText);
+
+        expect(report.withinBudget).toBe(true);
+        expect(report.tokenCount).toBeLessThan(200);
+        expect(report.maxTokens).toBe(250);
+        expect(report.targetTokens).toBe(200);
+        expect(report.exceededBy).toBe(0);
+        expect(report.savingsPercentage).toBeGreaterThanOrEqual(0);
+
+        // assertTokenBudget does not throw
+        expect(() => assertTokenBudget(sampleText)).not.toThrow();
+      });
+
+      it("detects when content exceeds token budget and calculates exceededBy tokens", () => {
+        // Bloated text with 300+ words/tokens
+        const bloatedText = Array.from({ length: 320 }, (_, i) => `instruction_clause_${i}`).join(" ");
+        const report = inspectTokenBudget(bloatedText, 250);
+
+        expect(report.withinBudget).toBe(false);
+        expect(report.tokenCount).toBeGreaterThan(250);
+        expect(report.exceededBy).toBe(report.tokenCount - 250);
+
+        // assertTokenBudget throws TokenBudgetExceededError
+        expect(() => assertTokenBudget(bloatedText, 250)).toThrow(TokenBudgetExceededError);
+      });
+
+      it("supports custom maxTokens limit for fine-grained enforcement", () => {
+        const sampleText = "This is a simple directives file with around ten tokens.";
+        const reportStrict = inspectTokenBudget(sampleText, 5);
+
+        expect(reportStrict.withinBudget).toBe(false);
+        expect(reportStrict.maxTokens).toBe(5);
+        expect(reportStrict.exceededBy).toBeGreaterThan(0);
+
+        expect(() => assertTokenBudget(sampleText, 5)).toThrow(TokenBudgetExceededError);
+      });
+    });
+
+    describe("compileRootAgents() Template Engine & Normalization", () => {
+      it("normalizes missing or empty commands to 'none'", () => {
+        const compiled = compileRootAgents({
+          archetype: "api_backend",
+          runtime: "python",
+          packageManager: "pip",
+          testCommand: "",
+          buildCommand: "",
+          lintCommand: "",
+          activeSkills: ["skill-backend"]
+        });
+
+        expect(compiled).toContain("* **Test Runner:** `none`");
+        expect(compiled).toContain("* **Build / Lint:** `none` | `none`");
+        expect(estimateTokens(compiled)).toBeLessThan(MAX_ROOT_AGENTS_TOKENS);
+      });
+
+      it("sanitizes excessive whitespace or newlines in injected commands", () => {
+        const compiled = compileRootAgents({
+          archetype: "systems_microservice",
+          runtime: "rust",
+          packageManager: "cargo",
+          testCommand: "  cargo   test   --all   ",
+          buildCommand: "cargo\nbuild\n--release",
+          lintCommand: "cargo   clippy  ",
+          activeSkills: ["skill-backend", "skill-testing"]
+        });
+
+        expect(compiled).toContain("* **Test Runner:** `cargo test --all`");
+        expect(compiled).toContain("* **Build / Lint:** `cargo build --release` | `cargo clippy`");
+      });
+
+      it("supports customInvariants while respecting the 250 token budget", () => {
+        const compiled = compileRootAgents({
+          archetype: "api_backend",
+          runtime: "node",
+          packageManager: "npm",
+          testCommand: "npm test",
+          buildCommand: "npm run build",
+          lintCommand: "npm run lint",
+          activeSkills: ["skill-backend", "skill-security", "skill-testing"],
+          customInvariants: [
+            "* **Airgap First:** Disallow outbound network requests during compilation.",
+            "* **Atomic Commits:** Every feature must be preceded by a failing RED test."
+          ]
+        });
+
+        expect(compiled).toContain("* **Airgap First:** Disallow outbound network requests during compilation.");
+        expect(compiled).toContain("* **Atomic Commits:** Every feature must be preceded by a failing RED test.");
+
+        const report = inspectTokenBudget(compiled);
+        expect(report.withinBudget).toBe(true);
+        expect(report.tokenCount).toBeLessThan(MAX_ROOT_AGENTS_TOKENS);
+      });
+
+      it("enforces strictTokenGuard when option is enabled and budget is exceeded", () => {
+        // Enforce strictTokenGuard with unrealistically low budget
+        const options: RootAgentsTemplateOptions = {
+          maxTokens: 10,
+          strictTokenGuard: true
+        };
+
+        expect(() => {
+          compileRootAgents(
+            {
+              archetype: "api_backend",
+              runtime: "bun",
+              packageManager: "bun",
+              testCommand: "bun test",
+              buildCommand: "bun run build",
+              lintCommand: "none",
+              activeSkills: ["skill-backend"]
+            },
+            options
+          );
+        }).toThrow(TokenBudgetExceededError);
+      });
+
+      it("produces deterministic output across multiple invocations with same profile", () => {
+        const profile = {
+          archetype: "fullstack_hybrid" as AgentArchetype,
+          runtime: "bun",
+          packageManager: "bun",
+          testCommand: "bun test",
+          buildCommand: "bun run build",
+          lintCommand: "bunx biome check .",
+          activeSkills: [
+            "skill-frontend",
+            "skill-backend",
+            "skill-database",
+            "skill-security",
+            "skill-testing"
+          ] as SkillName[]
+        };
+
+        const out1 = compileRootAgents(profile);
+        const out2 = compileRootAgents(profile);
+        expect(out1).toBe(out2);
+      });
+    });
+
+    describe("generateAgents() with Token Guard integration", () => {
+      it("embeds tokenGuard and token_guard in generateAgents output", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "guard-test", dependencies: { next: "14" } })
+        );
+
+        const result = Bun.spawnSync([
+          "bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "--json"
+        ]);
+        expect(result.exitCode).toBe(0);
+
+        const parsed = JSON.parse(result.stdout.toString().trim());
+        expect(parsed).toHaveProperty("tokenGuard");
+        expect(parsed.tokenGuard.withinBudget).toBe(true);
+        expect(parsed.tokenGuard.tokenCount).toBeLessThan(MAX_ROOT_AGENTS_TOKENS);
+        expect(parsed.tokenGuard.maxTokens).toBe(MAX_ROOT_AGENTS_TOKENS);
+
+        expect(parsed).toHaveProperty("token_guard");
+        expect(parsed.token_guard.withinBudget).toBe(true);
+      });
+    });
+
+    describe("CLI 'agents check' (Token Guard Audit)", () => {
+      it("audits compliant AGENTS.md and exits with 0", () => {
+        // First generate compliant files
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "check-test", dependencies: { express: "^4.18.0" } })
+        );
+        Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+
+        // Run baba agents check
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("Matryoshka AGENTS.md Token Guard Audit");
+        expect(stdout).toContain("Status:");
+        expect(stdout).toContain("PASSED");
+        expect(stdout).toContain("within budget");
+      });
+
+      it("supports 'baba agents check [path] --json' with structured TokenGuardReport", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "check-json-test", dependencies: { express: "^4.18.0" } })
+        );
+        Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir, "--json"]);
+        expect(proc.exitCode).toBe(0);
+
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.status).toBe("success");
+        expect(parsed.valid).toBe(true);
+        expect(parsed.tokenGuard.withinBudget).toBe(true);
+        expect(parsed.tokenGuard.tokenCount).toBeLessThan(MAX_ROOT_AGENTS_TOKENS);
+      });
+
+      it("detects bloated AGENTS.md (> 250 tokens) and exits with 1", () => {
+        // Create an excessively long AGENTS.md
+        const bloatedAgents = `# Bloated Monolithic Instructions\n` +
+          Array.from({ length: 300 }, (_, i) => `* Over-engineered directive rule ${i} with textbook patterns`).join("\n");
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), bloatedAgents, "utf-8");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir]);
+        expect(proc.exitCode).toBe(1);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("FAILED");
+        expect(stdout).toContain("exceeded");
+      });
+
+      it("returns exit code 1 with error message when AGENTS.md does not exist", () => {
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir]);
+        expect(proc.exitCode).toBe(1);
+
+        const output = proc.stderr.toString() || proc.stdout.toString();
+        expect(output).toContain("not found");
+      });
+
+      it("ensures alias parity across baba, bbyg, and matryoshka for agents check --json", () => {
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "parity-check-test", dependencies: { next: "14" } })
+        );
+        Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+
+        const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir, "--json"]);
+        const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir, "--json"]);
+        const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "check", tempDir, "--json"]);
+
+        expect(procBaba.exitCode).toBe(0);
+        expect(procBbyg.exitCode).toBe(0);
+        expect(procMatryoshka.exitCode).toBe(0);
+
+        const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+        const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+        const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+        expect(resBaba.valid).toBe(resBbyg.valid);
+        expect(resBaba.valid).toBe(resMatryoshka.valid);
+        expect(resBaba.tokenGuard.tokenCount).toBe(resBbyg.tokenGuard.tokenCount);
       });
     });
   });
