@@ -11,1131 +11,252 @@
       }
     ]
   },
+  "description": "Production observability dashboard for Matryoshka-Harness and codebase-memory-mcp AST knowledge graph queries.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
+  "id": null,
   "links": [],
-  "liveNow": true,
+  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
         "y": 0
       },
-      "id": 100,
-      "title": "\ud83d\udcb0 Vis\u00e3o 1: FinOps & Token Budget (USD / BRL) \u2014 Tax\u00edmetro em Tempo Real",
-      "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Tax\u00edmetro em tempo real do custo financeiro acumulado das sandboxes de IA em USD.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "red",
-                "value": 100
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 4,
-        "x": 0,
-        "y": 1
-      },
       "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.4.0",
+      "title": "Semantic Knowledge Graph Invocations (search_graph)",
+      "type": "timeseries",
+      "description": "Tracks throughput and invocation rate of search_graph operations across agent sessions.",
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
           "editorMode": "code",
-          "expr": "sum(bughunter_cost_usd_total{repo=\"matryoshka-harness\"})",
-          "legendFormat": "Custo Real Acumulado (USD)",
+          "expr": "sum(rate(codebase_memory_mcp_search_graph_total[5m])) by (project)",
+          "legendFormat": "{{project}} - search_graph ops/sec",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tax\u00edmetro em Tempo Real (USD Gasto)",
-      "type": "stat"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Tax\u00edmetro em tempo real do custo financeiro acumulado das sandboxes de IA em BRL (calculado dinamicamente via OUROBOROS_USD_BRL_RATE).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 300
-              },
-              {
-                "color": "red",
-                "value": 600
-              }
-            ]
-          },
-          "unit": "currencyBRL"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 4,
-        "x": 4,
-        "y": 1
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum(bughunter_cost_brl_total{repo=\"matryoshka-harness\"})",
-          "legendFormat": "Custo Real Acumulado (BRL)",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Tax\u00edmetro em Tempo Real (BRL Gasto)",
-      "type": "stat"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Percentual de economia via prompt caching reutilizado.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.3
-              },
-              {
-                "color": "green",
-                "value": 0.6
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 4,
-        "x": 8,
-        "y": 1
-      },
-      "id": 2,
-      "options": {
-        "max": 1,
-        "min": 0,
-        "showThresholdLabels": true,
-        "showThresholdMarkers": true
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "bughunter_cache_hit_ratio{repo=\"matryoshka-harness\"}",
-          "legendFormat": "Cache Hit Ratio",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "FinOps: Prompt Cache Hit Ratio",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Distribui\u00e7\u00e3o de tokens prompt, completion e cached por modelo LLM ativo.",
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "bars",
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
           },
-          "unit": "short"
+          "unit": "reqps"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum by (model, type) (bughunter_tokens_total{model=~\"gemini-.*\"})",
-          "legendFormat": "{{model}} ({{type}})",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Consumo de Tokens por Modelo & Categoria",
-      "type": "timeseries"
+      }
     },
     {
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "Semantic Query Latency (P95 / P99)",
+      "type": "timeseries",
+      "description": "P95 and P99 latency percentiles for search_graph and knowledge graph AST queries.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(codebase_memory_mcp_query_duration_seconds_bucket{tool=\"search_graph\"}[5m])) by (le))",
+          "legendFormat": "search_graph P95 Latency",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(codebase_memory_mcp_query_duration_seconds_bucket{tool=\"search_graph\"}[5m])) by (le))",
+          "legendFormat": "search_graph P99 Latency",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
         "x": 0,
         "y": 8
       },
-      "id": 101,
-      "title": "\u26a1 Vis\u00e3o 2: DORA Metrics & Veloc\u00edmetro MTTR",
-      "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Tempo m\u00e9dio entre captura do span de erro OTel at\u00e9 abertura da PR (DORA Time to Restore).",
+      "id": 3,
+      "title": "MCP Tool Error Rates & Subprocess Failures",
+      "type": "timeseries",
+      "description": "Percentage error rate of codebase-memory-mcp tool invocations including search_graph and query_graph.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(codebase_memory_mcp_errors_total{tool=\"search_graph\"}[5m])) / (sum(rate(codebase_memory_mcp_requests_total{tool=\"search_graph\"}[5m])) + 0.0001) * 100",
+          "legendFormat": "search_graph Error Rate (%)",
+          "range": true,
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
           },
-          "mappings": [],
-          "max": 1800,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 300
-              },
-              {
-                "color": "red",
-                "value": 900
-              }
-            ]
-          },
-          "unit": "s"
+          "unit": "percent"
         },
         "overrides": []
-      },
+      }
+    },
+    {
+      "collapsed": false,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 9
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
       "id": 4,
-      "options": {
-        "orientation": "auto",
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
+      "title": "Active MCP Auto-Wired Sessions & Node Density",
+      "type": "stat",
+      "description": "Total AST nodes and active auto-wired environments (Cursor, Gemini CLI, Claude Code).",
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
           "editorMode": "code",
-          "expr": "bughunter_mttr_seconds{service=~\"matryoshka-harness|.*\"}",
-          "legendFormat": "MTTR M\u00e9dio (s)",
-          "range": true,
+          "expr": "codebase_memory_mcp_nodes_total",
+          "legendFormat": "AST Nodes",
+          "range": false,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
+          "editorMode": "code",
+          "expr": "codebase_memory_mcp_wired_targets_total",
+          "legendFormat": "Auto-Wired Targets",
+          "range": false,
+          "refId": "B"
         }
-      ],
-      "title": "Veloc\u00edmetro do MTTR (de horas para minutos)",
-      "type": "gauge"
+      ]
     },
     {
-      "datasource": "Prometheus",
-      "description": "Contraste em p95: Tempo de Confinamento da Sandbox (M\u00e1quina) vs Time to Merge (Decis\u00e3o Humana) vs Lead Time total.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line"
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
+      "collapsed": false,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 9
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
       "id": 5,
+      "title": "Maturity Gap Evaluation & Remediation Counts",
+      "type": "timeseries",
+      "description": "Tracks count of governance gaps evaluated and remediation recommendations produced across scanner runs.",
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
           "editorMode": "code",
-          "expr": "sum by (le) (rate(bughunter_pr_duration_seconds_bucket{service=~\"matryoshka-harness|.*\"}[5m]))",
-          "legendFormat": "PR Duration p95 (M\u00e1quina) - {{service}}",
+          "expr": "sum(rate(matryoshka_gaps_evaluated_total[5m])) by (gap_id)",
+          "legendFormat": "Evaluated Gap: {{gap_id}}",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, repo) (rate(ouroboros_time_to_merge_seconds_bucket{repo=\"matryoshka-harness\"}[5m])))",
-          "legendFormat": "Time to Merge p95 (Decis\u00e3o Humana) - {{repo}}",
+          "expr": "sum(matryoshka_remediation_issues_total) by (category)",
+          "legendFormat": "Remediations: {{category}}",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(bughunter_lead_time_seconds_bucket{repo=\"matryoshka-harness\"}[5m])))",
-          "legendFormat": "Lead Time p95 (End-to-End) - {{service}}",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "DORA: PR Duration (M\u00e1quina) vs Time to Merge (Humano) vs Lead Time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Total de incidentes classificados por QUEUED, PROCESSING, PR_OPENED e FAILED.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
           "custom": {
-            "drawStyle": "bars",
-            "stacking": {
-              "mode": "normal"
-            }
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
           },
           "unit": "short"
         },
         "overrides": []
-      },
+      }
+    },
+    {
+      "collapsed": false,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 9
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
       "id": 6,
+      "title": "AST Knowledge Graph Tool Invocations by Method",
+      "type": "timeseries",
+      "description": "Distribution of semantic AST queries across tools (search_graph, query_graph, trace_path, get_code_snippet).",
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-default"
+          },
           "editorMode": "code",
-          "expr": "sum by (status, service) (increase(bughunter_incidents_total[1h]))",
-          "legendFormat": "{{service}} - {{status}}",
+          "expr": "sum(rate(codebase_memory_mcp_tool_invocations_total[5m])) by (tool)",
+          "legendFormat": "Tool: {{tool}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Incidentes Capturados via OTel por Status",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      },
-      "id": 102,
-      "title": "\ud83d\udea6 Vis\u00e3o 3: SDLC Ag\u00eantico \u2014 Daniel Meppiel G-R Ratio & Circuit Breaker",
-      "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "M\u00e9dia consolidada do G-R Ratio de todas as PRs/tasks do projeto. Meta saud\u00e1vel do SDLC Ag\u00eantico: > 3.0:1 (Zona Verde).",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "max": 10,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1.5
-              },
-              {
-                "color": "green",
-                "value": 3.0
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 5,
-        "x": 0,
-        "y": 18
-      },
-      "id": 70,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "avg(bughunter_gr_ratio)",
-          "legendFormat": "G-R M\u00e9dio Global",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "G-R Ratio M\u00e9dio do Projeto (Pod)",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Raz\u00e3o G-R: Tempo de Gera\u00e7\u00e3o pelo Agente / Tempo de Revis\u00e3o pelo Tech Lead. Meta: > 3.0 (Zona Verde).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 12,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1.5
-              },
-              {
-                "color": "green",
-                "value": 3.0
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 10,
-        "x": 5,
-        "y": 18
-      },
-      "id": 7,
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "showUnfilled": true
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "bughunter_gr_ratio{repo=\"matryoshka-harness\"}",
-          "legendFormat": "PR #{{pr_number}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Sem\u00e1foro do G-R Ratio por PR",
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "desc": true,
-                "field": "Value"
-              }
-            ]
-          }
-        }
-      ],
-      "type": "bargauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Contagem de acionamentos de circuit breaker (limite de retries CI ou conflitos de sandbox). Dispara alerta Slack.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 15,
-        "y": 18
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum by (reason) (increase(bughunter_circuit_breaker_triggers_total[1h]))",
-          "legendFormat": "Acionamento: {{reason}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Alertas autom\u00e1ticos no Slack para Circuit Breakers ativados",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 26
-      },
-      "id": 103,
-      "title": "\ud83d\udee1\ufe0f Vis\u00e3o 4: Sa\u00fade de Sandboxes & Runtime",
-      "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Quantidade de sandboxes ativas concorrentes isoladas no host.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "max": 3,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 2
-              },
-              {
-                "color": "red",
-                "value": 3
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 27
-      },
-      "id": 9,
-      "options": {
-        "orientation": "auto",
-        "showThresholdLabels": true,
-        "showThresholdMarkers": true
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "bughunter_active_sandboxes",
-          "legendFormat": "Sandboxes Ativas",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Sandboxes Ativas Concorrentes (Limite: 3)",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Lat\u00eancia de cria\u00e7\u00e3o das Git Worktrees ef\u00eameras sob demanda.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
           "custom": {
-            "drawStyle": "line"
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
           },
-          "unit": "s"
+          "unit": "reqps"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 27
-      },
-      "id": 10,
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(bughunter_worktree_creation_seconds_bucket[5m])) by (le))",
-          "legendFormat": "Worktree Provisioning p99",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Lat\u00eancia de Provisionamento de Worktree (< 10ms)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 34
-      },
-      "id": 12,
-      "panels": [],
-      "title": "\ud83d\udd75\ufe0f Vis\u00e3o 5: AgentOps \u2014 Invoca\u00e7\u00e3o de Ferramentas, Lat\u00eancia P95 & Resili\u00eancia",
-      "type": "row"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Volume acumulado de ferramentas invocadas pelo agente construtor.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "blue",
-                "value": 100
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 35
-      },
-      "id": 13,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "topk(8, sum by (tool) (bughunter_tool_calls_total{agent=~\".*implementer.*\",repo=\"matryoshka-harness\"}))",
-          "legendFormat": "{{tool}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "\ud83d\udd28 Implementer \u2014 Top Tools Invocadas (Constru\u00e7\u00e3o & RED-to-GREEN)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Tempo de resposta em P95 das tools invocadas pelo agente construtor.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.2
-              },
-              {
-                "color": "red",
-                "value": 0.8
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 35
-      },
-      "id": 14,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "topk(8, histogram_quantile(0.95, sum by (le, tool) (rate(bughunter_tool_duration_seconds_bucket{agent=~\".*implementer.*\",repo=\"matryoshka-harness\"}[5m]))))",
-          "legendFormat": "{{tool}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "\ud83d\udd28 Implementer \u2014 Lat\u00eancia P95 por Tool (Gargalos de Execu\u00e7\u00e3o)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Volume acumulado de ferramentas invocadas pelo agente espi\u00e3o.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 30
-              },
-              {
-                "color": "blue",
-                "value": 70
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 43
-      },
-      "id": 16,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "topk(8, sum by (tool) (bughunter_tool_calls_total{agent=~\".*bughunter.*\",repo=\"matryoshka-harness\"}))",
-          "legendFormat": "{{tool}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "\ud83d\udd75\ufe0f Bughunter \u2014 Top Tools Invocadas (Investiga\u00e7\u00e3o & Stealth Review)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Tempo de resposta em P95 das tools invocadas pelo agente espi\u00e3o.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.05
-              },
-              {
-                "color": "red",
-                "value": 0.2
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 43
-      },
-      "id": 17,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "topk(8, histogram_quantile(0.95, sum by (le, tool) (rate(bughunter_tool_duration_seconds_bucket{agent=~\".*bughunter.*\",repo=\"matryoshka-harness\"}[5m]))))",
-          "legendFormat": "{{tool}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "\ud83d\udd75\ufe0f Bughunter \u2014 Lat\u00eancia P95 por Tool (Reconhecimento & AST)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Contraste de volume bruto, divis\u00e3o por agente e taxa de sucesso operacional da f\u00e1brica.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 300
-              },
-              {
-                "color": "red",
-                "value": 800
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Falhas de Execu\u00e7\u00e3o"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Taxa de Sucesso (Resili\u00eancia)"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 51
-      },
-      "id": 15,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum(bughunter_tool_calls_total{agent=~\".*\ud83d\udd28.*|.*\ud83d\udd75\ufe0f.*\"})",
-          "legendFormat": "Total Tool Calls (F\u00e1brica)",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum(bughunter_tool_calls_total{agent=~\".*\ud83d\udd28.*\"})",
-          "legendFormat": "\ud83d\udd28 Implementer (Constru\u00e7\u00e3o)",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum(bughunter_tool_calls_total{agent=~\".*\ud83d\udd75\ufe0f.*\"})",
-          "legendFormat": "\ud83d\udd75\ufe0f Bughunter (Investiga\u00e7\u00e3o)",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "sum(bughunter_tool_errors_total{agent=~\".*\ud83d\udd28.*|.*\ud83d\udd75\ufe0f.*\"})",
-          "legendFormat": "Falhas de Execu\u00e7\u00e3o",
-          "range": true,
-          "refId": "D"
-        },
-        {
-          "datasource": "Prometheus",
-          "editorMode": "code",
-          "expr": "(1 - (sum(bughunter_tool_errors_total{agent=~\".*\ud83d\udd28.*|.*\ud83d\udd75\ufe0f.*\"}) / sum(bughunter_tool_calls_total{agent=~\".*\ud83d\udd28.*|.*\ud83d\udd75\ufe0f.*\"}))) * 100",
-          "legendFormat": "Taxa de Sucesso (Resili\u00eancia)",
-          "range": true,
-          "refId": "E"
-        }
-      ],
-      "title": "AgentOps: Invoca\u00e7\u00e3o Total, Por Agente & Resili\u00eancia",
-      "type": "stat"
+      }
     }
   ],
   "refresh": "10s",
@@ -1143,24 +264,22 @@
   "style": "dark",
   "tags": [
     "matryoshka",
-    "bun",
-    "typescript",
-    "subsidized-finops"
+    "mcp",
+    "codebase-memory-mcp",
+    "search_graph",
+    "telemetry",
+    "observability"
   ],
+  "templating": {
+    "list": []
+  },
   "time": {
     "from": "now-6h",
     "to": "now"
   },
-  "timepicker": {
-    "refresh_intervals": [
-      "5s",
-      "10s",
-      "30s",
-      "1m",
-      "5m"
-    ]
-  },
+  "timepicker": {},
   "timezone": "browser",
-  "title": "LeonelLabs \u2014 Matryoshka Harness (Autonomous TS/Bun Engine)",
-  "uid": "matryoshka-telemetry-root"
+  "title": "Matryoshka Harness - MCP & Knowledge Graph Telemetry",
+  "uid": "matryoshka-mcp-telemetry",
+  "version": 1
 }
