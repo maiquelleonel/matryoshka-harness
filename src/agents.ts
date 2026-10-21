@@ -147,6 +147,23 @@ export interface DatabaseSkillCompilerOptions {
   profile?: ArchetypeProfile;
 }
 
+export interface FrontendSkillCompilerOptions {
+  framework?: string;
+  styling?: string;
+  stateManagement?: string;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export interface SecuritySkillCompilerOptions {
+  authFramework?: string;
+  complianceStandards?: string[];
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
 export interface GenerateAgentsOptions {
   force?: boolean;
   dryRun?: boolean;
@@ -903,6 +920,144 @@ export function detectBackendOrm(projectPath: string = process.cwd()): string | 
 }
 
 /**
+ * Detects the frontend framework used in the project by inspecting package manifests.
+ */
+export function detectFrontendFramework(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("next" in deps) return "next";
+      if ("nuxt" in deps) return "nuxt";
+      if ("@sveltejs/kit" in deps || "svelte" in deps) return "svelte";
+      if ("astro" in deps) return "astro";
+      if ("@angular/core" in deps || "angular" in deps) return "angular";
+      if ("solid-js" in deps) return "solid";
+      if ("vue" in deps) return "vue";
+      if ("react" in deps) return "react";
+    } catch {}
+  }
+
+  // 2. Check monorepo subdirectories if not found at root
+  const subdirs = ["apps/web", "apps/frontend", "apps/ui", "frontend", "client", "web"];
+  for (const rel of subdirs) {
+    const subPkg = path.join(root, rel, "package.json");
+    if (fs.existsSync(subPkg)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(subPkg, "utf-8"));
+        const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+        if ("next" in deps) return "next";
+        if ("nuxt" in deps) return "nuxt";
+        if ("@sveltejs/kit" in deps || "svelte" in deps) return "svelte";
+        if ("astro" in deps) return "astro";
+        if ("@angular/core" in deps || "angular" in deps) return "angular";
+        if ("solid-js" in deps) return "solid";
+        if ("vue" in deps) return "vue";
+        if ("react" in deps) return "react";
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detects the styling framework or methodology used in the project.
+ */
+export function detectStylingSystem(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("tailwindcss" in deps || "@tailwindcss/postcss" in deps) return "tailwind";
+      if ("@emotion/react" in deps || "styled-components" in deps) return "css-in-js";
+      if ("sass" in deps || "less" in deps) return "sass";
+    } catch {}
+  }
+
+  // Check config files
+  if (
+    fs.existsSync(path.join(root, "tailwind.config.js")) ||
+    fs.existsSync(path.join(root, "tailwind.config.ts")) ||
+    fs.existsSync(path.join(root, "tailwind.config.cjs")) ||
+    fs.existsSync(path.join(root, "tailwind.config.mjs"))
+  ) {
+    return "tailwind";
+  }
+
+  return null;
+}
+
+/**
+ * Detects the authentication or security framework used in the project.
+ */
+export function detectAuthFramework(projectPath: string = process.cwd()): string | null {
+  const root = path.resolve(projectPath);
+
+  // 1. Check Node/TS package.json
+  const packageJsonPath = path.join(root, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      if ("next-auth" in deps || "@auth/core" in deps) return "next-auth";
+      if ("@clerk/nextjs" in deps || "@clerk/backend" in deps || "@clerk/clerk-sdk-node" in deps) return "clerk";
+      if ("@supabase/supabase-js" in deps || "@supabase/auth-helpers-nextjs" in deps) return "supabase-auth";
+      if ("passport" in deps) return "passport";
+      if ("lucia" in deps) return "lucia";
+      if ("jsonwebtoken" in deps || "jose" in deps) return "jwt";
+    } catch {}
+  }
+
+  // 2. Check Python manifests
+  const pyprojectPath = path.join(root, "pyproject.toml");
+  const requirementsPath = path.join(root, "requirements.txt");
+  let pythonContent = "";
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(pyprojectPath, "utf-8");
+    } catch {}
+  }
+  if (fs.existsSync(requirementsPath)) {
+    try {
+      pythonContent += "\n" + fs.readFileSync(requirementsPath, "utf-8");
+    } catch {}
+  }
+  if (pythonContent) {
+    if (/django[-_]allauth/i.test(pythonContent)) return "django-allauth";
+    if (/fastapi[-_]users/i.test(pythonContent)) return "fastapi-users";
+    if (/pyjwt|python[-_]jose|authlib/i.test(pythonContent)) return "jwt";
+  }
+
+  // 3. Check Go manifests
+  const goModPath = path.join(root, "go.mod");
+  if (fs.existsSync(goModPath)) {
+    try {
+      const goContent = fs.readFileSync(goModPath, "utf-8");
+      if (/golang-jwt\/jwt/i.test(goContent)) return "jwt";
+    } catch {}
+  }
+
+  // 4. Check Rust manifests
+  const cargoTomlPath = path.join(root, "Cargo.toml");
+  if (fs.existsSync(cargoTomlPath)) {
+    try {
+      const cargoContent = fs.readFileSync(cargoTomlPath, "utf-8");
+      if (/jsonwebtoken/i.test(cargoContent)) return "jwt";
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
  * Detects the database engine used in the project by inspecting package manifests and driver dependencies.
  */
 export function detectDatabaseEngine(projectPath: string = process.cwd()): string | null {
@@ -1095,6 +1250,132 @@ description: Zero-downtime migrations, lock safety, column additions, and indexi
 }
 
 /**
+ * Compiles context-aware frontend engineering guidelines with YAML frontmatter.
+ */
+export function compileFrontendSkill(options?: FrontendSkillCompilerOptions): string {
+  let framework = options?.framework;
+  if (!framework && options?.projectPath) {
+    framework = detectFrontendFramework(options.projectPath) || undefined;
+  }
+
+  let styling = options?.styling;
+  if (!styling && options?.projectPath) {
+    styling = detectStylingSystem(options.projectPath) || undefined;
+  }
+
+  let frameworkGuidance = "";
+  if (framework === "next") {
+    frameworkGuidance = `\n* **Next.js Guidance:** Strictly delineate Server Components from Client Components with the \`'use client'\` boundary. Use \`next/image\` with explicit \`width\` and \`height\` or \`fill\` with \`sizes\` to eliminate CLS. Leverage \`next/font\` to avoid render-blocking typography shifts.`;
+  } else if (framework === "react") {
+    frameworkGuidance = `\n* **React Guidance:** Ensure hook dependency arrays are complete and immutable. Avoid creating inline object/function references inside frequently rendered props. Never mutate React state directly.`;
+  } else if (framework === "vue" || framework === "nuxt") {
+    frameworkGuidance = `\n* **Vue / Nuxt Guidance:** Preserve reactivity by avoiding direct destructuring of reactive objects (use \`toRefs\` or computed properties). Use \`defineAsyncComponent\` for code-splitting heavy dialogs and widgets.`;
+  } else if (framework === "svelte") {
+    frameworkGuidance = `\n* **Svelte Guidance:** Use reactive declarations and runes idioms. Avoid complex nested store subscriptions where localized reactive state suffices.`;
+  } else if (framework === "astro") {
+    frameworkGuidance = `\n* **Astro Guidance:** Default to zero-JavaScript static HTML. Hydrate components on demand using explicit client directives (\`client:load\`, \`client:idle\`, \`client:visible\`).`;
+  } else if (framework === "angular") {
+    frameworkGuidance = `\n* **Angular Guidance:** Enforce \`ChangeDetectionStrategy.OnPush\` across all components. Use Angular Signals for localized reactive state and standalone components for tree-shakeable packaging.`;
+  }
+
+  let stylingGuidance = "";
+  if (styling === "tailwind") {
+    stylingGuidance = `\n* **Tailwind CSS Guidance:** Colocate utility classes directly within components. Extract repetitive layout patterns into reusable primitives rather than sprawling custom CSS files.`;
+  }
+
+  let customRulesSection = "";
+  if (options?.customRules && options.customRules.length > 0) {
+    customRulesSection = `\n\n## 5. Repository Custom Invariants\n${options.customRules.map((rule) => rule.trim()).join("\n")}`;
+  }
+
+  return `---
+name: skill-frontend
+description: Reactivity best practices, layout shifts, pure rendering, accessibility standards (A11y), and state management. Use when modifying UI components, styling, or client-side logic.
+---
+
+# 🎨 Frontend Engineering Guidelines
+
+## 1. Pure Rendering & Reactivity Invariants
+* Keep render functions pure and free of side effects; isolate mutations in event handlers or lifecycle seams.
+* Colocate state as close as possible to the consumers to avoid broad sub-tree re-renders.
+* Minimize component surface area: prefer simple composable components over monolithic multi-purpose components.${frameworkGuidance}
+
+## 2. Cumulative Layout Shifts (CLS) & Performance
+* Always specify explicit dimensions or aspect ratios for images, embeds, and dynamic placeholders.
+* Avoid layout-shifting skeleton states or flash of unstyled/unauthenticated content (FOUC).
+* Code-split large interactive modules and lazy-load below-the-fold components to preserve Core Web Vitals and protect bundle size.
+
+## 3. Accessibility (A11y) & Semantic Markup
+* Use native HTML semantic elements (\`<button>\`, \`<main>\`, \`<nav>\`, \`<article>\`) before ARIA overrides.
+* Ensure keyboard navigability, visible focus rings, and high-contrast color ratios across all interactives.
+* Every interactive element must have an accessible name; all media elements (\`<img>\`, \`<video>\`) must specify descriptive \`alt\` or \`aria-label\` attributes.
+
+## 4. Component Architecture & State Hygiene
+* Follow unidirectional data flow: pass data down through props/inputs and emit changes up via events/callbacks.
+* Avoid premature global state; prefer local component state or localized context/stores until shared consumption is strictly needed.${stylingGuidance}${customRulesSection}
+`;
+}
+
+/**
+ * Compiles context-aware security and DLP guidelines with YAML frontmatter.
+ */
+export function compileSecuritySkill(options?: SecuritySkillCompilerOptions): string {
+  let authFramework = options?.authFramework;
+  if (!authFramework && options?.projectPath) {
+    authFramework = detectAuthFramework(options.projectPath) || undefined;
+  }
+
+  let authGuidance = "";
+  if (authFramework === "next-auth") {
+    authGuidance = `\n* **Next-Auth / Auth.js Guidance:** Validate sessions server-side using \`auth()\` or \`getServerSession()\`. Protect API routes and page transitions via Edge Middleware.`;
+  } else if (authFramework === "jwt") {
+    authGuidance = `\n* **JWT Guidance:** Verify signature, expiration (\`exp\`), issuer (\`iss\`), and audience (\`aud\`) on every incoming token. Never store sensitive PII or credentials in unencrypted JWT payload claims.`;
+  } else if (authFramework === "clerk") {
+    authGuidance = `\n* **Clerk Guidance:** Enforce \`auth().userId\` verification in server actions and route handlers. Use Clerk webhook signature verification for event listeners.`;
+  } else if (authFramework === "supabase-auth") {
+    authGuidance = `\n* **Supabase Auth Guidance:** Enforce Row-Level Security (RLS) policies on all tables. Never bypass RLS with the service_role key in client-accessible contexts.`;
+  } else if (authFramework === "django-allauth") {
+    authGuidance = `\n* **Django Auth Guidance:** Always enable CSRF protection for state-mutating requests. Use \`LoginRequiredMixin\` or \`@login_required\` on view endpoints.`;
+  } else if (authFramework === "passport") {
+    authGuidance = `\n* **Passport Guidance:** Validate session serialization and deserialize user instances strictly against database records.`;
+  }
+
+  let customRulesSection = "";
+  if (options?.customRules && options.customRules.length > 0) {
+    customRulesSection = `\n\n## 5. Repository Custom Invariants\n${options.customRules.map((rule) => rule.trim()).join("\n")}`;
+  }
+
+  return `---
+name: skill-security
+description: OWASP Top 10 mitigation, strict input sanitization, secret leakage prevention, and defense-in-depth security invariants. Use when handling user input, authentication, authorization, or sensitive data.
+---
+
+# 🔒 Security & DLP Guidelines
+
+## 1. Zero Secret Leakage Invariant & DLP
+* Never hardcode API keys, JWT secrets, database passwords, private certificates, or tokens in source code, configs, or test fixtures.
+* Always retrieve sensitive credentials via runtime environment variables or secure key vaults. Ensure \`.env\` files are explicitly ignored in \`.gitignore\`.
+* Redact sensitive fields (passwords, tokens, PII, credit cards) from application logs, error traces, and telemetry payloads.
+
+## 2. Strict Input Sanitization & Parameterization
+* Parameterize all database queries without exception to eliminate SQL and NoSQL injection vectors. Never concatenate untrusted user input into query strings.
+* Sanitize and escape all user-provided HTML, URLs, and file uploads against Cross-Site Scripting (XSS).
+* Validate and restrict outgoing URLs against private CIDR blocks (127.0.0.1, 10.0.0.0/8, 169.254.169.254, 192.168.0.0/16) to eliminate Server-Side Request Forgery (SSRF).
+* Sanitize and canonicalize file system paths; resolve absolute paths against an allowed base directory to prevent Path Traversal attacks.
+
+## 3. Authentication & Authorization Guardrails
+* Apply least-privilege access control on all endpoints. Re-verify user ownership and object-level permissions on every resource access (Broken Object Level Authorization / IDOR prevention).
+* Enforce secure cookie attributes: \`HttpOnly\`, \`SameSite=Lax\` (or \`Strict\`), and \`Secure\`.
+* Enforce rate limiting and brute-force mitigation on authentication, password reset, and sensitive operational endpoints.${authGuidance}
+
+## 4. Defense-in-Depth & Dependency Security
+* Set robust HTTP security headers: Content-Security-Policy (CSP), Strict-Transport-Security (HSTS), X-Content-Type-Options (nosniff), and X-Frame-Options (DENY).
+* Pin dependencies and audit third-party packages regularly against known CVEs; eliminate vulnerable transitives.
+* Fail safely: return generic error responses to clients without exposing internal stack traces, database schema details, or server environments.${customRulesSection}
+`;
+}
+
+/**
  * Catalog of specialized skills with YAML frontmatter.
  */
 export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
@@ -1117,50 +1398,14 @@ export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
     fileName: "skill-frontend.md",
     description:
       "Reactivity best practices, layout shifts, pure rendering, accessibility standards (A11y), and state management. Use when modifying UI components, styling, or client-side logic.",
-    content: `---
-name: skill-frontend
-description: Reactivity best practices, layout shifts, pure rendering, accessibility standards (A11y), and state management. Use when modifying UI components, styling, or client-side logic.
----
-
-# 🎨 Frontend Engineering Guidelines
-
-## 1. Pure Rendering & Reactivity Invariants
-* Keep render functions pure and free of side effects; isolate mutations in event handlers or lifecycle seams.
-* Colocate state as close as possible to the consumers to avoid broad sub-tree re-renders.
-
-## 2. Cumulative Layout Shifts (CLS) & Performance
-* Always specify explicit dimensions or aspect ratios for images, embeds, and dynamic placeholders.
-* Avoid layout-shifting skeleton states or flash of unstyled/unauthenticated content.
-
-## 3. Accessibility (A11y) & Semantic Markup
-* Use native HTML semantic elements (\`<button>\`, \`<main>\`, \`<nav>\`, \`<article>\`) before ARIA overrides.
-* Ensure keyboard navigability, focus rings, and high-contrast color ratios across all interactives.
-`
+    content: compileFrontendSkill()
   },
   "skill-security": {
     name: "skill-security",
     fileName: "skill-security.md",
     description:
       "OWASP Top 10 mitigation, strict input sanitization, secret leakage prevention, and defense-in-depth security invariants. Use when handling user input, authentication, authorization, or sensitive data.",
-    content: `---
-name: skill-security
-description: OWASP Top 10 mitigation, strict input sanitization, secret leakage prevention, and defense-in-depth security invariants. Use when handling user input, authentication, authorization, or sensitive data.
----
-
-# 🔒 Security & DLP Guidelines
-
-## 1. Zero Secret Leakage Invariant
-* Never hardcode API keys, JWT secrets, passwords, or private tokens in code, configs, or test fixtures.
-* Always retrieve sensitive credentials via runtime environment variables or secure key vaults.
-
-## 2. Strict Input Sanitization & Parameterization
-* Parameterize all database queries without exception to eliminate SQL and NoSQL injection vectors.
-* Sanitize user-provided HTML, URLs, and file uploads against XSS, SSRF, and directory traversal.
-
-## 3. Authentication & Authorization Guardrails
-* Apply least-privilege access control on all endpoints. Re-verify user ownership on resource access.
-* Enforce CSRF protection and secure session cookies (\`HttpOnly\`, \`SameSite=Lax/Strict\`, \`Secure\`).
-`
+    content: compileSecuritySkill()
   },
   "skill-testing": {
     name: "skill-testing",
@@ -1441,6 +1686,12 @@ export function generateAgents(
     }
     if (skillName === "skill-database") {
       return compileDatabaseSkill({ projectPath: root, profile });
+    }
+    if (skillName === "skill-frontend") {
+      return compileFrontendSkill({ projectPath: root, profile });
+    }
+    if (skillName === "skill-security") {
+      return compileSecuritySkill({ projectPath: root, profile });
     }
     return SKILL_DEFINITIONS[skillName].content;
   };

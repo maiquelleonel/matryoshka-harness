@@ -1823,6 +1823,69 @@ dependencies = [
           expect(resBaba.skill).toBe(resMatryoshka.skill);
           expect(resBaba.frontmatter.name).toBe("skill-frontend");
         });
+
+        it("ensures alias parity across baba, bbyg, and matryoshka for agents skill security --json", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({ dependencies: { "next-auth": "^4.0.0" } })
+          );
+
+          const procBaba = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "security", tempDir, "--json"
+          ]);
+          const procBbyg = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "security", tempDir, "--json"
+          ]);
+          const procMatryoshka = Bun.spawnSync([
+            "bun", "run", cliPath, "agents", "skill", "security", tempDir, "--json"
+          ]);
+
+          expect(procBaba.exitCode).toBe(0);
+          expect(procBbyg.exitCode).toBe(0);
+          expect(procMatryoshka.exitCode).toBe(0);
+
+          const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+          const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+          const resMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+          expect(resBaba.skill).toBe(resBbyg.skill);
+          expect(resBaba.skill).toBe(resMatryoshka.skill);
+          expect(resBaba.frontmatter.name).toBe("skill-security");
+        });
+
+        it("integrates adapted frontend and security skills during generateAgents() execution", () => {
+          fs.writeFileSync(
+            path.join(tempDir, "package.json"),
+            JSON.stringify({
+              name: "fullstack-demo",
+              dependencies: {
+                next: "^14.0.0",
+                react: "^18.0.0",
+                "next-auth": "^4.0.0",
+                prisma: "^5.0.0",
+                "@prisma/client": "^5.0.0"
+              }
+            })
+          );
+
+          const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+          expect(proc.exitCode).toBe(0);
+
+          const skillsDir = path.join(tempDir, ".agents", "skills");
+          const frontendPath = path.join(skillsDir, "skill-frontend.md");
+          const securityPath = path.join(skillsDir, "skill-security.md");
+
+          expect(fs.existsSync(frontendPath)).toBe(true);
+          expect(fs.existsSync(securityPath)).toBe(true);
+
+          const frontendContent = fs.readFileSync(frontendPath, "utf-8");
+          const securityContent = fs.readFileSync(securityPath, "utf-8");
+
+          expect(frontendContent).toContain("Next.js");
+          expect(frontendContent).toContain("'use client'");
+          expect(securityContent).toContain("Next-Auth");
+          expect(securityContent).toContain("getServerSession");
+        });
       });
     });
   });

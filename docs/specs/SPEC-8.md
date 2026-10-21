@@ -1,7 +1,7 @@
 # 📐 SPEC-8: feat(agents): context-aware adaptive AGENTS.md and modular skills engine
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 5: Backend & Database Skill Compilers)  
+**Status:** in_progress (Subtask 6: Frontend & Security Skill Compilers)  
 **Gatilho:** Issue #8  
 **Target:** Bun + TypeScript  
 
@@ -110,6 +110,34 @@ export function detectDatabaseEngine(projectPath: string): string | null;
 ```
 
 - CLI subcommand: `baba agents skill <backend|database> [path] [--json]`
+
+### 2.6 Contratos dos Compiladores de Frontend & Security (Subtask 6)
+```typescript
+export interface FrontendSkillCompilerOptions {
+  framework?: string;
+  styling?: string;
+  stateManagement?: string;
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export interface SecuritySkillCompilerOptions {
+  authFramework?: string;
+  complianceStandards?: string[];
+  customRules?: string[];
+  projectPath?: string;
+  profile?: ArchetypeProfile;
+}
+
+export function compileFrontendSkill(options?: FrontendSkillCompilerOptions): string;
+export function compileSecuritySkill(options?: SecuritySkillCompilerOptions): string;
+export function detectFrontendFramework(projectPath?: string): string | null;
+export function detectStylingSystem(projectPath?: string): string | null;
+export function detectAuthFramework(projectPath?: string): string | null;
+```
+
+- CLI subcommand: `baba agents skill <backend|database|frontend|security> [path] [--json]`
 
 
 ---
