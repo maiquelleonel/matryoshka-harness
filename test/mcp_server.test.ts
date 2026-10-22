@@ -7,11 +7,20 @@ import {
   McpServer,
   createMatryoshkaMcpServer,
   registerMatryoshkaTools,
+  registerMatryoshkaResources,
+  registerMatryoshkaPrompts,
   MATRYOSHKA_MCP_TOOLS,
   DETECT_STACK_TOOL_DEFINITION,
   SCAN_HARNESS_TOOL_DEFINITION,
   GENERATE_AGENTS_TOOL_DEFINITION,
   WRAP_CONTEXT_TOOL_DEFINITION,
+  AGENTS_RESOURCE_DEFINITION,
+  DIAGNOSTIC_RESOURCE_DEFINITION,
+  MATRYOSHKA_MCP_RESOURCES,
+  MATRYOSHKA_RESOURCE_URIS,
+  AUDIT_REPOSITORY_PROMPT_DEFINITION,
+  MATRYOSHKA_MCP_PROMPTS,
+  MATRYOSHKA_PROMPT_NAMES,
   JSONRPC_PARSE_ERROR,
   JSONRPC_INVALID_REQUEST,
   JSONRPC_METHOD_NOT_FOUND,
@@ -654,6 +663,416 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       expect(wrapData.threshold).toBe(75);
       expect(wrapData.actionPlan).toBeDefined();
       expect(wrapData.action_plan).toBeDefined();
+    });
+  });
+
+  describe("Scenario AC-3: Subtask 3 - Resource & Prompt provider handlers", () => {
+    it("exports canonical resource and prompt definitions", () => {
+      expect(MATRYOSHKA_MCP_RESOURCES).toBeDefined();
+      expect(MATRYOSHKA_MCP_RESOURCES.length).toBe(2);
+      expect(MATRYOSHKA_RESOURCE_URIS).toEqual(["matryoshka://agents", "matryoshka://diagnostic"]);
+
+      expect(AGENTS_RESOURCE_DEFINITION.uri).toBe("matryoshka://agents");
+      expect(AGENTS_RESOURCE_DEFINITION.mimeType).toBe("text/markdown");
+      expect(DIAGNOSTIC_RESOURCE_DEFINITION.uri).toBe("matryoshka://diagnostic");
+      expect(DIAGNOSTIC_RESOURCE_DEFINITION.mimeType).toBe("text/markdown");
+
+      expect(MATRYOSHKA_MCP_PROMPTS).toBeDefined();
+      expect(MATRYOSHKA_MCP_PROMPTS.length).toBe(1);
+      expect(MATRYOSHKA_PROMPT_NAMES).toEqual(["audit_repository"]);
+
+      expect(AUDIT_REPOSITORY_PROMPT_DEFINITION.name).toBe("audit_repository");
+      expect(AUDIT_REPOSITORY_PROMPT_DEFINITION.arguments).toBeDefined();
+      const argNames = AUDIT_REPOSITORY_PROMPT_DEFINITION.arguments?.map((a) => a.name);
+      expect(argNames).toContain("targetDir");
+      expect(argNames).toContain("strict");
+      expect(argNames).toContain("threshold");
+    });
+
+    it("provides server resource and prompt inspection methods", () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Resources inspection
+      expect(server.getResources().length).toBe(2);
+      expect(server.hasResource("matryoshka://agents")).toBe(true);
+      expect(server.hasResource("matryoshka://diagnostic")).toBe(true);
+      expect(server.hasResource("matryoshka://unknown")).toBe(false);
+
+      const agentRes = server.getResource("matryoshka://agents");
+      expect(agentRes).toBeDefined();
+      expect(agentRes?.uri).toBe("matryoshka://agents");
+
+      const unregRes = server.unregisterResource("matryoshka://agents");
+      expect(unregRes).toBe(true);
+      expect(server.hasResource("matryoshka://agents")).toBe(false);
+      expect(server.getResources().length).toBe(1);
+      expect(server.unregisterResource("matryoshka://agents")).toBe(false);
+
+      // Prompts inspection
+      expect(server.getPrompts().length).toBe(1);
+      expect(server.hasPrompt("audit_repository")).toBe(true);
+      expect(server.hasPrompt("unknown_prompt")).toBe(false);
+
+      const promptDef = server.getPrompt("audit_repository");
+      expect(promptDef).toBeDefined();
+      expect(promptDef?.name).toBe("audit_repository");
+
+      const unregPrompt = server.unregisterPrompt("audit_repository");
+      expect(unregPrompt).toBe(true);
+      expect(server.hasPrompt("audit_repository")).toBe(false);
+      expect(server.getPrompts().length).toBe(0);
+      expect(server.unregisterPrompt("audit_repository")).toBe(false);
+    });
+
+    it("supports registerMatryoshkaResources and registerMatryoshkaPrompts on a bare McpServer", () => {
+      const bareServer = new McpServer();
+      expect(bareServer.getResources().length).toBe(0);
+      expect(bareServer.getPrompts().length).toBe(0);
+
+      registerMatryoshkaResources(bareServer, tempDir);
+      registerMatryoshkaPrompts(bareServer, tempDir);
+
+      expect(bareServer.getResources().length).toBe(2);
+      expect(bareServer.hasResource("matryoshka://agents")).toBe(true);
+      expect(bareServer.hasResource("matryoshka://diagnostic")).toBe(true);
+      expect(bareServer.getPrompts().length).toBe(1);
+      expect(bareServer.hasPrompt("audit_repository")).toBe(true);
+    });
+
+    it("handles resources/list returning all exposed resources", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const resStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "res-list-1",
+          method: "resources/list",
+        })
+      );
+      const res = JSON.parse(resStr!);
+      expect(res.jsonrpc).toBe("2.0");
+      expect(res.id).toBe("res-list-1");
+      expect(res.result.resources).toBeDefined();
+      expect(res.result.resources.length).toBe(2);
+
+      const uris = res.result.resources.map((r: any) => r.uri);
+      expect(uris).toContain("matryoshka://agents");
+      expect(uris).toContain("matryoshka://diagnostic");
+    });
+
+    it("handles resources/templates/list returning empty list", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const resStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "tpl-1",
+          method: "resources/templates/list",
+        })
+      );
+      const res = JSON.parse(resStr!);
+      expect(res.result.resourceTemplates).toEqual([]);
+    });
+
+    it("handles resources/read for matryoshka://agents with live and missing files", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // 1. Missing file -> returns placeholder
+      const resMissingStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "read-agents-1",
+          method: "resources/read",
+          params: { uri: "matryoshka://agents" },
+        })
+      );
+      const resMissing = JSON.parse(resMissingStr!);
+      expect(resMissing.result.contents).toBeDefined();
+      expect(resMissing.result.contents[0].uri).toBe("matryoshka://agents");
+      expect(resMissing.result.contents[0].mimeType).toBe("text/markdown");
+      expect(resMissing.result.contents[0].text).toContain("No AGENTS.md compiled yet");
+
+      // 2. Existing file -> returns file content
+      const sampleAgents = "# AGENTS.md\n\n## Canonical Commands\n- test: bun test\n";
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), sampleAgents, "utf-8");
+
+      const resLiveStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "read-agents-2",
+          method: "resources/read",
+          params: { uri: "matryoshka://agents" },
+        })
+      );
+      const resLive = JSON.parse(resLiveStr!);
+      expect(resLive.result.contents[0].text).toBe(sampleAgents);
+    });
+
+    it("handles resources/read for matryoshka://diagnostic with live and missing files", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // 1. Missing file -> returns placeholder
+      const resMissingStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "read-diag-1",
+          method: "resources/read",
+          params: { uri: "matryoshka://diagnostic" },
+        })
+      );
+      const resMissing = JSON.parse(resMissingStr!);
+      expect(resMissing.result.contents[0].uri).toBe("matryoshka://diagnostic");
+      expect(resMissing.result.contents[0].text).toContain("No DIAGNOSTIC.md generated yet");
+
+      // 2. Existing file -> returns file content
+      const sampleDiag = "# DIAGNOSTIC.md\n\nScore: 85/100 (Level L3)\n";
+      fs.writeFileSync(path.join(tempDir, "DIAGNOSTIC.md"), sampleDiag, "utf-8");
+
+      const resLiveStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "read-diag-2",
+          method: "resources/read",
+          params: { uri: "matryoshka://diagnostic" },
+        })
+      );
+      const resLive = JSON.parse(resLiveStr!);
+      expect(resLive.result.contents[0].text).toBe(sampleDiag);
+    });
+
+    it("validates resources/read parameters rejecting missing, invalid, or unregistered uri with -32602", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Missing uri
+      const missingUri = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "err-uri-1",
+          method: "resources/read",
+          params: {},
+        })
+      );
+      expect(JSON.parse(missingUri!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-string uri
+      const nonStringUri = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "err-uri-2",
+          method: "resources/read",
+          params: { uri: 12345 },
+        })
+      );
+      expect(JSON.parse(nonStringUri!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-object params
+      const nonObjectParams = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "err-uri-3",
+          method: "resources/read",
+          params: "invalid",
+        })
+      );
+      expect(JSON.parse(nonObjectParams!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Unregistered uri
+      const unregUri = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "err-uri-4",
+          method: "resources/read",
+          params: { uri: "matryoshka://nonexistent" },
+        })
+      );
+      const parsedUnreg = JSON.parse(unregUri!);
+      expect(parsedUnreg.error.code).toBe(JSONRPC_INVALID_PARAMS);
+      expect(parsedUnreg.error.message).toContain("Resource not found");
+    });
+
+    it("handles prompts/list returning all registered prompts with parameter schemas", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const resStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "prompt-list-1",
+          method: "prompts/list",
+        })
+      );
+      const res = JSON.parse(resStr!);
+      expect(res.jsonrpc).toBe("2.0");
+      expect(res.id).toBe("prompt-list-1");
+      expect(res.result.prompts).toBeDefined();
+      expect(res.result.prompts.length).toBe(1);
+
+      const prompt = res.result.prompts[0];
+      expect(prompt.name).toBe("audit_repository");
+      expect(prompt.description).toBeDefined();
+      expect(prompt.arguments).toBeDefined();
+      const argNames = prompt.arguments.map((a: any) => a.name);
+      expect(argNames).toContain("targetDir");
+      expect(argNames).toContain("strict");
+      expect(argNames).toContain("threshold");
+    });
+
+    it("handles prompts/get for audit_repository with default and custom arguments", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Default arguments
+      const resDefaultStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-1",
+          method: "prompts/get",
+          params: { name: "audit_repository" },
+        })
+      );
+      const resDefault = JSON.parse(resDefaultStr!);
+      expect(resDefault.result.messages).toBeDefined();
+      expect(resDefault.result.messages.length).toBe(1);
+      expect(resDefault.result.messages[0].role).toBe("user");
+      const textDefault = resDefault.result.messages[0].content.text;
+      expect(textDefault).toContain(tempDir);
+      expect(textDefault).toContain("detect_stack");
+      expect(textDefault).toContain("scan_harness");
+      expect(textDefault).toContain("wrap_context");
+      expect(textDefault).toContain("generate_agents");
+
+      // Custom arguments with strict: true and threshold: 90
+      const customSub = path.join(tempDir, "custom-sub");
+      const resCustomStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-2",
+          method: "prompts/get",
+          params: {
+            name: "audit_repository",
+            arguments: {
+              targetDir: customSub,
+              strict: true,
+              threshold: 90,
+            },
+          },
+        })
+      );
+      const resCustom = JSON.parse(resCustomStr!);
+      const textCustom = resCustom.result.messages[0].content.text;
+      expect(textCustom).toContain(customSub);
+      expect(textCustom).toContain("strict");
+      expect(textCustom).toContain("90");
+    });
+
+    it("validates prompts/get parameters rejecting missing, invalid, non-object arguments or unregistered prompts with -32602", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Missing name
+      const missingName = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-err-1",
+          method: "prompts/get",
+          params: {},
+        })
+      );
+      expect(JSON.parse(missingName!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-string name
+      const nonStringName = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-err-2",
+          method: "prompts/get",
+          params: { name: 999 },
+        })
+      );
+      expect(JSON.parse(nonStringName!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-object params
+      const nonObjParams = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-err-3",
+          method: "prompts/get",
+          params: "bad",
+        })
+      );
+      expect(JSON.parse(nonObjParams!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-object arguments (array)
+      const arrayArgs = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-err-4",
+          method: "prompts/get",
+          params: { name: "audit_repository", arguments: [1, 2] },
+        })
+      );
+      expect(JSON.parse(arrayArgs!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Unregistered prompt name
+      const unregPrompt = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "pget-err-5",
+          method: "prompts/get",
+          params: { name: "unknown_prompt" },
+        })
+      );
+      const parsedUnreg = JSON.parse(unregPrompt!);
+      expect(parsedUnreg.error.code).toBe(JSONRPC_INVALID_PARAMS);
+      expect(parsedUnreg.error.message).toContain("Prompt not found");
+    });
+
+    it("handles resource and prompt execution failures fail-safe returning -32603", async () => {
+      const server = new McpServer();
+
+      server.registerResource(
+        {
+          uri: "matryoshka://error-resource",
+          name: "Error Resource",
+          mimeType: "text/plain",
+        },
+        async () => {
+          throw new Error("Disk read failure");
+        }
+      );
+
+      server.registerPrompt(
+        {
+          name: "error_prompt",
+          description: "Throws an error",
+        },
+        async () => {
+          throw new Error("Prompt compilation crashed");
+        }
+      );
+
+      // Resource error
+      const resErrStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "res-err-1",
+          method: "resources/read",
+          params: { uri: "matryoshka://error-resource" },
+        })
+      );
+      const resErr = JSON.parse(resErrStr!);
+      expect(resErr.error.code).toBe(JSONRPC_INTERNAL_ERROR);
+      expect(resErr.error.message).toContain("Disk read failure");
+
+      // Prompt error
+      const promptErrStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "p-err-1",
+          method: "prompts/get",
+          params: { name: "error_prompt" },
+        })
+      );
+      const promptErr = JSON.parse(promptErrStr!);
+      expect(promptErr.error.code).toBe(JSONRPC_INTERNAL_ERROR);
+      expect(promptErr.error.message).toContain("Prompt compilation crashed");
     });
   });
 
