@@ -111,7 +111,7 @@ Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polygl
 ### 1.1 Escopo das Subtasks
 - **Subtask 1 (Concluída):** Polyglot AST Walker & Tree-sitter WASM Engine
 - **Subtask 2 (Concluída):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
-- **Subtask 3 (Ativa):** Harness² Composite Scorer & Gap Aggregator
+- **Subtask 3 (Concluída):** Harness² Composite Scorer & Gap Aggregator
 - **Subtask 4:** `DIAGNOSTIC.md` & JSON Report Compilers
 - **Subtask 5:** CLI Subcommand Integration, Guardrails & Strict Mode
 
