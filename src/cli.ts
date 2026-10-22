@@ -24,6 +24,12 @@ import {
   runMaturityScan,
 } from "./scanner";
 import { formatMcpWireHumanOutput, wireMcpTargets } from "./mcp";
+import { evaluateCompositeHarness } from "./scorer";
+import {
+  formatWrapHumanOutput,
+  formatWrapJsonOutput,
+  writeDiagnosticReport,
+} from "./report";
 import type { DetectResult, McpTargetName, ProjectStack } from "./types";
 
 const VERSION = "0.1.0";
@@ -38,14 +44,14 @@ Usage:
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents skill <name> [path] [--json]
-  baba wrap [path]
+  baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
   baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
 
 Commands:
   detect   Inspect codebase and detect primary stack, frameworks, and test runner
   scan     Execute maturity audit and semantic AST reconciliation
   agents   Generate adaptive AGENTS.md and modular skills
-  wrap     Apply adaptive context fence and inject AGENTS.md / SKILLS.md
+  wrap     Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
   mcp wire Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
 
 Options:
@@ -54,6 +60,10 @@ Options:
   --json             Output strictly valid JSON
   --targets <list>   Comma-separated target environments (cursor, gemini, claude)
   --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  --output <file>, -o Custom output report path (default: ./DIAGNOSTIC.md)
+  --strict           Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
+  --threshold <num>  Minimum acceptable Harness² composite score for strict gate (default: 80)
+  --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
   -h, --help         Show help information
   -v, --version      Show version
 `.trim();
@@ -519,31 +529,121 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "wrap": {
-      const positional = rest.filter((arg) => !arg.startsWith("-"));
-      const targetDir = positional[0] || process.cwd();
-      const resolvedPath = path.resolve(targetDir);
+      let isStrict = rest.includes("--strict");
+      let isDryRun = rest.includes("--dry-run");
+      let targetDir: string | undefined;
+      let outputPath: string | undefined;
+      let threshold: number | undefined;
+      let maxFileSizeKb: number | undefined;
 
-      if (isJson) {
-        console.log(
-          JSON.stringify(
-            {
-              status: "pending",
-              command: "wrap",
-              rootPath: resolvedPath,
-              message: "Context wrap engine scheduled for Phase 2 (Issue #8)"
-            },
-            null,
-            2
-          )
-        );
-      } else {
-        console.log(
-          pc.yellow(
-            `\n[baba wrap] Scheduled for Phase 2 (Issue #8). Inspected path: ${resolvedPath}\n`
-          )
-        );
+      for (let i = 0; i < rest.length; i++) {
+        const arg = rest[i];
+        if (!arg) continue;
+
+        if (arg === "--json" || arg === "--strict" || arg === "--dry-run") {
+          // Handled via flags
+        } else if (arg === "--output" || arg === "-o") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            outputPath = nextVal;
+            i++;
+          }
+        } else if (arg.startsWith("--output=")) {
+          outputPath = arg.slice("--output=".length);
+        } else if (arg.startsWith("-o=")) {
+          outputPath = arg.slice("-o=".length);
+        } else if (arg === "--threshold") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            const parsed = Number.parseInt(nextVal, 10);
+            if (!Number.isNaN(parsed)) threshold = parsed;
+            i++;
+          }
+        } else if (arg.startsWith("--threshold=")) {
+          const parsed = Number.parseInt(arg.slice("--threshold=".length), 10);
+          if (!Number.isNaN(parsed)) threshold = parsed;
+        } else if (arg === "--max-file-size") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            const parsed = Number.parseInt(nextVal, 10);
+            if (!Number.isNaN(parsed)) maxFileSizeKb = parsed;
+            i++;
+          }
+        } else if (arg.startsWith("--max-file-size=")) {
+          const parsed = Number.parseInt(arg.slice("--max-file-size=".length), 10);
+          if (!Number.isNaN(parsed)) maxFileSizeKb = parsed;
+        } else if (arg.startsWith("-")) {
+          // Unrecognized flag - ignore
+        } else {
+          if (!targetDir) {
+            targetDir = arg;
+          }
+        }
       }
-      process.exit(0);
+
+      const resolvedPath = path.resolve(targetDir || process.cwd());
+
+      try {
+        const evaluationResult = await evaluateCompositeHarness(resolvedPath, {
+          threshold: threshold ?? 80,
+          astOptions: {
+            maxFileSizeKb: maxFileSizeKb ?? 500,
+          },
+        });
+
+        const writeResult = await writeDiagnosticReport(resolvedPath, evaluationResult, {
+          outputPath,
+          dryRun: isDryRun,
+          atomic: true,
+        });
+
+        if (isJson) {
+          const jsonOutput = formatWrapJsonOutput(evaluationResult, {
+            reportPath: writeResult.reportPath,
+            written: writeResult.written,
+          });
+          console.log(JSON.stringify(jsonOutput, null, 2));
+        } else {
+          console.log(formatWrapHumanOutput(evaluationResult, writeResult));
+        }
+
+        if (isStrict && !evaluationResult.passedStrict) {
+          let failureMsg = `Strict mode failed: Composite score (${evaluationResult.compositeScore}) is below threshold (${evaluationResult.threshold}).`;
+          if (evaluationResult.hasCriticalViolations && !evaluationResult.passedThreshold) {
+            failureMsg = `Strict mode failed: Composite score (${evaluationResult.compositeScore}) is below threshold (${evaluationResult.threshold}) and critical AST violations were detected.`;
+          } else if (evaluationResult.hasCriticalViolations) {
+            failureMsg = `Strict mode failed: Critical AST violations detected (${evaluationResult.ast.bySeverity.critical} critical).`;
+          }
+
+          if (isJson) {
+            console.error(pc.red(failureMsg));
+          } else {
+            console.error(pc.red(`\n❌ ${failureMsg}\n`));
+          }
+          process.exit(1);
+        }
+
+        process.exit(0);
+      } catch (error: any) {
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "error",
+                command: "wrap",
+                projectPath: resolvedPath,
+                project_path: resolvedPath,
+                message: error?.message || "Wrap command failed",
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(pc.red(`\nWrap failed: ${error?.message || "Unknown error"}\n`));
+        }
+        process.exit(1);
+      }
       break;
     }
 
