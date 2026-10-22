@@ -153,7 +153,7 @@ def get_user(user_id):
 
       const funcs = parsed.rootNode.findChildrenByType("FunctionDeclaration");
       expect(funcs.length).toBe(1);
-      expect(funcs[0].text).toContain("def get_user");
+      expect(funcs[0]?.text).toContain("def get_user");
     });
 
     it("parses Go source into structured AstNode tree", () => {
@@ -270,7 +270,7 @@ func GetUser(id string) {
       const result = await engine.walk(tempDir);
 
       expect(result.scannedFiles.length).toBe(1);
-      expect(result.scannedFiles[0].relativePath).toBe("good.ts");
+      expect(result.scannedFiles[0]?.relativePath).toBe("good.ts");
     });
 
     it("produces byte-for-byte idempotent outputs across repeated runs", async () => {

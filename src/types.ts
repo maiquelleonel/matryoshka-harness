@@ -138,3 +138,88 @@ export interface McpWireResult {
   message?: string;
 }
 
+// ==========================================
+// SPEC-11: Polyglot AST Engine & Baba Wrap
+// ==========================================
+
+export type AstLanguage = "typescript" | "javascript" | "python" | "go" | "rust";
+
+export interface AstPoint {
+  row: number;
+  column: number;
+}
+
+export interface AstNode {
+  type: string;
+  text: string;
+  startPosition: AstPoint;
+  endPosition: AstPoint;
+  children: AstNode[];
+  parent?: AstNode | null;
+  childCount: number;
+  findChildByType(type: string): AstNode | null;
+  findChildrenByType(type: string): AstNode[];
+  walk(visitor: (node: AstNode) => void | boolean): void;
+}
+
+export interface ParsedFileAst {
+  filePath: string;
+  relativePath: string;
+  language: AstLanguage;
+  sizeBytes: number;
+  parseEngine: "tree-sitter-wasm" | "heuristic-fallback";
+  parseTimeMs: number;
+  rootNode: AstNode;
+  content: string;
+  lines: string[];
+}
+
+export interface AstWalkerOptions {
+  cwd?: string;
+  maxFileSizeKb?: number;
+  timeoutMs?: number;
+  languages?: AstLanguage[];
+  ignorePatterns?: string[];
+  wasmGrammarPaths?: Partial<Record<AstLanguage, string>>;
+  concurrency?: number;
+}
+
+export interface AstSkippedFile {
+  filePath: string;
+  relativePath: string;
+  reason:
+    | "exceeds_max_size"
+    | "binary"
+    | "ignored"
+    | "unsupported_language"
+    | "timeout"
+    | "parse_error";
+  sizeBytes?: number;
+  error?: string;
+}
+
+export interface AstWalkResult {
+  totalFilesDiscovered: number;
+  scannedFiles: ParsedFileAst[];
+  skippedFiles: AstSkippedFile[];
+  languagesCount: Record<AstLanguage, number>;
+  executionTimeMs: number;
+}
+
+export type AstViolationSeverity = "critical" | "high" | "medium" | "low";
+
+export interface AstViolation {
+  id: string;
+  ruleId: string;
+  severity: AstViolationSeverity;
+  message: string;
+  filePath: string;
+  relativePath: string;
+  line: number;
+  column: number;
+  nodeType: string;
+  codeSnippet: string;
+  remediation: string;
+}
+
+
