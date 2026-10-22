@@ -1,7 +1,7 @@
 # 📐 SPEC-12: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 2: Tool registration & schema definitions (`detect_stack`, `scan_harness`, `generate_agents`, `wrap_context`))  
+**Status:** in_progress (Subtask 3: Resource & Prompt provider handlers)  
 **Gatilho:** Issue #12  
 **Target:** Bun + TypeScript + Model Context Protocol (stdio transport)  
 
@@ -243,6 +243,75 @@ export const MATRYOSHKA_MCP_TOOLS: McpToolDefinition[] = [
   GENERATE_AGENTS_TOOL_DEFINITION,
   WRAP_CONTEXT_TOOL_DEFINITION,
 ];
+
+export const MATRYOSHKA_TOOL_NAMES = [
+  "detect_stack",
+  "scan_harness",
+  "generate_agents",
+  "wrap_context",
+] as const;
+
+### 2.5 Schemas e Definições Canônicas de Recursos & Prompts Matryoshka (Subtask 3)
+
+```typescript
+export const AGENTS_RESOURCE_DEFINITION: McpResourceDefinition = {
+  uri: "matryoshka://agents",
+  name: "Current Compiled AGENTS.md",
+  description: "Exposes currently compiled AGENTS.md",
+  mimeType: "text/markdown",
+};
+
+export const DIAGNOSTIC_RESOURCE_DEFINITION: McpResourceDefinition = {
+  uri: "matryoshka://diagnostic",
+  name: "Latest DIAGNOSTIC.md Report",
+  description: "Exposes latest DIAGNOSTIC.md",
+  mimeType: "text/markdown",
+};
+
+export const MATRYOSHKA_MCP_RESOURCES: McpResourceDefinition[] = [
+  AGENTS_RESOURCE_DEFINITION,
+  DIAGNOSTIC_RESOURCE_DEFINITION,
+];
+
+export const MATRYOSHKA_RESOURCE_URIS = [
+  "matryoshka://agents",
+  "matryoshka://diagnostic",
+] as const;
+
+export const AUDIT_REPOSITORY_PROMPT_DEFINITION: McpPromptDefinition = {
+  name: "audit_repository",
+  description: "Guided system prompt for an agent to inspect and remediate repository harness score",
+  arguments: [
+    {
+      name: "targetDir",
+      description: "Path to repository to audit (defaults to server root)",
+      required: false,
+    },
+    {
+      name: "path",
+      description: "Alias for targetDir",
+      required: false,
+    },
+    {
+      name: "strict",
+      description: "Enforce strict zero-critical-violations quality gate",
+      required: false,
+    },
+    {
+      name: "threshold",
+      description: "Minimum acceptable harness score (default: 80)",
+      required: false,
+    },
+  ],
+};
+
+export const MATRYOSHKA_MCP_PROMPTS: McpPromptDefinition[] = [
+  AUDIT_REPOSITORY_PROMPT_DEFINITION,
+];
+
+export const MATRYOSHKA_PROMPT_NAMES = [
+  "audit_repository",
+] as const;
 ```
 ```
 
@@ -281,7 +350,21 @@ Feature: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
     Given The native MCP server
     When "resources/list" and "prompts/list" are called
     Then It exposes "matryoshka://agents" and "matryoshka://diagnostic"
-    And It exposes prompt "audit_repository"
+    And It exposes prompt "audit_repository" with parameters "targetDir", "path", "strict", and "threshold"
+    And Calling "resources/read" with "matryoshka://agents" when AGENTS.md exists returns its raw markdown content
+    And Calling "resources/read" with "matryoshka://agents" when AGENTS.md is absent returns fallback placeholder markdown
+    And Calling "resources/read" with "matryoshka://diagnostic" when DIAGNOSTIC.md exists returns its raw markdown content
+    And Calling "resources/read" with "matryoshka://diagnostic" when DIAGNOSTIC.md is absent returns fallback placeholder markdown
+    And Calling "resources/read" with missing or invalid "uri" returns error code -32602 (Invalid params)
+    And Calling "resources/read" with unregistered URI returns error code -32602 (Invalid params)
+    And Calling "resources/templates/list" returns empty resourceTemplates array
+    And Calling "prompts/get" with "audit_repository" generates structured prompt messages instructing agent workflow
+    And Calling "prompts/get" with missing or invalid "name" returns error code -32602 (Invalid params)
+    And Calling "prompts/get" with non-object arguments returns error code -32602 (Invalid params)
+    And Calling "prompts/get" for unregistered prompt returns error code -32602 (Invalid params)
+    And Inspection methods getResources, getResource, hasResource, unregisterResource operate idempotently
+    And Inspection methods getPrompts, getPrompt, hasPrompt, unregisterPrompt operate idempotently
+    And Standalone registerMatryoshkaResources and registerMatryoshkaPrompts populate bare McpServer instances
 
   Scenario: AC-4 - Subtask 4: CLI integration (baba mcp serve) with stderr logging guards
     Given The CLI binary
