@@ -12,6 +12,10 @@ import {
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
   type DetectResult,
+  type DetectStackToolArgs,
+  type ScanHarnessToolArgs,
+  type GenerateAgentsToolArgs,
+  type WrapContextToolArgs,
   type McpPromptArgument,
   type McpPromptDefinition,
   type McpResourceDefinition,
@@ -21,6 +25,100 @@ import {
   type ProjectStack,
 } from "./types";
 
+export const DETECT_STACK_TOOL_DEFINITION: McpToolDefinition = {
+  name: "detect_stack",
+  description: "Detect project framework, testing conventions, and repo archetype",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to analyze (defaults to server working directory)",
+      },
+    },
+  },
+};
+
+export const SCAN_HARNESS_TOOL_DEFINITION: McpToolDefinition = {
+  name: "scan_harness",
+  description: "Evaluate current L1-L4 harness score and generate maturity metrics",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to scan (defaults to server working directory)",
+      },
+    },
+  },
+};
+
+export const GENERATE_AGENTS_TOOL_DEFINITION: McpToolDefinition = {
+  name: "generate_agents",
+  description: "Autonomously produce lean AGENTS.md and modular .agents/skills/",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path (defaults to server working directory)",
+      },
+      force: {
+        type: "boolean",
+        description: "Overwrite existing files with backup creation",
+      },
+      dryRun: {
+        type: "boolean",
+        description: "Simulate generation without writing to disk",
+      },
+      maxTokens: {
+        type: "number",
+        description: "Maximum token budget for root AGENTS.md (default: 250)",
+      },
+      strictTokenGuard: {
+        type: "boolean",
+        description: "Enforce strict token guard threshold",
+      },
+    },
+  },
+};
+
+export const WRAP_CONTEXT_TOOL_DEFINITION: McpToolDefinition = {
+  name: "wrap_context",
+  description: "Run polyglot AST audit and generate remediation plan",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to audit (defaults to server working directory)",
+      },
+      threshold: {
+        type: "number",
+        description: "Minimum acceptable harness score (default: 80)",
+      },
+      strict: {
+        type: "boolean",
+        description: "Enforce strict mode (zero critical violations permitted)",
+      },
+    },
+  },
+};
+
+export const MATRYOSHKA_MCP_TOOLS: McpToolDefinition[] = [
+  DETECT_STACK_TOOL_DEFINITION,
+  SCAN_HARNESS_TOOL_DEFINITION,
+  GENERATE_AGENTS_TOOL_DEFINITION,
+  WRAP_CONTEXT_TOOL_DEFINITION,
+];
+
+export const MATRYOSHKA_TOOL_NAMES = [
+  "detect_stack",
+  "scan_harness",
+  "generate_agents",
+  "wrap_context",
+] as const;
+
 export {
   JSONRPC_PARSE_ERROR,
   JSONRPC_INVALID_REQUEST,
@@ -28,6 +126,10 @@ export {
   JSONRPC_INVALID_PARAMS,
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
+  type DetectStackToolArgs,
+  type ScanHarnessToolArgs,
+  type GenerateAgentsToolArgs,
+  type WrapContextToolArgs,
   type McpPromptArgument,
   type McpPromptDefinition,
   type McpResourceDefinition,
@@ -101,6 +203,54 @@ export class McpServer {
     if (!this.capabilities.prompts) {
       this.capabilities.prompts = {};
     }
+  }
+
+  getTools(): McpToolDefinition[] {
+    return Array.from(this.tools.values()).map((t) => t.definition);
+  }
+
+  getTool(name: string): McpToolDefinition | undefined {
+    return this.tools.get(name)?.definition;
+  }
+
+  hasTool(name: string): boolean {
+    return this.tools.has(name);
+  }
+
+  unregisterTool(name: string): boolean {
+    return this.tools.delete(name);
+  }
+
+  getResources(): McpResourceDefinition[] {
+    return Array.from(this.resources.values()).map((r) => r.definition);
+  }
+
+  getResource(uri: string): McpResourceDefinition | undefined {
+    return this.resources.get(uri)?.definition;
+  }
+
+  hasResource(uri: string): boolean {
+    return this.resources.has(uri);
+  }
+
+  unregisterResource(uri: string): boolean {
+    return this.resources.delete(uri);
+  }
+
+  getPrompts(): McpPromptDefinition[] {
+    return Array.from(this.prompts.values()).map((p) => p.definition);
+  }
+
+  getPrompt(name: string): McpPromptDefinition | undefined {
+    return this.prompts.get(name)?.definition;
+  }
+
+  hasPrompt(name: string): boolean {
+    return this.prompts.has(name);
+  }
+
+  unregisterPrompt(name: string): boolean {
+    return this.prompts.delete(name);
   }
 
   log(level: string, message: string): void {
@@ -229,8 +379,18 @@ export class McpServer {
       }
 
       case "tools/call": {
-        const toolName = params?.name;
-        const toolArgs = params?.arguments || {};
+        if (!params || typeof params !== "object" || Array.isArray(params)) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: params must be an object",
+            },
+          });
+        }
+
+        const toolName = params.name;
 
         if (!toolName || typeof toolName !== "string") {
           return JSON.stringify({
@@ -242,6 +402,24 @@ export class McpServer {
             },
           });
         }
+
+        if (
+          params.arguments !== undefined &&
+          (typeof params.arguments !== "object" ||
+            params.arguments === null ||
+            Array.isArray(params.arguments))
+        ) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: 'arguments' must be an object",
+            },
+          });
+        }
+
+        const toolArgs = params.arguments || {};
 
         const tool = this.tools.get(toolName);
         if (!tool) {
@@ -503,6 +681,70 @@ export class McpServer {
 }
 
 /**
+ * Registers all canonical Matryoshka tools into an MCP server instance.
+ */
+export function registerMatryoshkaTools(
+  server: McpServer,
+  targetDir: string = process.cwd()
+): void {
+  const resolvedDir = path.resolve(targetDir);
+
+  // Tool 1: detect_stack
+  server.registerTool(DETECT_STACK_TOOL_DEFINITION, async (args: any) => {
+    const p = path.resolve(args?.path || resolvedDir);
+    const stack: ProjectStack = detectStack(p);
+    const res: DetectResult = {
+      status: "success",
+      stack: {
+        primary: stack.primary,
+        frameworks: stack.frameworks,
+        testRunner: stack.testRunner,
+        archetype: stack.archetype,
+      },
+      rootPath: p,
+    };
+    return res;
+  });
+
+  // Tool 2: scan_harness
+  server.registerTool(SCAN_HARNESS_TOOL_DEFINITION, async (args: any) => {
+    const p = path.resolve(args?.path || resolvedDir);
+    const result = await runMaturityScan(p);
+    return {
+      ...result,
+      score: result.oracleScore,
+      level: result.oracleLevel,
+      gaps: result.remediationIssues,
+    };
+  });
+
+  // Tool 3: generate_agents
+  server.registerTool(GENERATE_AGENTS_TOOL_DEFINITION, async (args: any) => {
+    const p = path.resolve(args?.path || resolvedDir);
+    return generateAgents(p, {
+      force: Boolean(args?.force),
+      dryRun: Boolean(args?.dryRun),
+      maxTokens: typeof args?.maxTokens === "number" ? args.maxTokens : undefined,
+      strictTokenGuard: Boolean(args?.strictTokenGuard),
+      json: true,
+    });
+  });
+
+  // Tool 4: wrap_context
+  server.registerTool(WRAP_CONTEXT_TOOL_DEFINITION, async (args: any) => {
+    const p = path.resolve(args?.path || resolvedDir);
+    const evalResult = await evaluateCompositeHarness(p, {
+      threshold: typeof args?.threshold === "number" ? args.threshold : 80,
+    });
+    return {
+      ...evalResult,
+      actionPlan: evalResult.aggregatedGaps?.actionPlan || [],
+      action_plan: evalResult.aggregatedGaps?.actionPlan || [],
+    };
+  });
+}
+
+/**
  * Creates and initializes a Native Matryoshka MCP Server instance with all tools,
  * resources, and prompts registered.
  */
@@ -520,97 +762,8 @@ export function createMatryoshkaMcpServer(targetDir: string = process.cwd()): Mc
     },
   });
 
-  // Tool 1: detect_stack
-  server.registerTool(
-    {
-      name: "detect_stack",
-      description: "Detect project framework, testing conventions, and repo archetype",
-      inputSchema: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Target repository path" },
-        },
-      },
-    },
-    async (args: any) => {
-      const p = path.resolve(args?.path || resolvedDir);
-      const stack: ProjectStack = detectStack(p);
-      const res: DetectResult = {
-        status: "success",
-        stack: {
-          primary: stack.primary,
-          frameworks: stack.frameworks,
-          testRunner: stack.testRunner,
-          archetype: stack.archetype,
-        },
-        rootPath: p,
-      };
-      return res;
-    }
-  );
-
-  // Tool 2: scan_harness
-  server.registerTool(
-    {
-      name: "scan_harness",
-      description: "Evaluate current L1-L4 harness score and generate maturity metrics",
-      inputSchema: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Target repository path" },
-        },
-      },
-    },
-    async (args: any) => {
-      const p = path.resolve(args?.path || resolvedDir);
-      return await runMaturityScan(p);
-    }
-  );
-
-  // Tool 3: generate_agents
-  server.registerTool(
-    {
-      name: "generate_agents",
-      description: "Autonomously produce lean AGENTS.md and modular .agents/skills/",
-      inputSchema: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Target repository path" },
-          force: { type: "boolean", description: "Overwrite existing files" },
-          dryRun: { type: "boolean", description: "Simulate without writing to disk" },
-        },
-      },
-    },
-    async (args: any) => {
-      const p = path.resolve(args?.path || resolvedDir);
-      return generateAgents(p, {
-        force: Boolean(args?.force),
-        dryRun: Boolean(args?.dryRun),
-        json: true,
-      });
-    }
-  );
-
-  // Tool 4: wrap_context
-  server.registerTool(
-    {
-      name: "wrap_context",
-      description: "Run polyglot AST audit and generate remediation plan",
-      inputSchema: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Target repository path" },
-          threshold: { type: "number", description: "Minimum acceptable harness score" },
-        },
-      },
-    },
-    async (args: any) => {
-      const p = path.resolve(args?.path || resolvedDir);
-      return await evaluateCompositeHarness(p, {
-        threshold: typeof args?.threshold === "number" ? args.threshold : 80,
-      });
-    }
-  );
+  // Register canonical tools
+  registerMatryoshkaTools(server, resolvedDir);
 
   // Resource 1: matryoshka://agents
   server.registerResource(

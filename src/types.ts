@@ -529,6 +529,28 @@ export interface McpToolDefinition {
   inputSchema: McpToolInputSchema;
 }
 
+export interface DetectStackToolArgs {
+  path?: string;
+}
+
+export interface ScanHarnessToolArgs {
+  path?: string;
+}
+
+export interface GenerateAgentsToolArgs {
+  path?: string;
+  force?: boolean;
+  dryRun?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface WrapContextToolArgs {
+  path?: string;
+  threshold?: number;
+  strict?: boolean;
+}
+
 export interface McpToolContentItem {
   type: "text" | "image" | "resource";
   text?: string;

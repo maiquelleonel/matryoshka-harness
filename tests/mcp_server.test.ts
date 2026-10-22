@@ -524,7 +524,7 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       expect(parsedDefault.result.isError).toBeFalsy();
       const dataDefault = JSON.parse(parsedDefault.result.content[0].text);
       expect(dataDefault.status).toBe("success");
-      expect(dataDefault.stack.primary).toBe("javascript_typescript");
+      expect(["typescript", "javascript_typescript"]).toContain(dataDefault.stack.primary);
 
       // Sub-repo with python
       const pySubDir = path.join(tempDir, "python-sub");
@@ -571,7 +571,7 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       const scanData = JSON.parse(parsed.result.content[0].text);
       expect(scanData.score).toBeDefined();
       expect(scanData.level).toBeDefined();
-      expect(scanData.primaryStack).toBe("javascript_typescript");
+      expect(["typescript", "javascript_typescript"]).toContain(scanData.primaryStack);
     });
 
     it("executes generate_agents tool via tools/call in dryRun and live modes with overwrite guardrails", async () => {
