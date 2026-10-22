@@ -1,7 +1,7 @@
 # 📐 SPEC-11: feat(ast): polyglot tree-sitter wasm engine and canonical baba wrap
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 4: `DIAGNOSTIC.md` & JSON Report Compilers)  
+**Status:** in_progress (Subtask 5: CLI Subcommand Integration, Guardrails & Strict Mode)  
 **Gatilho:** Issue #11  
 **Target:** Bun + TypeScript + WebAssembly (WASM)  
 
@@ -203,6 +203,23 @@ export interface DiagnosticWriteResult {
 - `writeDiagnosticReport(projectPath: string, result: Harness2EvaluationResult, options?: DiagnosticWriteOptions): Promise<DiagnosticWriteResult>`
 - `inspectDiagnosticTokenBudget(content: string, maxTokens?: number): { tokenCount: number; maxTokens: number; withinBudget: boolean; exceededBy: number }`
 
+### 2.11 Contratos de Integração do CLI Subcommand & Strict Mode (Subtask 5)
+
+```typescript
+export interface WrapCliOptions {
+  outputPath?: string;           // Custom output path (default: ./DIAGNOSTIC.md)
+  strict?: boolean;              // Exit 1 if composite score < threshold or critical violations
+  threshold?: number;            // Minimum acceptable Harness² composite score (default: 80)
+  dryRun?: boolean;              // Simulate execution without modifying files on disk
+  json?: boolean;                // Output strictly valid JSON to stdout
+  maxFileSizeKb?: number;        // Maximum file size in KB to parse for AST traversal (default: 500)
+}
+```
+
+### 2.12 Funções Canônicas do CLI & Human Output (Subtask 5)
+- `formatWrapHumanOutput(result: Harness2EvaluationResult, writeResult: DiagnosticWriteResult): string`
+- `runCli(args?: string[]): Promise<void>` (com integração canônica do subcomando `wrap` e aliases `baba`, `bbyg`, `matryoshka`)
+
 ---
 
 ## 🎯 1. Objetivo & Escopo
@@ -212,8 +229,8 @@ Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polygl
 - **Subtask 1 (Concluída):** Polyglot AST Walker & Tree-sitter WASM Engine
 - **Subtask 2 (Concluída):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
 - **Subtask 3 (Concluída):** Harness² Composite Scorer & Gap Aggregator
-- **Subtask 4 (Ativa):** `DIAGNOSTIC.md` & JSON Report Compilers
-- **Subtask 5:** CLI Subcommand Integration, Guardrails & Strict Mode
+- **Subtask 4 (Concluída):** `DIAGNOSTIC.md` & JSON Report Compilers
+- **Subtask 5 (Ativa):** CLI Subcommand Integration, Guardrails & Strict Mode
 
 ---
 
@@ -494,6 +511,53 @@ Feature: DIAGNOSTIC.md & JSON Report Compilers (SPEC-11 Subtask 4)
     Given an output path attempting directory traversal outside the target
     When writeDiagnosticReport is invoked
     Then it rejects or normalizes the path safely without unauthorized escapes
+
+Feature: CLI Subcommand Integration, Guardrails & Strict Mode (SPEC-11 Subtask 5)
+
+  Scenario: Successfully detect unparameterized SQL query and generate DIAGNOSTIC.md
+    Given a project containing a TypeScript file with an unparameterized SQL query
+    When the user runs "baba wrap"
+    Then the command should exit with code 0
+    And a file named "DIAGNOSTIC.md" should be created in the project root
+    And the file should contain "Unparameterized SQL Query"
+    And the file should cite the exact file and line number
+    And the file should include a step-by-step remediation plan
+
+  Scenario: Output structured JSON for automated CI pipelines
+    Given a project with 1 critical AST violation
+    When the user runs "baba wrap --json"
+    Then stdout should contain valid JSON
+    And the JSON should have "harnessScore", "violations", and "summary" keys
+    And no "DIAGNOSTIC.md" should be created if "--dry-run" is also passed
+
+  Scenario: Enforce CI quality gate with strict mode on score below threshold
+    Given a project with a Harness² score of 72
+    When the user runs "baba wrap --strict --threshold 80"
+    Then the command should exit with code 1
+    And stderr or stdout should display the threshold violation message
+
+  Scenario: Enforce CI quality gate with strict mode on critical AST violations
+    Given a project with a Harness² score above threshold but containing a critical SQL injection
+    When the user runs "baba wrap --strict"
+    Then the command should exit with code 1
+    And stderr or stdout should display the critical violation message
+
+  Scenario: Pass strict mode when clean repository satisfies threshold
+    Given a clean repository with score >= threshold and zero critical violations
+    When the user runs "baba wrap --strict"
+    Then the command should exit with code 0
+
+  Scenario: Custom report output path and path traversal protection
+    Given a project and a custom output path flag "--output custom/report.md"
+    When the user runs "baba wrap --output custom/report.md"
+    Then the report should be created at the designated custom path
+    And directory traversal outside target path should be sanitized
+
+  Scenario: Strict CLI alias parity across baba, bbyg, and matryoshka for wrap
+    Given an identical project scanned via baba wrap, bbyg wrap, and matryoshka wrap
+    When each alias command is executed with --json
+    Then all three outputs should produce byte-identical JSON structure and scores
+
 ```
 
 ---
@@ -524,3 +588,5 @@ Feature: DIAGNOSTIC.md & JSON Report Compilers (SPEC-11 Subtask 4)
 - `tests/ast_engine.test.ts`
 - `tests/composite_scorer.test.ts`
 - `tests/diagnostic_compiler.test.ts`
+- `tests/wrap_cli.test.ts`
+- `src/cli.ts`
