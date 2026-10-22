@@ -252,4 +252,91 @@ export interface AstRuleSuiteResult {
   executionTimeMs: number;
 }
 
+export interface AstDeductionPenalties {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface Harness2Weights {
+  oracleWeight: number;
+  astWeight: number;
+}
+
+export interface CompositeScorerOptions {
+  weights?: Partial<Harness2Weights>;
+  penalties?: Partial<AstDeductionPenalties>;
+  threshold?: number;
+  normalizeOracleScore?: boolean;
+}
+
+export interface AstHealthBreakdown {
+  score: number;
+  totalDeductions: number;
+  violationsCount: number;
+  bySeverity: Record<AstViolationSeverity, number>;
+  penaltiesApplied: Record<AstViolationSeverity, number>;
+}
+
+export interface OracleScoreBreakdown {
+  rawScore: number;
+  maxScore: number;
+  normalizedScore: number;
+  level: MaturityLevel;
+  source: "subprocess" | "fallback";
+  totalGaps: number;
+}
+
+export interface SurgicalActionItem {
+  id: string;
+  source: "ast" | "oracle";
+  severity: AstViolationSeverity;
+  title: string;
+  description?: string;
+  target?: string;
+  action: string;
+  remediation?: string;
+}
+
+export interface AggregatedGapsResult {
+  totalCount: number;
+  astViolationsCount: number;
+  oracleGapsCount: number;
+  hasCriticalViolations: boolean;
+  bySeverity: Record<AstViolationSeverity, number>;
+  byRule: Record<string, number>;
+  byAxis: Record<GovernanceAxis, number>;
+  actionPlan: SurgicalActionItem[];
+}
+
+export interface CompositeScoreResult {
+  compositeScore: number;
+  status: "PASS" | "NEEDS_REMEDIATION";
+  threshold: number;
+  passedThreshold: boolean;
+  hasCriticalViolations: boolean;
+  passedStrict: boolean;
+  oracle: OracleScoreBreakdown;
+  ast: AstHealthBreakdown;
+  aggregatedGaps: AggregatedGapsResult;
+  executionTimeMs: number;
+}
+
+export interface CompositeEvaluationOptions extends CompositeScorerOptions {
+  cwd?: string;
+  oracleOptions?: HarnessScoreOptions;
+  astOptions?: AstWalkerOptions;
+  ruleOptions?: AstRuleSuiteOptions;
+}
+
+export interface Harness2EvaluationResult extends CompositeScoreResult {
+  projectPath: string;
+  totalFilesAnalyzed: number;
+  languagesCount: Record<AstLanguage, number>;
+  skippedFilesCount: number;
+  timestamp: string;
+}
+
+
 
