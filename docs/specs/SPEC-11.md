@@ -1,7 +1,7 @@
 # 📐 SPEC-11: feat(ast): polyglot tree-sitter wasm engine and canonical baba wrap
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 1: Polyglot AST Walker & Tree-sitter WASM Engine)  
+**Status:** in_progress (Subtask 2: Contextual AST Antipattern Rule Suite)  
 **Gatilho:** Issue #11  
 **Target:** Bun + TypeScript + WebAssembly (WASM)  
 
@@ -11,8 +11,8 @@
 Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polyglot AST Engine powered by WebAssembly (WASM) and the canonical `baba wrap` (`matryoshka wrap`, `bbyg wrap`) command. Refer to PRD: `docs/prds/PRD_POLYGLOT_AST_AND_BABA_WRAP.md`
 
 ### 1.1 Escopo das Subtasks
-- **Subtask 1 (Ativa):** Polyglot AST Walker & Tree-sitter WASM Engine
-- **Subtask 2:** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
+- **Subtask 1 (Concluída):** Polyglot AST Walker & Tree-sitter WASM Engine
+- **Subtask 2 (Ativa):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
 - **Subtask 3:** Harness² Composite Scorer & Gap Aggregator
 - **Subtask 4:** `DIAGNOSTIC.md` & JSON Report Compilers
 - **Subtask 5:** CLI Subcommand Integration, Guardrails & Strict Mode
@@ -88,13 +88,78 @@ export interface AstWalkResult {
 }
 ```
 
-### 2.4 Funções Canônicas
+### 2.4 Funções Canônicas (Subtask 1)
 - `detectFileLanguage(filePath: string): AstLanguage | null`
 - `isBinaryContent(buffer: Buffer | Uint8Array): boolean`
 - `isIgnoredFile(relativePath: string, customPatterns?: string[], gitignorePatterns?: string[]): boolean`
 - `parseSource(source: string, language: AstLanguage, options?: AstWalkerOptions): ParsedFileAst`
 - `parseFile(filePath: string, options?: AstWalkerOptions): Promise<ParsedFileAst>`
 - `walkCodebase(projectPath: string, options?: AstWalkerOptions): Promise<AstWalkResult>`
+
+### 2.5 Contratos de Violação e Regras AST (Subtask 2)
+```typescript
+export type AstViolationSeverity = "critical" | "high" | "medium" | "low";
+
+export interface AstViolation {
+  id: string;
+  ruleId: string;
+  severity: AstViolationSeverity;
+  message: string;
+  filePath: string;
+  relativePath: string;
+  line: number;      // 1-based line number
+  column: number;    // 1-based column number
+  nodeType: string;
+  codeSnippet: string;
+  remediation: string;
+}
+
+export interface AstRuleContext {
+  file: ParsedFileAst;
+  allFiles?: ParsedFileAst[];
+}
+
+export interface AstRule {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly defaultSeverity: AstViolationSeverity;
+  check(context: AstRuleContext): AstViolation[];
+}
+
+export interface AstRuleSuiteOptions {
+  rules?: AstRule[];
+  disabledRuleIds?: string[];
+  severityOverrides?: Partial<Record<string, AstViolationSeverity>>;
+  minSeverity?: AstViolationSeverity;
+}
+
+export interface AstRuleSuiteResult {
+  totalViolations: number;
+  violations: AstViolation[];
+  bySeverity: Record<AstViolationSeverity, number>;
+  byRule: Record<string, number>;
+  scannedFilesCount: number;
+  cleanFilesCount: number;
+  executionTimeMs: number;
+}
+```
+
+### 2.6 Regras Canônicas da Suite (Subtask 2)
+1. **`SqlInterpolationRule` (`sql-interpolation`):**
+   - Detecta interpolação de strings em queries de banco de dados (`db.query`, `cursor.execute`, `fmt.Sprintf`, template literals e f-strings com declarações SQL `SELECT`, `INSERT`, `UPDATE`, `DELETE`, etc.).
+   - Severidade: `critical`.
+   - Remediação: Parâmetros vinculados / queries parametrizadas.
+2. **`AssertionlessTestRule` (`assertionless-test`):**
+   - Detecta blocos de testes (`it`, `test`, `def test_*`, `func Test*`, `#[test] fn *`) sem asserções (`expect`, `assert`, `t.Fatal`, etc.) ou corpos de teste vazios.
+   - Severidade: `high`.
+   - Remediação: Adicionar ao menos uma asserção explícita.
+3. **`HardcodedCredentialRule` (`hardcoded-credential`):**
+   - Detecta variáveis e constantes contendo credenciais sensíveis (`api_key`, `secret`, `token`, `password`) atribuídas a literais de string em claro ou tokens de alta entropia / prefixos conhecidos (`sk_live_`, `ghp_`, `AKIA`, etc.).
+   - Severidade: `critical`.
+   - Remediação: Extrair credenciais para variáveis de ambiente (`process.env`, `os.environ`).
+4. **`AstRuleSuite` & `runAstRules`:**
+   - Orquestrador e agregador de violações com filtragem por severidade e medição de tempo de execução.
 
 ---
 
@@ -135,6 +200,32 @@ Feature: Polyglot AST Walker & Tree-sitter WASM Engine (SPEC-11 Subtask 1)
     Given an identical project structure scanned multiple times
     When walkCodebase is called repeatedly
     Then the scannedFiles order is byte-for-byte identical and deterministic
+
+Feature: Contextual AST Antipattern Rule Suite (SPEC-11 Subtask 2)
+
+  Scenario: Detecting SQL interpolation across polyglot files
+    Given source files in TypeScript, Python, or Go containing unparameterized SQL dynamic queries
+    When SqlInterpolationRule is executed on the parsed AST
+    Then it flags violations with severity "critical"
+    And provides 1-based line/col, nodeType, snippet, and parameterized remediation guidance
+
+  Scenario: Detecting assertionless and empty test cases
+    Given test files containing test blocks (test, it, def test_*, func Test*) without assertions or expectations
+    When AssertionlessTestRule is executed on the parsed AST
+    Then it flags violations with severity "high"
+    And ignores tests containing valid assertions (expect, assert, t.Fatal)
+
+  Scenario: Detecting hardcoded credentials and high-entropy secrets
+    Given source files with variable declarations containing sensitive names (api_key, secret, password) or known token prefixes
+    When HardcodedCredentialRule is executed on the parsed AST
+    Then it flags violations with severity "critical"
+    And ignores environment variable reads (process.env, os.getenv) and empty strings
+
+  Scenario: Aggregating violations across multiple files and rules via AstRuleSuite
+    Given a set of parsed polyglot files with various AST antipatterns
+    When AstRuleSuite.run is executed
+    Then it returns a deterministic AstRuleSuiteResult with total count, bySeverity, and byRule aggregates
+    And supports disabledRuleIds and minSeverity filtering
 ```
 
 ---
@@ -156,5 +247,7 @@ Feature: Polyglot AST Walker & Tree-sitter WASM Engine (SPEC-11 Subtask 1)
 - `docs/specs/SPEC-11.md`
 - `src/types.ts`
 - `src/ast.ts`
+- `src/rules.ts`
 - `index.ts`
+- `tests/ast_rules.test.ts`
 - `tests/ast_engine.test.ts`
