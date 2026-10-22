@@ -24,6 +24,7 @@ import {
   type McpServerOptions,
   type McpToolDefinition,
   type ProjectStack,
+  type StderrLoggingGuardOptions,
 } from "./types";
 
 export const DETECT_STACK_TOOL_DEFINITION: McpToolDefinition = {
@@ -197,11 +198,48 @@ export {
   type McpServerInfo,
   type McpServerOptions,
   type McpToolDefinition,
+  type StderrLoggingGuardOptions,
 };
+
+/**
+ * Installs a guard on console methods (log, info, warn, debug) redirecting all standard output
+ * to stderr so that stdout remains 100% clean for JSON-RPC MCP messages.
+ */
+export function installStderrLoggingGuard(
+  options: StderrLoggingGuardOptions = {}
+): () => void {
+  const targetStderr = options.stderr || process.stderr;
+  const prefix = options.prefix ?? "[matryoshka-mcp]";
+
+  const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalWarn = console.warn;
+  const originalDebug = console.debug;
+
+  const redirect = (level: string, ...args: any[]) => {
+    const msg = args
+      .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+      .join(" ");
+    targetStderr.write(`${prefix} [${level}] ${msg}\n`);
+  };
+
+  console.log = (...args: any[]) => redirect("info", ...args);
+  console.info = (...args: any[]) => redirect("info", ...args);
+  console.warn = (...args: any[]) => redirect("warn", ...args);
+  console.debug = (...args: any[]) => redirect("debug", ...args);
+
+  return () => {
+    console.log = originalLog;
+    console.info = originalInfo;
+    console.warn = originalWarn;
+    console.debug = originalDebug;
+  };
+}
 
 export class McpServer {
   public serverInfo: McpServerInfo;
   public capabilities: Record<string, any>;
+  public rootDir: string;
   private methods = new Map<string, (params: any) => Promise<any> | any>();
   private tools = new Map<
     string,
@@ -222,6 +260,7 @@ export class McpServer {
       name: "matryoshka-mcp",
       version: "0.1.0",
     };
+    this.rootDir = path.resolve(options.rootDir || options.projectPath || process.cwd());
     this.capabilities = options.capabilities || {
       tools: {},
       resources: {},
@@ -333,6 +372,7 @@ export class McpServer {
     try {
       payload = JSON.parse(trimmed);
     } catch {
+      this.log("error", "Parse error: Invalid JSON payload");
       return JSON.stringify({
         jsonrpc: "2.0",
         id: null,
@@ -351,6 +391,7 @@ export class McpServer {
       payload.jsonrpc !== "2.0" ||
       typeof payload.method !== "string"
     ) {
+      this.log("warn", "Invalid Request: expected JSON-RPC 2.0 object with valid method");
       const msgId =
         payload &&
         typeof payload === "object" &&
@@ -409,6 +450,7 @@ export class McpServer {
     // Built-in MCP handlers
     switch (method) {
       case "initialize": {
+        this.log("info", `Client initialized (method: initialize, protocol: ${params?.protocolVersion || MCP_PROTOCOL_VERSION})`);
         return JSON.stringify({
           jsonrpc: "2.0",
           id,
@@ -421,6 +463,7 @@ export class McpServer {
       }
 
       case "ping": {
+        this.log("debug", "Received ping request");
         return JSON.stringify({
           jsonrpc: "2.0",
           id,
@@ -429,6 +472,7 @@ export class McpServer {
       }
 
       case "tools/list": {
+        this.log("info", "Listing registered tools");
         const toolsList = Array.from(this.tools.values()).map((t) => t.definition);
         return JSON.stringify({
           jsonrpc: "2.0",
@@ -463,6 +507,8 @@ export class McpServer {
             },
           });
         }
+
+        this.log("info", `Dispatching tool call: ${toolName}`);
 
         if (
           params.arguments !== undefined &&
@@ -548,6 +594,7 @@ export class McpServer {
       }
 
       case "resources/list": {
+        this.log("info", "Listing registered resources");
         const resourcesList = Array.from(this.resources.values()).map(
           (r) => r.definition
         );
@@ -594,6 +641,8 @@ export class McpServer {
           });
         }
 
+        this.log("info", `Reading resource: ${uri}`);
+
         const resource = this.resources.get(uri);
         if (!resource) {
           return JSON.stringify({
@@ -634,6 +683,7 @@ export class McpServer {
       }
 
       case "prompts/list": {
+        this.log("info", "Listing registered prompts");
         const promptsList = Array.from(this.prompts.values()).map(
           (p) => p.definition
         );
@@ -669,6 +719,8 @@ export class McpServer {
             },
           });
         }
+
+        this.log("info", `Getting prompt: ${promptName}`);
 
         if (
           params.arguments !== undefined &&
@@ -739,6 +791,12 @@ export class McpServer {
     const outStream: NodeJS.WritableStream = streams?.out || process.stdout;
     this.activeStderr = streams?.err || process.stderr;
 
+    const uninstallGuard = installStderrLoggingGuard({
+      stderr: this.activeStderr,
+    });
+
+    this.log("info", `Matryoshka MCP server listening on stdio (root: ${this.rootDir})`);
+
     let active = true;
     let buffer = "";
 
@@ -775,6 +833,7 @@ export class McpServer {
 
     const stop = () => {
       active = false;
+      uninstallGuard();
       if (typeof (inStream as any).off === "function") {
         (inStream as any).off("data", onData);
         (inStream as any).off("end", onEnd);
@@ -927,6 +986,7 @@ export function registerMatryoshkaPrompts(
 export function createMatryoshkaMcpServer(targetDir: string = process.cwd()): McpServer {
   const resolvedDir = path.resolve(targetDir);
   const server = new McpServer({
+    rootDir: resolvedDir,
     serverInfo: {
       name: "matryoshka-mcp",
       version: "0.1.0",

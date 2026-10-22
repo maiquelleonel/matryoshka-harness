@@ -621,10 +621,16 @@ export interface McpPromptsListResult {
   prompts: McpPromptDefinition[];
 }
 
+export interface StderrLoggingGuardOptions {
+  stderr?: NodeJS.WritableStream;
+  prefix?: string;
+}
+
 export interface McpServerOptions {
   serverInfo?: McpServerInfo;
   instructions?: string;
   projectPath?: string;
+  rootDir?: string;
   capabilities?: {
     tools?: Record<string, any>;
     resources?: Record<string, any>;

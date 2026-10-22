@@ -81,7 +81,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     process.exit(0);
   }
 
-  if (isHelp || args.length === 0) {
+  if (args.length === 0 || (isHelp && !(args[0] === "mcp" && args[1] === "serve"))) {
     console.log(HELP_TEXT);
     process.exit(0);
   }
@@ -654,11 +654,27 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const [subcommand, ...mcpArgs] = rest;
 
       if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
-        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp wire [path] [--dry-run] [--json]"));
+        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]"));
         process.exit(1);
       }
 
       if (subcommand === "serve") {
+        if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
+          console.log(`
+Usage: baba mcp serve [path]
+
+Start native Model Context Protocol (MCP) server over stdio for AI coding agents.
+
+Arguments:
+  [path]   Root repository path to serve (defaults to current working directory)
+
+Stream Guarantees:
+  stdout   Strictly reserved for newline-delimited JSON-RPC 2.0 protocol messages
+  stderr   Diagnostic telemetry, startup notices, and logging
+`.trim());
+          process.exit(0);
+        }
+
         const positional = mcpArgs.filter((arg) => !arg.startsWith("-"));
         const targetDir = positional[0] || process.cwd();
         const resolvedPath = path.resolve(targetDir);
@@ -671,7 +687,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       if (subcommand !== "wire") {
         console.error(
           pc.red(
-            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp wire [path] [--dry-run] [--json]`
+            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]`
           )
         );
         process.exit(1);
