@@ -1,7 +1,7 @@
 # 📐 SPEC-11: feat(ast): polyglot tree-sitter wasm engine and canonical baba wrap
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 3: Harness² Composite Scorer & Gap Aggregator)  
+**Status:** in_progress (Subtask 4: `DIAGNOSTIC.md` & JSON Report Compilers)  
 **Gatilho:** Issue #11  
 **Target:** Bun + TypeScript + WebAssembly (WASM)  
 
@@ -103,6 +103,106 @@ export interface Harness2EvaluationResult extends CompositeScoreResult {
 - `evaluateCompositeHarness(projectPath: string, options?: CompositeEvaluationOptions): Promise<Harness2EvaluationResult>`
 - `class Harness2Scorer` (Orquestrador integrado de pontuação e agregação)
 
+### 2.9 Contratos de Compilação de Relatórios e Diagnóstico (Subtask 4)
+
+```typescript
+export interface DiagnosticCompilerOptions {
+  maxTokens?: number;            // default: 1500 (MAX_DIAGNOSTIC_TOKENS)
+  includeSnippets?: boolean;      // default: true
+  truncateOnBudget?: boolean;     // default: true
+  remediationCommand?: string;    // default: "baba wrap --strict"
+}
+
+export interface WrapJsonSummary {
+  compositeScore: number;
+  composite_score: number;
+  status: "PASS" | "NEEDS_REMEDIATION";
+  threshold: number;
+  passedThreshold: boolean;
+  passed_threshold: boolean;
+  hasCriticalViolations: boolean;
+  has_critical_violations: boolean;
+  passedStrict: boolean;
+  passed_strict: boolean;
+  oracleScore: number;
+  oracle_score: number;
+  astScore: number;
+  ast_score: number;
+  totalFilesAnalyzed: number;
+  total_files_analyzed: number;
+  languagesCount: Record<AstLanguage, number>;
+  languages_count: Record<AstLanguage, number>;
+  totalViolations: number;
+  total_violations: number;
+  bySeverity: Record<AstViolationSeverity, number>;
+  by_severity: Record<AstViolationSeverity, number>;
+  executionTimeMs: number;
+  execution_time_ms: number;
+}
+
+export interface FormattedAstViolation {
+  id: string;
+  ruleId: string;
+  rule_id: string;
+  severity: AstViolationSeverity;
+  message: string;
+  filePath: string;
+  file_path: string;
+  relativePath: string;
+  relative_path: string;
+  line: number;
+  column: number;
+  nodeType: string;
+  node_type: string;
+  codeSnippet: string;
+  code_snippet: string;
+  remediation: string;
+}
+
+export interface WrapJsonReport {
+  status: "success" | "remediation_needed";
+  command: "wrap";
+  harnessScore: number;
+  harness_score: number;
+  compositeScore: number;
+  composite_score: number;
+  projectPath: string;
+  project_path: string;
+  timestamp: string;
+  summary: WrapJsonSummary;
+  violations: FormattedAstViolation[];
+  actionPlan: SurgicalActionItem[];
+  action_plan: SurgicalActionItem[];
+  oracle: OracleScoreBreakdown;
+  ast: AstHealthBreakdown;
+  reportPath?: string;
+  report_path?: string;
+  written?: boolean;
+}
+
+export interface DiagnosticWriteOptions {
+  outputPath?: string;           // default: "./DIAGNOSTIC.md"
+  dryRun?: boolean;              // default: false
+  atomic?: boolean;              // default: true
+  compilerOptions?: DiagnosticCompilerOptions;
+}
+
+export interface DiagnosticWriteResult {
+  reportPath: string;
+  written: boolean;
+  content: string;
+  tokenCount: number;
+  isWithinBudget: boolean;
+  dryRun: boolean;
+}
+```
+
+### 2.10 Funções Canônicas de Relatórios (Subtask 4)
+- `compileDiagnosticMarkdown(result: Harness2EvaluationResult, options?: DiagnosticCompilerOptions): string`
+- `formatWrapJsonOutput(result: Harness2EvaluationResult, options?: { reportPath?: string; written?: boolean }): WrapJsonReport`
+- `writeDiagnosticReport(projectPath: string, result: Harness2EvaluationResult, options?: DiagnosticWriteOptions): Promise<DiagnosticWriteResult>`
+- `inspectDiagnosticTokenBudget(content: string, maxTokens?: number): { tokenCount: number; maxTokens: number; withinBudget: boolean; exceededBy: number }`
+
 ---
 
 ## 🎯 1. Objetivo & Escopo
@@ -112,7 +212,7 @@ Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polygl
 - **Subtask 1 (Concluída):** Polyglot AST Walker & Tree-sitter WASM Engine
 - **Subtask 2 (Concluída):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
 - **Subtask 3 (Concluída):** Harness² Composite Scorer & Gap Aggregator
-- **Subtask 4:** `DIAGNOSTIC.md` & JSON Report Compilers
+- **Subtask 4 (Ativa):** `DIAGNOSTIC.md` & JSON Report Compilers
 - **Subtask 5:** CLI Subcommand Integration, Guardrails & Strict Mode
 
 ---
@@ -356,6 +456,44 @@ Feature: Harness² Composite Scorer & Gap Aggregator (SPEC-11 Subtask 3)
     When evaluateCompositeHarness is executed
     Then it orchestrates stack detection, oracle scan (with fallback), AST walker, and rule suite
     And returns complete Harness2EvaluationResult with timing metrics and deterministic output
+
+Feature: DIAGNOSTIC.md & JSON Report Compilers (SPEC-11 Subtask 4)
+
+  Scenario: Compiling deterministic DIAGNOSTIC.md report
+    Given a Harness2EvaluationResult with AST violations and Oracle gaps
+    When compileDiagnosticMarkdown is executed
+    Then it compiles valid markdown with Score Breakdown, Detected AST Violations, and Surgical Action Plan
+    And includes exact file citations, line numbers, node types, and remediation guidance
+    And appends "Re-run baba wrap --strict to verify remediation" as the final action step
+
+  Scenario: Clean repository DIAGNOSTIC.md report
+    Given a Harness2EvaluationResult with 100 composite score and zero violations
+    When compileDiagnosticMarkdown is executed
+    Then it renders status PASS and explicitly indicates no violations were detected
+    And marks action plan complete with continuous compliance recommendation
+
+  Scenario: Structured JSON serialization for CI pipelines
+    Given a Harness2EvaluationResult
+    When formatWrapJsonOutput is called
+    Then it produces structured JSON with "harnessScore", "violations", and "summary" keys
+    And provides dual-case compatibility (camelCase and snake_case) across all fields
+
+  Scenario: Token Budget Guardrail (< 1500 tokens)
+    Given an evaluation result with many AST violations
+    When compileDiagnosticMarkdown is executed
+    Then the generated Markdown strictly respects the 1500 token ceiling
+    And truncates gracefully with an explanatory note directing users to --json
+
+  Scenario: Atomic file persistence and dry-run guardrails
+    Given a target output path for DIAGNOSTIC.md
+    When writeDiagnosticReport is called with dryRun: false
+    Then it writes atomically via a temporary file (.tmp) before renaming
+    And when called with dryRun: true, it writes no files to disk and returns dryRun: true
+
+  Scenario: Path traversal protection
+    Given an output path attempting directory traversal outside the target
+    When writeDiagnosticReport is invoked
+    Then it rejects or normalizes the path safely without unauthorized escapes
 ```
 
 ---
@@ -379,8 +517,10 @@ Feature: Harness² Composite Scorer & Gap Aggregator (SPEC-11 Subtask 3)
 - `src/ast.ts`
 - `src/rules.ts`
 - `src/scorer.ts`
+- `src/report.ts`
 - `src/core/oracle.ts`
 - `index.ts`
 - `tests/ast_rules.test.ts`
 - `tests/ast_engine.test.ts`
 - `tests/composite_scorer.test.ts`
+- `tests/diagnostic_compiler.test.ts`
