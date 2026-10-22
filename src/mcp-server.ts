@@ -16,6 +16,7 @@ import {
   type ScanHarnessToolArgs,
   type GenerateAgentsToolArgs,
   type WrapContextToolArgs,
+  type AuditRepositoryPromptArgs,
   type McpPromptArgument,
   type McpPromptDefinition,
   type McpResourceDefinition,
@@ -119,6 +120,65 @@ export const MATRYOSHKA_TOOL_NAMES = [
   "wrap_context",
 ] as const;
 
+export const AGENTS_RESOURCE_DEFINITION: McpResourceDefinition = {
+  uri: "matryoshka://agents",
+  name: "Current Compiled AGENTS.md",
+  description: "Exposes currently compiled AGENTS.md",
+  mimeType: "text/markdown",
+};
+
+export const DIAGNOSTIC_RESOURCE_DEFINITION: McpResourceDefinition = {
+  uri: "matryoshka://diagnostic",
+  name: "Latest DIAGNOSTIC.md Report",
+  description: "Exposes latest DIAGNOSTIC.md",
+  mimeType: "text/markdown",
+};
+
+export const MATRYOSHKA_MCP_RESOURCES: McpResourceDefinition[] = [
+  AGENTS_RESOURCE_DEFINITION,
+  DIAGNOSTIC_RESOURCE_DEFINITION,
+];
+
+export const MATRYOSHKA_RESOURCE_URIS = [
+  "matryoshka://agents",
+  "matryoshka://diagnostic",
+] as const;
+
+export const AUDIT_REPOSITORY_PROMPT_DEFINITION: McpPromptDefinition = {
+  name: "audit_repository",
+  description: "Guided system prompt for an agent to inspect and remediate repository harness score",
+  arguments: [
+    {
+      name: "targetDir",
+      description: "Path to repository to audit (defaults to server root)",
+      required: false,
+    },
+    {
+      name: "path",
+      description: "Alias for targetDir",
+      required: false,
+    },
+    {
+      name: "strict",
+      description: "Enforce strict zero-critical-violations quality gate",
+      required: false,
+    },
+    {
+      name: "threshold",
+      description: "Minimum acceptable harness score (default: 80)",
+      required: false,
+    },
+  ],
+};
+
+export const MATRYOSHKA_MCP_PROMPTS: McpPromptDefinition[] = [
+  AUDIT_REPOSITORY_PROMPT_DEFINITION,
+];
+
+export const MATRYOSHKA_PROMPT_NAMES = [
+  "audit_repository",
+] as const;
+
 export {
   JSONRPC_PARSE_ERROR,
   JSONRPC_INVALID_REQUEST,
@@ -130,6 +190,7 @@ export {
   type ScanHarnessToolArgs,
   type GenerateAgentsToolArgs,
   type WrapContextToolArgs,
+  type AuditRepositoryPromptArgs,
   type McpPromptArgument,
   type McpPromptDefinition,
   type McpResourceDefinition,
@@ -499,8 +560,29 @@ export class McpServer {
         });
       }
 
+      case "resources/templates/list": {
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            resourceTemplates: [],
+          },
+        });
+      }
+
       case "resources/read": {
-        const uri = params?.uri;
+        if (!params || typeof params !== "object" || Array.isArray(params)) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: params must be an object",
+            },
+          });
+        }
+
+        const uri = params.uri;
         if (!uri || typeof uri !== "string") {
           return JSON.stringify({
             jsonrpc: "2.0",
@@ -565,7 +647,18 @@ export class McpServer {
       }
 
       case "prompts/get": {
-        const promptName = params?.name;
+        if (!params || typeof params !== "object" || Array.isArray(params)) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: params must be an object",
+            },
+          });
+        }
+
+        const promptName = params.name;
         if (!promptName || typeof promptName !== "string") {
           return JSON.stringify({
             jsonrpc: "2.0",
@@ -573,6 +666,22 @@ export class McpServer {
             error: {
               code: JSONRPC_INVALID_PARAMS,
               message: "Invalid params: 'name' is required for prompts/get",
+            },
+          });
+        }
+
+        if (
+          params.arguments !== undefined &&
+          (typeof params.arguments !== "object" ||
+            params.arguments === null ||
+            Array.isArray(params.arguments))
+        ) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: 'arguments' must be an object",
             },
           });
         }
@@ -745,6 +854,73 @@ export function registerMatryoshkaTools(
 }
 
 /**
+ * Registers canonical Matryoshka resources (matryoshka://agents, matryoshka://diagnostic).
+ */
+export function registerMatryoshkaResources(
+  server: McpServer,
+  targetDir: string = process.cwd()
+): void {
+  const resolvedDir = path.resolve(targetDir);
+
+  // Resource 1: matryoshka://agents
+  server.registerResource(AGENTS_RESOURCE_DEFINITION, async () => {
+    const filePath = path.join(resolvedDir, "AGENTS.md");
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, "utf-8");
+    }
+    return "# AGENTS.md\n(No AGENTS.md compiled yet)";
+  });
+
+  // Resource 2: matryoshka://diagnostic
+  server.registerResource(DIAGNOSTIC_RESOURCE_DEFINITION, async () => {
+    const filePath = path.join(resolvedDir, "DIAGNOSTIC.md");
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, "utf-8");
+    }
+    return "# DIAGNOSTIC.md\n(No DIAGNOSTIC.md generated yet)";
+  });
+}
+
+/**
+ * Registers canonical Matryoshka prompts (audit_repository).
+ */
+export function registerMatryoshkaPrompts(
+  server: McpServer,
+  targetDir: string = process.cwd()
+): void {
+  const resolvedDir = path.resolve(targetDir);
+
+  // Prompt: audit_repository
+  server.registerPrompt(AUDIT_REPOSITORY_PROMPT_DEFINITION, async (args: any) => {
+    const p = path.resolve(args?.targetDir || args?.path || resolvedDir);
+    const strictMode = Boolean(args?.strict);
+    const threshold = typeof args?.threshold === "number" ? args.threshold : 80;
+
+    let text = `Please audit the repository at "${p}". First run detect_stack to understand project archetype, test runners and language idioms. Then run scan_harness and wrap_context to discover harness gaps and contextual AST vulnerabilities.`;
+    if (strictMode) {
+      text += ` Enforce strict mode with zero critical violations permitted.`;
+    }
+    if (threshold !== 80) {
+      text += ` The minimum acceptable harness score threshold is ${threshold}.`;
+    }
+    text += ` Finally remediate identified critical issues and generate clean AGENTS.md and modular skills using generate_agents.`;
+
+    return {
+      description: AUDIT_REPOSITORY_PROMPT_DEFINITION.description,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text,
+          },
+        },
+      ],
+    };
+  });
+}
+
+/**
  * Creates and initializes a Native Matryoshka MCP Server instance with all tools,
  * resources, and prompts registered.
  */
@@ -762,72 +938,10 @@ export function createMatryoshkaMcpServer(targetDir: string = process.cwd()): Mc
     },
   });
 
-  // Register canonical tools
+  // Register canonical tools, resources, and prompts
   registerMatryoshkaTools(server, resolvedDir);
-
-  // Resource 1: matryoshka://agents
-  server.registerResource(
-    {
-      uri: "matryoshka://agents",
-      name: "Current Compiled AGENTS.md",
-      description: "Exposes currently compiled AGENTS.md",
-      mimeType: "text/markdown",
-    },
-    async () => {
-      const filePath = path.join(resolvedDir, "AGENTS.md");
-      if (fs.existsSync(filePath)) {
-        return fs.readFileSync(filePath, "utf-8");
-      }
-      return "# AGENTS.md\n(No AGENTS.md compiled yet)";
-    }
-  );
-
-  // Resource 2: matryoshka://diagnostic
-  server.registerResource(
-    {
-      uri: "matryoshka://diagnostic",
-      name: "Latest DIAGNOSTIC.md Report",
-      description: "Exposes latest DIAGNOSTIC.md",
-      mimeType: "text/markdown",
-    },
-    async () => {
-      const filePath = path.join(resolvedDir, "DIAGNOSTIC.md");
-      if (fs.existsSync(filePath)) {
-        return fs.readFileSync(filePath, "utf-8");
-      }
-      return "# DIAGNOSTIC.md\n(No DIAGNOSTIC.md generated yet)";
-    }
-  );
-
-  // Prompt: audit_repository
-  server.registerPrompt(
-    {
-      name: "audit_repository",
-      description: "Guided system prompt for an agent to inspect and remediate repository harness score",
-      arguments: [
-        {
-          name: "targetDir",
-          description: "Path to repository to audit",
-          required: false,
-        },
-      ],
-    },
-    async (args: any) => {
-      const p = path.resolve(args?.targetDir || resolvedDir);
-      return {
-        description: "Guided system prompt for an agent to inspect and remediate repository harness score",
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: `Please audit the repository at "${p}". First run detect_stack to understand project archetype, test runners and language idioms. Then run scan_harness and wrap_context to discover harness gaps and contextual AST vulnerabilities. Finally remediate identified critical issues and generate clean AGENTS.md and modular skills using generate_agents.`,
-            },
-          },
-        ],
-      };
-    }
-  );
+  registerMatryoshkaResources(server, resolvedDir);
+  registerMatryoshkaPrompts(server, resolvedDir);
 
   return server;
 }

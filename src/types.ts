@@ -602,6 +602,25 @@ export interface McpPromptResult {
   messages: McpPromptMessage[];
 }
 
+export interface AuditRepositoryPromptArgs {
+  targetDir?: string;
+  path?: string;
+  strict?: boolean;
+  threshold?: number;
+}
+
+export interface McpResourcesListResult {
+  resources: McpResourceDefinition[];
+}
+
+export interface McpResourceReadResult {
+  contents: McpResourceContent[];
+}
+
+export interface McpPromptsListResult {
+  prompts: McpPromptDefinition[];
+}
+
 export interface McpServerOptions {
   serverInfo?: McpServerInfo;
   instructions?: string;
