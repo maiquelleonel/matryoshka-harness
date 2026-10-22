@@ -24,6 +24,7 @@ import {
   runMaturityScan,
 } from "./scanner";
 import { formatMcpWireHumanOutput, wireMcpTargets } from "./mcp";
+import { createMatryoshkaMcpServer } from "./mcp-server";
 import { evaluateCompositeHarness } from "./scorer";
 import {
   formatWrapHumanOutput,
@@ -46,13 +47,15 @@ Usage:
   baba agents skill <name> [path] [--json]
   baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
   baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
+  baba mcp serve [path]
 
 Commands:
-  detect   Inspect codebase and detect primary stack, frameworks, and test runner
-  scan     Execute maturity audit and semantic AST reconciliation
-  agents   Generate adaptive AGENTS.md and modular skills
-  wrap     Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
-  mcp wire Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
+  detect     Inspect codebase and detect primary stack, frameworks, and test runner
+  scan       Execute maturity audit and semantic AST reconciliation
+  agents     Generate adaptive AGENTS.md and modular skills
+  wrap       Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
+  mcp wire   Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
+  mcp serve  Start native Model Context Protocol (MCP) server over stdio
 
 Options:
   --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
@@ -78,7 +81,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     process.exit(0);
   }
 
-  if (isHelp || args.length === 0) {
+  if (args.length === 0 || (isHelp && !(args[0] === "mcp" && args[1] === "serve"))) {
     console.log(HELP_TEXT);
     process.exit(0);
   }
@@ -651,14 +654,40 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const [subcommand, ...mcpArgs] = rest;
 
       if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
-        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp wire [path] [--dry-run] [--json]"));
+        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]"));
         process.exit(1);
+      }
+
+      if (subcommand === "serve") {
+        if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
+          console.log(`
+Usage: baba mcp serve [path]
+
+Start native Model Context Protocol (MCP) server over stdio for AI coding agents.
+
+Arguments:
+  [path]   Root repository path to serve (defaults to current working directory)
+
+Stream Guarantees:
+  stdout   Strictly reserved for newline-delimited JSON-RPC 2.0 protocol messages
+  stderr   Diagnostic telemetry, startup notices, and logging
+`.trim());
+          process.exit(0);
+        }
+
+        const positional = mcpArgs.filter((arg) => !arg.startsWith("-"));
+        const targetDir = positional[0] || process.cwd();
+        const resolvedPath = path.resolve(targetDir);
+
+        const server = createMatryoshkaMcpServer(resolvedPath);
+        server.listenStdio();
+        return;
       }
 
       if (subcommand !== "wire") {
         console.error(
           pc.red(
-            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp wire [path] [--dry-run] [--json]`
+            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]`
           )
         );
         process.exit(1);
