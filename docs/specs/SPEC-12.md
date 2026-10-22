@@ -1,7 +1,7 @@
 # 📐 SPEC-12: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 3: Resource & Prompt provider handlers)  
+**Status:** in_progress (Subtask 4: CLI integration (`baba mcp serve`) with stderr logging guards)  
 **Gatilho:** Issue #12  
 **Target:** Bun + TypeScript + Model Context Protocol (stdio transport)  
 
@@ -312,6 +312,19 @@ export const MATRYOSHKA_MCP_PROMPTS: McpPromptDefinition[] = [
 export const MATRYOSHKA_PROMPT_NAMES = [
   "audit_repository",
 ] as const;
+
+### 2.6 CLI Integration & Stderr Logging Guards (Subtask 4)
+
+```typescript
+export interface StderrLoggingGuardOptions {
+  stderr?: NodeJS.WritableStream;
+  prefix?: string;
+}
+
+export function installStderrLoggingGuard(
+  options?: StderrLoggingGuardOptions
+): () => void;
+```
 ```
 ```
 
@@ -372,6 +385,10 @@ Feature: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
     Then It binds to stdio without writing non-JSON text to stdout
     And All startup notices and telemetry are strictly routed to stderr
     And Parity is preserved across "bbyg mcp serve" and "matryoshka mcp serve"
+    And Stderr logging guard redirects any console.log, console.info, console.warn, and console.debug to stderr
+    And Uninstalling the logging guard restores original console logging methods
+    And Executing "baba mcp serve --help" outputs formatted CLI usage guide and exits with code 0
+    And Supplying invalid MCP subcommands emits helpful guidance on stderr and exits with code 1
 
   Scenario: AC-5 - Subtask 5: BDD acceptance tests verifying MCP client handshake and tool invocation
     Given A subprocess executing "baba mcp serve"
