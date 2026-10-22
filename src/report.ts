@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import pc from "picocolors";
 import { estimateTokens } from "./agents";
 import type {
   AstLanguage,
@@ -378,3 +379,66 @@ export async function writeDiagnosticReport(
     dryRun: false,
   };
 }
+
+/**
+ * Formats a clean, readable human terminal summary for baba wrap execution.
+ */
+export function formatWrapHumanOutput(
+  result: Harness2EvaluationResult,
+  writeResult: DiagnosticWriteResult
+): string {
+  const lines: string[] = [];
+
+  // Header
+  lines.push(pc.bold(pc.cyan("\n🪆 Matryoshka Context Wrap & Harness² Remediation (baba wrap)")));
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Target Path:")}      ${result.projectPath}`);
+
+  let scoreColor = pc.red;
+  if (result.compositeScore >= (result.threshold ?? 80)) scoreColor = pc.green;
+  else if (result.compositeScore >= 60) scoreColor = pc.yellow;
+
+  const statusDisplay = result.status === "PASS" ? pc.green("PASS") : pc.red("NEEDS REMEDIATION");
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Composite Score:")}  ${scoreColor(
+      `${result.compositeScore} / 100`
+    )} [${statusDisplay}] (threshold: ${result.threshold})`
+  );
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Base Oracle:")}      ${result.oracle.normalizedScore} / 100 (${result.oracle.totalGaps} gap(s))`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("AST Health:")}       ${result.ast.score} / 100 (${result.ast.violationsCount} violation(s))`
+  );
+
+  // Languages Breakdown
+  const langEntries = (Object.keys(result.languagesCount || {}) as AstLanguage[])
+    .sort()
+    .filter((lang) => (result.languagesCount[lang] || 0) > 0)
+    .map((lang) => `${result.languagesCount[lang]} ${LANGUAGE_DISPLAY_NAMES[lang] || lang}`);
+  const langSuffix = langEntries.length > 0 ? ` (${langEntries.join(", ")})` : "";
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Files Analyzed:")}   ${result.totalFilesAnalyzed}${langSuffix}`);
+
+  if (writeResult.dryRun) {
+    lines.push(`  ${pc.dim("•")} ${pc.bold("Report:")}           ${pc.yellow("[dry-run] (not written to disk)")}`);
+    lines.push(`\n${writeResult.content}`);
+  } else {
+    lines.push(`  ${pc.dim("•")} ${pc.bold("Report:")}           ${pc.green(writeResult.reportPath)} (${writeResult.tokenCount} tokens)`);
+
+    const actionPlan = result.aggregatedGaps?.actionPlan || [];
+    if (actionPlan.length > 0) {
+      lines.push(pc.bold(pc.cyan("\n🎯 Priority Action Plan:")));
+      const preview = actionPlan.slice(0, 3);
+      for (const item of preview) {
+        lines.push(`  ${pc.dim("•")} [${item.severity.toUpperCase()}] ${item.action}`);
+      }
+      if (actionPlan.length > 3) {
+        lines.push(`  ${pc.dim("•")} ... and ${actionPlan.length - 3} more in ${writeResult.reportPath}`);
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+

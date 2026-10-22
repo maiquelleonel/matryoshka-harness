@@ -1,7 +1,7 @@
 # 📐 SPEC-11: feat(ast): polyglot tree-sitter wasm engine and canonical baba wrap
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 5: CLI Subcommand Integration, Guardrails & Strict Mode)  
+**Status:** completed (Subtask 5: CLI Subcommand Integration, Guardrails & Strict Mode)  
 **Gatilho:** Issue #11  
 **Target:** Bun + TypeScript + WebAssembly (WASM)  
 
@@ -230,7 +230,7 @@ Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polygl
 - **Subtask 2 (Concluída):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
 - **Subtask 3 (Concluída):** Harness² Composite Scorer & Gap Aggregator
 - **Subtask 4 (Concluída):** `DIAGNOSTIC.md` & JSON Report Compilers
-- **Subtask 5 (Ativa):** CLI Subcommand Integration, Guardrails & Strict Mode
+- **Subtask 5 (Concluída):** CLI Subcommand Integration, Guardrails & Strict Mode
 
 ---
 
