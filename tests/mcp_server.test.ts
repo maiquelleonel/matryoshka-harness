@@ -6,6 +6,12 @@ import { PassThrough } from "node:stream";
 import {
   McpServer,
   createMatryoshkaMcpServer,
+  registerMatryoshkaTools,
+  MATRYOSHKA_MCP_TOOLS,
+  DETECT_STACK_TOOL_DEFINITION,
+  SCAN_HARNESS_TOOL_DEFINITION,
+  GENERATE_AGENTS_TOOL_DEFINITION,
+  WRAP_CONTEXT_TOOL_DEFINITION,
   JSONRPC_PARSE_ERROR,
   JSONRPC_INVALID_REQUEST,
   JSONRPC_METHOD_NOT_FOUND,
@@ -380,6 +386,274 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       expect(promptResult.result.prompts).toBeDefined();
       const promptNames = promptResult.result.prompts.map((p: any) => p.name);
       expect(promptNames).toContain("audit_repository");
+    });
+  });
+
+  describe("Scenario AC-2: Subtask 2 - Tool registration & schema definitions", () => {
+    it("exports canonical tool definitions with valid schemas (MATRYOSHKA_MCP_TOOLS)", () => {
+      expect(MATRYOSHKA_MCP_TOOLS).toBeDefined();
+      expect(MATRYOSHKA_MCP_TOOLS.length).toBe(4);
+
+      const names = MATRYOSHKA_MCP_TOOLS.map((t) => t.name);
+      expect(names).toContain("detect_stack");
+      expect(names).toContain("scan_harness");
+      expect(names).toContain("generate_agents");
+      expect(names).toContain("wrap_context");
+
+      for (const tool of MATRYOSHKA_MCP_TOOLS) {
+        expect(typeof tool.name).toBe("string");
+        expect(typeof tool.description).toBe("string");
+        expect(tool.description.length).toBeGreaterThan(5);
+        expect(tool.inputSchema).toBeDefined();
+        expect(tool.inputSchema.type).toBe("object");
+        expect(tool.inputSchema.properties).toBeDefined();
+      }
+
+      // Check specific definitions
+      expect(DETECT_STACK_TOOL_DEFINITION.name).toBe("detect_stack");
+      expect(SCAN_HARNESS_TOOL_DEFINITION.name).toBe("scan_harness");
+      expect(GENERATE_AGENTS_TOOL_DEFINITION.name).toBe("generate_agents");
+      expect(WRAP_CONTEXT_TOOL_DEFINITION.name).toBe("wrap_context");
+
+      // Verify generate_agents properties
+      expect(GENERATE_AGENTS_TOOL_DEFINITION.inputSchema.properties?.force).toBeDefined();
+      expect(GENERATE_AGENTS_TOOL_DEFINITION.inputSchema.properties?.dryRun).toBeDefined();
+
+      // Verify wrap_context properties
+      expect(WRAP_CONTEXT_TOOL_DEFINITION.inputSchema.properties?.threshold).toBeDefined();
+    });
+
+    it("provides server tool registry inspection methods (getTools, getTool, hasTool, unregisterTool)", () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      expect(server.getTools().length).toBe(4);
+      expect(server.hasTool("detect_stack")).toBe(true);
+      expect(server.hasTool("unknown_tool")).toBe(false);
+
+      const toolDef = server.getTool("detect_stack");
+      expect(toolDef).toBeDefined();
+      expect(toolDef?.name).toBe("detect_stack");
+
+      const unregSuccess = server.unregisterTool("detect_stack");
+      expect(unregSuccess).toBe(true);
+      expect(server.hasTool("detect_stack")).toBe(false);
+      expect(server.getTools().length).toBe(3);
+
+      const unregFail = server.unregisterTool("non_existent");
+      expect(unregFail).toBe(false);
+    });
+
+    it("supports registerMatryoshkaTools helper on a bare McpServer", async () => {
+      const bareServer = new McpServer();
+      expect(bareServer.getTools().length).toBe(0);
+
+      registerMatryoshkaTools(bareServer, tempDir);
+      expect(bareServer.getTools().length).toBe(4);
+      expect(bareServer.hasTool("wrap_context")).toBe(true);
+    });
+
+    it("validates tools/call parameters rejecting missing name and non-object arguments with -32602", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Missing name
+      const noName = await server.handleRawMessage(
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: {} })
+      );
+      expect(JSON.parse(noName!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-string name
+      const nonStringName = await server.handleRawMessage(
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: 123 } })
+      );
+      expect(JSON.parse(nonStringName!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-object arguments (string)
+      const stringArgs = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: "invalid" },
+        })
+      );
+      expect(JSON.parse(stringArgs!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Non-object arguments (array)
+      const arrayArgs = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 4,
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: [1, 2, 3] },
+        })
+      );
+      expect(JSON.parse(arrayArgs!).error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // Unregistered tool
+      const unreg = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 5,
+          method: "tools/call",
+          params: { name: "non_existent_tool", arguments: {} },
+        })
+      );
+      const parsedUnreg = JSON.parse(unreg!);
+      expect(parsedUnreg.result.isError).toBe(true);
+      expect(parsedUnreg.result.content[0].text).toContain("Tool 'non_existent_tool' not found");
+    });
+
+    it("executes detect_stack tool via tools/call with default and explicit paths", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "my-ts-app", devDependencies: { vitest: "latest" } })
+      );
+
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // Default path (empty arguments)
+      const resDefault = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-default",
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: {} },
+        })
+      );
+      const parsedDefault = JSON.parse(resDefault!);
+      expect(parsedDefault.result.isError).toBeFalsy();
+      const dataDefault = JSON.parse(parsedDefault.result.content[0].text);
+      expect(dataDefault.status).toBe("success");
+      expect(dataDefault.stack.primary).toBe("javascript_typescript");
+
+      // Sub-repo with python
+      const pySubDir = path.join(tempDir, "python-sub");
+      fs.mkdirSync(pySubDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(pySubDir, "pyproject.toml"),
+        `[project]\nname = "fastapi-service"\ndependencies = ["fastapi", "pytest"]\n`
+      );
+
+      const resExplicit = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-explicit",
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: { path: pySubDir } },
+        })
+      );
+      const parsedExplicit = JSON.parse(resExplicit!);
+      expect(parsedExplicit.result.isError).toBeFalsy();
+      const dataExplicit = JSON.parse(parsedExplicit.result.content[0].text);
+      expect(dataExplicit.status).toBe("success");
+      expect(dataExplicit.stack.primary).toBe("python");
+    });
+
+    it("executes scan_harness tool via tools/call returning maturity metrics", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "scan-test-app", scripts: { test: "bun test" } })
+      );
+
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const resStr = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-scan",
+          method: "tools/call",
+          params: { name: "scan_harness", arguments: { path: tempDir } },
+        })
+      );
+      const parsed = JSON.parse(resStr!);
+      expect(parsed.result.isError).toBeFalsy();
+
+      const scanData = JSON.parse(parsed.result.content[0].text);
+      expect(scanData.score).toBeDefined();
+      expect(scanData.level).toBeDefined();
+      expect(scanData.primaryStack).toBe("javascript_typescript");
+    });
+
+    it("executes generate_agents tool via tools/call in dryRun and live modes with overwrite guardrails", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "agent-gen-app", scripts: { test: "bun test" } })
+      );
+
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      // 1. Dry run: touches 0 files
+      const dryRunRes = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-gen-dry",
+          method: "tools/call",
+          params: { name: "generate_agents", arguments: { path: tempDir, dryRun: true } },
+        })
+      );
+      const parsedDry = JSON.parse(dryRunRes!);
+      expect(parsedDry.result.isError).toBeFalsy();
+      const dryData = JSON.parse(parsedDry.result.content[0].text);
+      expect(dryData.dryRun).toBe(true);
+      expect(dryData.plannedFiles.length).toBeGreaterThan(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+
+      // 2. Live run: creates AGENTS.md
+      const liveRes = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-gen-live",
+          method: "tools/call",
+          params: { name: "generate_agents", arguments: { path: tempDir, force: true } },
+        })
+      );
+      const parsedLive = JSON.parse(liveRes!);
+      expect(parsedLive.result.isError).toBeFalsy();
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+
+      // 3. Second run without force: catches overwrite error and returns tool error fail-safe
+      const failRes = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-gen-noforce",
+          method: "tools/call",
+          params: { name: "generate_agents", arguments: { path: tempDir, force: false } },
+        })
+      );
+      const parsedFail = JSON.parse(failRes!);
+      expect(parsedFail.result.isError).toBe(true);
+      expect(parsedFail.result.content[0].text).toContain("already exists");
+    });
+
+    it("executes wrap_context tool via tools/call returning composite score, violations, and action plan", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "wrap-app", scripts: { test: "bun test" } })
+      );
+      fs.writeFileSync(
+        path.join(tempDir, "index.ts"),
+        `export function add(a: number, b: number): number { return a + b; }\n`
+      );
+
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const wrapRes = await server.handleRawMessage(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-wrap",
+          method: "tools/call",
+          params: { name: "wrap_context", arguments: { path: tempDir, threshold: 75 } },
+        })
+      );
+      const parsedWrap = JSON.parse(wrapRes!);
+      expect(parsedWrap.result.isError).toBeFalsy();
+
+      const wrapData = JSON.parse(parsedWrap.result.content[0].text);
+      expect(wrapData.compositeScore).toBeDefined();
+      expect(wrapData.status).toBeDefined();
+      expect(wrapData.threshold).toBe(75);
+      expect(wrapData.actionPlan).toBeDefined();
+      expect(wrapData.action_plan).toBeDefined();
     });
   });
 
