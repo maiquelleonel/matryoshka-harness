@@ -28,6 +28,8 @@ import {
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
   installStderrLoggingGuard,
+  McpClient,
+  type McpClientOptions,
 } from "../src/mcp-server";
 
 describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispatcher)", () => {
@@ -1395,4 +1397,342 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       expect(errText).toContain("Usage: baba mcp");
     });
   });
+
+  describe("Scenario AC-5: Subtask 5 - BDD acceptance tests verifying MCP client handshake and tool invocation", () => {
+    function setupWorkspace(dir: string): void {
+      fs.writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify(
+          {
+            name: "sample-service",
+            version: "1.0.0",
+            scripts: { test: "bun test", build: "bun run build" },
+            dependencies: { fastapi: "false" },
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(path.join(dir, "bun.lock"), "");
+      fs.writeFileSync(path.join(dir, "README.md"), "# Sample Service\n");
+
+      const srcDir = path.join(dir, "src");
+      fs.mkdirSync(srcDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(srcDir, "index.ts"),
+        `export function greet(name: string): string { return "Hello, " + name; }\n`
+      );
+
+      const testDir = path.join(dir, "tests");
+      fs.mkdirSync(testDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(testDir, "index.test.ts"),
+        `import { describe, it, expect } from "bun:test";\nimport { greet } from "../src/index";\ndescribe("greet", () => {\n  it("greets", () => { expect(greet("world")).toBe("Hello, world"); });\n});\n`
+      );
+    }
+
+    it("AC-5.1: establishes complete handshake lifecycle (initialize, notifications/initialized, ping)", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      // 1. initialize
+      const initResult = await client.initialize({
+        name: "test-cursor-agent",
+        version: "1.2.3",
+      });
+
+      expect(initResult.protocolVersion).toBe(MCP_PROTOCOL_VERSION);
+      expect(initResult.serverInfo.name).toBe("matryoshka-mcp");
+      expect(initResult.serverInfo.version).toBe("0.1.0");
+      expect(initResult.capabilities.tools).toBeDefined();
+      expect(initResult.capabilities.resources).toBeDefined();
+      expect(initResult.capabilities.prompts).toBeDefined();
+
+      // 2. notifications/initialized
+      const stdoutCountBefore = client.getStdoutLines().length;
+      client.notify("notifications/initialized");
+      // Give tiny tick to verify no response emitted for notification
+      await new Promise((r) => setTimeout(r, 40));
+      expect(client.getStdoutLines().length).toBe(stdoutCountBefore);
+
+      // 3. ping
+      const pingResult = await client.ping();
+      expect(pingResult).toEqual({});
+
+      await client.close();
+    });
+
+    it("AC-5.2: inspects registered tools schemas via tools/list", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+
+      const tools = await client.listTools();
+      expect(tools.length).toBe(4);
+
+      const toolNames = tools.map((t) => t.name);
+      expect(toolNames).toContain("detect_stack");
+      expect(toolNames).toContain("scan_harness");
+      expect(toolNames).toContain("generate_agents");
+      expect(toolNames).toContain("wrap_context");
+
+      for (const tool of tools) {
+        expect(tool.description).toBeDefined();
+        expect(tool.inputSchema.type).toBe("object");
+        expect(tool.inputSchema.properties).toBeDefined();
+      }
+
+      await client.close();
+    });
+
+    it("AC-5.3: executes canonical tools end-to-end on target repository (detect_stack, scan_harness, generate_agents, wrap_context)", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+
+      // 1. detect_stack
+      const detectCall = await client.callTool("detect_stack", {});
+      expect(detectCall.isError).toBeFalsy();
+      expect(detectCall.content.length).toBeGreaterThan(0);
+      const detectData = JSON.parse(detectCall.content[0].text!);
+      expect(detectData.status).toBe("success");
+      expect(detectData.stack.primary).toBe("typescript");
+      expect(detectData.rootPath).toBe(tempDir);
+
+      // 2. scan_harness
+      const scanCall = await client.callTool("scan_harness", {});
+      expect(scanCall.isError).toBeFalsy();
+      const scanData = JSON.parse(scanCall.content[0].text!);
+      expect(typeof scanData.score).toBe("number");
+      expect(scanData.score).toBeGreaterThanOrEqual(0);
+      expect(scanData.level).toBeDefined();
+      expect(Array.isArray(scanData.gaps)).toBe(true);
+
+      // 3. generate_agents in dryRun
+      const dryRunCall = await client.callTool("generate_agents", { dryRun: true });
+      expect(dryRunCall.isError).toBeFalsy();
+      const dryRunData = JSON.parse(dryRunCall.content[0].text!);
+      expect(dryRunData.dryRun).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+
+      // 4. generate_agents with force: true
+      const genCall = await client.callTool("generate_agents", { force: true });
+      expect(genCall.isError).toBeFalsy();
+      const genData = JSON.parse(genCall.content[0].text!);
+      expect(genData.status).toBe("success");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents/skills"))).toBe(true);
+
+      // 5. wrap_context
+      const wrapCall = await client.callTool("wrap_context", { threshold: 80 });
+      expect(wrapCall.isError).toBeFalsy();
+      const wrapData = JSON.parse(wrapCall.content[0].text!);
+      expect(typeof wrapData.compositeScore).toBe("number");
+      expect(Array.isArray(wrapData.actionPlan)).toBe(true);
+
+      await client.close();
+    });
+
+    it("AC-5.4: interacts with resources and prompts over stdio (resources/list, resources/read, prompts/list, prompts/get)", async () => {
+      setupWorkspace(tempDir);
+      // Pre-create AGENTS.md
+      const sampleAgents = "# AGENTS.md\n\n## Governance Rules\n- Always test before commit\n";
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), sampleAgents, "utf-8");
+
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+
+      // 1. resources/list
+      const resources = await client.listResources();
+      expect(resources.length).toBe(2);
+      const uris = resources.map((r) => r.uri);
+      expect(uris).toContain("matryoshka://agents");
+      expect(uris).toContain("matryoshka://diagnostic");
+
+      // 2. resources/read
+      const readResult = await client.readResource("matryoshka://agents");
+      expect(readResult.length).toBe(1);
+      expect(readResult[0].uri).toBe("matryoshka://agents");
+      expect(readResult[0].text).toBe(sampleAgents);
+
+      // 3. prompts/list
+      const prompts = await client.listPrompts();
+      expect(prompts.length).toBe(1);
+      expect(prompts[0].name).toBe("audit_repository");
+
+      // 4. prompts/get
+      const promptRes = await client.getPrompt("audit_repository", {
+        strict: true,
+        threshold: 90,
+      });
+      expect(promptRes.messages.length).toBe(1);
+      expect(promptRes.messages[0].role).toBe("user");
+      const text = promptRes.messages[0].content.text!;
+      expect(text).toContain(tempDir);
+      expect(text).toContain("strict");
+      expect(text).toContain("90");
+
+      await client.close();
+    });
+
+    it("AC-5.5: supports concurrent pipelined requests with deterministic ID correlation", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+
+      // Launch 5 concurrent requests with distinct IDs
+      const req1 = client.request("ping", {}, "req-ping-1");
+      const req2 = client.request("tools/list", {}, "req-tools-2");
+      const req3 = client.request("resources/list", {}, "req-res-3");
+      const req4 = client.request("prompts/list", {}, "req-prompts-4");
+      const req5 = client.request("tools/call", { name: "detect_stack", arguments: {} }, "req-call-5");
+
+      const [res1, res2, res3, res4, res5] = await Promise.all([req1, req2, req3, req4, req5]);
+
+      expect(res1.id).toBe("req-ping-1");
+      expect(res1.result).toEqual({});
+
+      expect(res2.id).toBe("req-tools-2");
+      expect(res2.result.tools.length).toBe(4);
+
+      expect(res3.id).toBe("req-res-3");
+      expect(res3.result.resources.length).toBe(2);
+
+      expect(res4.id).toBe("req-prompts-4");
+      expect(res4.result.prompts.length).toBe(1);
+
+      expect(res5.id).toBe("req-call-5");
+      expect(res5.result.isError).toBeFalsy();
+
+      await client.close();
+    });
+
+    it("AC-5.6: validates error resilience (-32700, -32600, -32601, -32602) without terminating server", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+
+      // 1. Parse error (-32700) on malformed JSON
+      const parseErrRes = await client.sendRawAndExpect("{ bad-json-syntax ...\n");
+      expect(parseErrRes.error.code).toBe(JSONRPC_PARSE_ERROR);
+
+      // 2. Invalid Request (-32600) on non-compliant JSON-RPC
+      const invReqRes = await client.sendRawAndExpect(
+        JSON.stringify({ not_jsonrpc: true, id: 99 }) + "\n"
+      );
+      expect(invReqRes.error.code).toBe(JSONRPC_INVALID_REQUEST);
+
+      // 3. Method not found (-32601)
+      const unkMethod = await client.request("unknown_nonexistent_method", {}, "err-method");
+      expect(unkMethod.error.code).toBe(JSONRPC_METHOD_NOT_FOUND);
+
+      // 4. Invalid params (-32602) when calling tool with missing name
+      const invParams = await client.request("tools/call", {}, "err-params");
+      expect(invParams.error.code).toBe(JSONRPC_INVALID_PARAMS);
+
+      // 5. Unregistered tool returns tool error result with isError: true
+      const unregTool = await client.callTool("unregistered_phantom_tool");
+      expect(unregTool.isError).toBe(true);
+      expect(unregTool.content[0].text).toContain("not found");
+
+      // 6. Verify server is still alive and resilient
+      const healthyPing = await client.ping();
+      expect(healthyPing).toEqual({});
+
+      await client.close();
+    });
+
+    it("AC-5.7: verifies strict stream isolation and diagnostic telemetry routing", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+      await client.callTool("detect_stack", {});
+      await client.callTool("scan_harness", {});
+
+      const stdoutLines = client.getStdoutLines();
+      expect(stdoutLines.length).toBeGreaterThanOrEqual(3);
+
+      // Verify every single stdout line is strictly valid JSON-RPC 2.0
+      for (const line of stdoutLines) {
+        let parsed: any;
+        expect(() => {
+          parsed = JSON.parse(line);
+        }).not.toThrow();
+        expect(parsed.jsonrpc).toBe("2.0");
+      }
+
+      // Verify telemetry is strictly in stderr
+      const stderrOutput = client.getStderrOutput();
+      expect(stderrOutput).toContain("[matryoshka-mcp]");
+      expect(stderrOutput).toContain("Matryoshka MCP server listening on stdio");
+      expect(stderrOutput).toContain("detect_stack");
+      expect(stderrOutput).toContain("scan_harness");
+
+      await client.close();
+    });
+
+    it("AC-5.8: terminates cleanly with exit code 0 on EOF (stdin stream close)", async () => {
+      setupWorkspace(tempDir);
+      const client = McpClient.spawn({
+        command: ["bun", "run", cliPath, "mcp", "serve", tempDir],
+        cwd: tempDir,
+      });
+
+      await client.initialize();
+      const exitCode = await client.close();
+      expect(exitCode).toBe(0);
+    });
+
+    it("AC-5.9: preserves full client handshake and tool invocation parity across baba, bbyg, and matryoshka", async () => {
+      setupWorkspace(tempDir);
+
+      const aliases = ["baba", "bbyg", "matryoshka"];
+      for (const alias of aliases) {
+        const client = McpClient.spawn({
+          command: ["bun", "run", alias, "mcp", "serve", tempDir],
+          cwd: tempDir,
+        });
+
+        const initRes = await client.initialize();
+        expect(initRes.serverInfo.name).toBe("matryoshka-mcp");
+
+        const tools = await client.listTools();
+        expect(tools.length).toBe(4);
+
+        const detect = await client.callTool("detect_stack", {});
+        expect(detect.isError).toBeFalsy();
+
+        const exitCode = await client.close();
+        expect(exitCode).toBe(0);
+      }
+    });
+  });
 });
+
