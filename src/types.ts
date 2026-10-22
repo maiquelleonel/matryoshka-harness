@@ -433,6 +433,19 @@ export interface DiagnosticWriteResult {
   dryRun: boolean;
 }
 
+// ==========================================
+// SPEC-11 Subtask 5: Wrap CLI Options
+// ==========================================
+
+export interface WrapCliOptions {
+  outputPath?: string;
+  strict?: boolean;
+  threshold?: number;
+  dryRun?: boolean;
+  json?: boolean;
+  maxFileSizeKb?: number;
+}
+
 
 
 

@@ -174,11 +174,11 @@ describe("CLI Commands and Aliases (src/cli.ts & index.ts)", () => {
       expect(proc.stderr.toString()).toContain("Unknown command 'unknown-command'");
     });
 
-    it("supports wrap subcommand with pending JSON responses", async () => {
+    it("supports wrap subcommand with structured JSON output", async () => {
       const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--json"]);
       expect(procWrap.exitCode).toBe(0);
       const wrapParsed = JSON.parse(procWrap.stdout.toString().trim());
-      expect(wrapParsed.status).toBe("pending");
+      expect(wrapParsed.status).toBe("remediation_needed");
       expect(wrapParsed.command).toBe("wrap");
     });
 
