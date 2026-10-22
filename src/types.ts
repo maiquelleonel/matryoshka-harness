@@ -446,6 +446,215 @@ export interface WrapCliOptions {
   maxFileSizeKb?: number;
 }
 
+// ==========================================
+// SPEC-12: Native MCP Server & Dispatcher
+// ==========================================
+
+export interface JsonRpcRequest {
+  jsonrpc: "2.0";
+  id: string | number;
+  method: string;
+  params?: Record<string, any> | any[];
+}
+
+export interface JsonRpcNotification {
+  jsonrpc: "2.0";
+  method: string;
+  params?: Record<string, any> | any[];
+}
+
+export interface JsonRpcResponse<T = any> {
+  jsonrpc: "2.0";
+  id: string | number;
+  result: T;
+}
+
+export interface JsonRpcErrorObject {
+  code: number;
+  message: string;
+  data?: any;
+}
+
+export interface JsonRpcErrorResponse {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  error: JsonRpcErrorObject;
+}
+
+export interface JsonRpcClientResponse<T = any> {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  result?: T;
+  error?: JsonRpcErrorObject;
+}
+
+export type JsonRpcMessage =
+  | JsonRpcRequest
+  | JsonRpcNotification
+  | JsonRpcResponse
+  | JsonRpcErrorResponse;
+
+export const JSONRPC_PARSE_ERROR = -32700;
+export const JSONRPC_INVALID_REQUEST = -32600;
+export const JSONRPC_METHOD_NOT_FOUND = -32601;
+export const JSONRPC_INVALID_PARAMS = -32602;
+export const JSONRPC_INTERNAL_ERROR = -32603;
+
+export const MCP_PROTOCOL_VERSION = "2024-11-05";
+export const MATRYOSHKA_MCP_SERVER_NAME = "matryoshka-mcp";
+export const MCP_SERVER_VERSION = "0.1.0";
+
+export interface McpServerInfo {
+  name: string;
+  version: string;
+}
+
+export interface McpServerCapabilities {
+  tools?: { listChanged?: boolean };
+  resources?: { subscribe?: boolean; listChanged?: boolean };
+  prompts?: { listChanged?: boolean };
+  logging?: Record<string, unknown>;
+}
+
+export interface McpInitializeResult {
+  protocolVersion: string;
+  capabilities: McpServerCapabilities;
+  serverInfo: McpServerInfo;
+  instructions?: string;
+}
+
+export interface McpToolInputSchema {
+  type: "object";
+  properties?: Record<string, any>;
+  required?: string[];
+  [key: string]: any;
+}
+
+export interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: McpToolInputSchema;
+}
+
+export interface DetectStackToolArgs {
+  path?: string;
+}
+
+export interface ScanHarnessToolArgs {
+  path?: string;
+}
+
+export interface GenerateAgentsToolArgs {
+  path?: string;
+  force?: boolean;
+  dryRun?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface WrapContextToolArgs {
+  path?: string;
+  threshold?: number;
+  strict?: boolean;
+}
+
+export interface McpToolContentItem {
+  type: "text" | "image" | "resource";
+  text?: string;
+  data?: string;
+  mimeType?: string;
+}
+
+export interface McpToolCallResult {
+  content: McpToolContentItem[];
+  isError?: boolean;
+}
+
+export interface McpResourceDefinition {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface McpResourceContent {
+  uri: string;
+  mimeType?: string;
+  text?: string;
+  blob?: string;
+}
+
+export interface McpPromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface McpPromptDefinition {
+  name: string;
+  description?: string;
+  arguments?: McpPromptArgument[];
+}
+
+export interface McpPromptMessage {
+  role: "user" | "assistant";
+  content: {
+    type: "text" | "image" | "resource";
+    text?: string;
+  };
+}
+
+export interface McpPromptResult {
+  description?: string;
+  messages: McpPromptMessage[];
+}
+
+export interface AuditRepositoryPromptArgs {
+  targetDir?: string;
+  path?: string;
+  strict?: boolean;
+  threshold?: number;
+}
+
+export interface McpResourcesListResult {
+  resources: McpResourceDefinition[];
+}
+
+export interface McpResourceReadResult {
+  contents: McpResourceContent[];
+}
+
+export interface McpPromptsListResult {
+  prompts: McpPromptDefinition[];
+}
+
+export interface StderrLoggingGuardOptions {
+  stderr?: NodeJS.WritableStream;
+  prefix?: string;
+}
+
+export interface McpServerOptions {
+  serverInfo?: McpServerInfo;
+  instructions?: string;
+  projectPath?: string;
+  rootDir?: string;
+  capabilities?: {
+    tools?: Record<string, any>;
+    resources?: Record<string, any>;
+    prompts?: Record<string, any>;
+    [key: string]: any;
+  };
+}
+
+export interface McpClientOptions {
+  command?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+
+
 
 
 
