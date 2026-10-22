@@ -361,6 +361,7 @@ export function calculateCompositeScore(
     oracle: oracleBreakdown,
     ast: astBreakdown,
     aggregatedGaps,
+    violations,
     executionTimeMs,
   };
 }
@@ -414,6 +415,7 @@ export async function evaluateCompositeHarness(
 
   return {
     ...scoreResult,
+    violations: ruleResult.violations,
     projectPath: resolvedPath,
     totalFilesAnalyzed: walkResult.scannedFiles.length,
     languagesCount: walkResult.languagesCount,

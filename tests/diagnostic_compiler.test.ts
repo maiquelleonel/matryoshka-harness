@@ -406,6 +406,8 @@ describe("SPEC-11: DIAGNOSTIC.md & JSON Report Compilers (Subtask 4)", () => {
       // Violations structure
       expect(json.violations.length).toBe(3);
       const first = json.violations[0];
+      expect(first).toBeDefined();
+      if (!first) throw new Error("Expected at least one formatted violation");
       expect(first.ruleId).toBe("sql-interpolation");
       expect(first.rule_id).toBe("sql-interpolation");
       expect(first.severity).toBe("critical");

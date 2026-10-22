@@ -320,6 +320,7 @@ export interface CompositeScoreResult {
   oracle: OracleScoreBreakdown;
   ast: AstHealthBreakdown;
   aggregatedGaps: AggregatedGapsResult;
+  violations?: AstViolation[];
   executionTimeMs: number;
 }
 
@@ -337,6 +338,101 @@ export interface Harness2EvaluationResult extends CompositeScoreResult {
   skippedFilesCount: number;
   timestamp: string;
 }
+
+// ==========================================
+// SPEC-11 Subtask 4: Report Compilers
+// ==========================================
+
+export interface DiagnosticCompilerOptions {
+  maxTokens?: number;
+  includeSnippets?: boolean;
+  truncateOnBudget?: boolean;
+  remediationCommand?: string;
+}
+
+export interface WrapJsonSummary {
+  compositeScore: number;
+  composite_score: number;
+  status: "PASS" | "NEEDS_REMEDIATION";
+  threshold: number;
+  passedThreshold: boolean;
+  passed_threshold: boolean;
+  hasCriticalViolations: boolean;
+  has_critical_violations: boolean;
+  passedStrict: boolean;
+  passed_strict: boolean;
+  oracleScore: number;
+  oracle_score: number;
+  astScore: number;
+  ast_score: number;
+  totalFilesAnalyzed: number;
+  total_files_analyzed: number;
+  languagesCount: Record<AstLanguage, number>;
+  languages_count: Record<AstLanguage, number>;
+  totalViolations: number;
+  total_violations: number;
+  bySeverity: Record<AstViolationSeverity, number>;
+  by_severity: Record<AstViolationSeverity, number>;
+  executionTimeMs: number;
+  execution_time_ms: number;
+}
+
+export interface FormattedAstViolation {
+  id: string;
+  ruleId: string;
+  rule_id: string;
+  severity: AstViolationSeverity;
+  message: string;
+  filePath: string;
+  file_path: string;
+  relativePath: string;
+  relative_path: string;
+  line: number;
+  column: number;
+  nodeType: string;
+  node_type: string;
+  codeSnippet: string;
+  code_snippet: string;
+  remediation: string;
+}
+
+export interface WrapJsonReport {
+  status: "success" | "remediation_needed";
+  command: "wrap";
+  harnessScore: number;
+  harness_score: number;
+  compositeScore: number;
+  composite_score: number;
+  projectPath: string;
+  project_path: string;
+  timestamp: string;
+  summary: WrapJsonSummary;
+  violations: FormattedAstViolation[];
+  actionPlan: SurgicalActionItem[];
+  action_plan: SurgicalActionItem[];
+  oracle: OracleScoreBreakdown;
+  ast: AstHealthBreakdown;
+  reportPath?: string;
+  report_path?: string;
+  written?: boolean;
+}
+
+export interface DiagnosticWriteOptions {
+  outputPath?: string;
+  dryRun?: boolean;
+  atomic?: boolean;
+  compilerOptions?: DiagnosticCompilerOptions;
+}
+
+export interface DiagnosticWriteResult {
+  reportPath: string;
+  written: boolean;
+  content: string;
+  tokenCount: number;
+  isWithinBudget: boolean;
+  dryRun: boolean;
+}
+
 
 
 
