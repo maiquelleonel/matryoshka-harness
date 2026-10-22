@@ -9,6 +9,7 @@ export * from "./src/agents";
 export * from "./src/ast";
 export * from "./src/rules";
 export * from "./src/scorer";
+export * from "./src/report";
 export * from "./src/core/oracle";
 export * from "./src/cli";
 
