@@ -1,7 +1,7 @@
 # 📐 SPEC-12: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 4: CLI integration (`baba mcp serve`) with stderr logging guards)  
+**Status:** in_progress (Subtask 5: BDD acceptance tests verifying MCP client handshake and tool invocation)  
 **Gatilho:** Issue #12  
 **Target:** Bun + TypeScript + Model Context Protocol (stdio transport)  
 
@@ -325,7 +325,40 @@ export function installStderrLoggingGuard(
   options?: StderrLoggingGuardOptions
 ): () => void;
 ```
-```
+
+### 2.7 MCP Client Contract & BDD Acceptance Test Harness (Subtask 5)
+
+```typescript
+export interface McpClientOptions {
+  command?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+export class McpClient {
+  public readonly proc: any;
+  public readonly rootDir: string;
+
+  constructor(options?: McpClientOptions);
+  static spawn(options?: McpClientOptions): McpClient;
+
+  request<T = any>(method: string, params?: Record<string, any>, id?: string | number): Promise<JsonRpcResponse<T>>;
+  notify(method: string, params?: Record<string, any>): void;
+
+  initialize(clientInfo?: McpServerInfo, protocolVersion?: string): Promise<McpInitializeResult>;
+  ping(): Promise<Record<string, unknown>>;
+  listTools(): Promise<McpToolDefinition[]>;
+  callTool(name: string, args?: Record<string, any>): Promise<McpToolCallResult>;
+  listResources(): Promise<McpResourceDefinition[]>;
+  readResource(uri: string): Promise<McpResourceContent[]>;
+  listPrompts(): Promise<McpPromptDefinition[]>;
+  getPrompt(name: string, args?: Record<string, any>): Promise<McpPromptResult>;
+
+  getStdoutLines(): string[];
+  getStderrOutput(): string;
+  close(): Promise<number | null>;
+}
 ```
 
 ---
@@ -395,6 +428,17 @@ Feature: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
     When A client performs the initialize handshake and executes tools over stdin
     Then Valid JSON-RPC responses are received on stdout
     And Stderr captures diagnostic telemetry without corrupting the message stream
+    And Calling "tools/list" returns schemas for detect_stack, scan_harness, generate_agents, and wrap_context
+    And Calling "tools/call" with "detect_stack" identifies project frameworks and archetype
+    And Calling "tools/call" with "scan_harness" computes maturity level and gaps
+    And Calling "tools/call" with "generate_agents" in dryRun mode returns planned files without touching disk
+    And Calling "tools/call" with "generate_agents" with force creates AGENTS.md and modular skills
+    And Calling "tools/call" with "wrap_context" runs AST audit and composite scorer returning action plan
+    And Calling "resources/read" retrieves the compiled AGENTS.md content
+    And Calling "prompts/get" with "audit_repository" generates structured workflow instructions
+    And Concurrent pipelined requests receive matched responses by ID without interleaving
+    And Malformed JSON and non-compliant requests return error codes -32700, -32600, -32601, and -32602
+    And Subprocess terminates cleanly with exit code 0 when stdin stream closes
 ```
 
 ---
