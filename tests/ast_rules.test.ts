@@ -322,8 +322,8 @@ const dbPassword = "ProductionPassword2026!#";
 
     it("detects known secret token prefixes even with generic variable names", () => {
       const tsCode = `
-const githubToken = "ghp_0123456789abcdefghijklmnopqrstuvwxyz";
-const slackBotToken = "[REDACTED]-1234567890123-abcdefghijklmnopqrstuvwx";
+const itemA = "ghp_0123456789abcdefghijklmnopqrstuvwxyz";
+const itemB = "AKIA1234567890ABCDEF";
       `.trim();
 
       const parsed = parseSource(tsCode, "typescript");
