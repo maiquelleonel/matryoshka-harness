@@ -27,6 +27,7 @@ import {
   JSONRPC_INVALID_PARAMS,
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
+  installStderrLoggingGuard,
 } from "../src/mcp-server";
 
 describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispatcher)", () => {
@@ -1076,8 +1077,181 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
     });
   });
 
-  describe("Scenario 7: CLI Subcommand Integration (baba mcp serve)", () => {
-    it("runs 'baba mcp serve' as a stdio MCP server responding to initialize", async () => {
+  describe("Scenario AC-4: Subtask 4 - CLI integration (baba mcp serve) with stderr logging guards", () => {
+    it("installs and uninstalls stderr logging guard redirecting console methods cleanly", () => {
+      const capturedChunks: string[] = [];
+      const mockStderr = {
+        write: (str: string) => {
+          capturedChunks.push(str);
+          return true;
+        },
+      } as any;
+
+      const uninstall = installStderrLoggingGuard({
+        stderr: mockStderr,
+        prefix: "[test-guard]",
+      });
+
+      console.log("hello stdout log");
+      console.info("hello info log");
+      console.warn("hello warn log");
+      console.debug("hello debug log");
+
+      expect(capturedChunks.length).toBe(4);
+      expect(capturedChunks[0]).toContain("[test-guard] [info] hello stdout log");
+      expect(capturedChunks[1]).toContain("[test-guard] [info] hello info log");
+      expect(capturedChunks[2]).toContain("[test-guard] [warn] hello warn log");
+      expect(capturedChunks[3]).toContain("[test-guard] [debug] hello debug log");
+
+      uninstall();
+
+      const countBefore = capturedChunks.length;
+      console.log("another log after uninstall");
+      expect(capturedChunks.length).toBe(countBefore);
+    });
+
+    it("listenStdio guards console output and emits startup notice to stderr", async () => {
+      const server = new McpServer();
+      server.registerTool(
+        {
+          name: "noisy_tool",
+          description: "A tool that accidentally calls console.log",
+          inputSchema: { type: "object" },
+        },
+        async () => {
+          console.log("A noisy internal library log");
+          return { status: "clean" };
+        }
+      );
+
+      const inStream = new PassThrough();
+      const outStream = new PassThrough();
+      const errStream = new PassThrough();
+
+      const outChunks: string[] = [];
+      const errChunks: string[] = [];
+
+      outStream.on("data", (chunk) => outChunks.push(chunk.toString()));
+      errStream.on("data", (chunk) => errChunks.push(chunk.toString()));
+
+      const listener = server.listenStdio({
+        in: inStream,
+        out: outStream,
+        err: errStream,
+      });
+
+      // Verify startup notice was emitted to stderr
+      expect(errChunks.some((c) => c.includes("Matryoshka MCP server listening on stdio"))).toBe(true);
+
+      // Call noisy tool
+      const callMsg =
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "call-noisy",
+          method: "tools/call",
+          params: { name: "noisy_tool", arguments: {} },
+        }) + "\n";
+
+      inStream.write(callMsg);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      listener.stop();
+
+      // Check stdout contains ONLY valid JSON-RPC
+      const rawOut = outChunks.join("").trim();
+      expect(rawOut.length).toBeGreaterThan(0);
+      const parsedOut = JSON.parse(rawOut);
+      expect(parsedOut.jsonrpc).toBe("2.0");
+      expect(parsedOut.id).toBe("call-noisy");
+      expect(parsedOut.result.content[0].text).toContain("clean");
+
+      // Check stderr captured the noisy log
+      const rawErr = errChunks.join("");
+      expect(rawErr).toContain("A noisy internal library log");
+    });
+
+    it("routes telemetry for all protocol operations strictly to stderr", async () => {
+      const server = createMatryoshkaMcpServer(tempDir);
+
+      const inStream = new PassThrough();
+      const outStream = new PassThrough();
+      const errStream = new PassThrough();
+
+      const outChunks: string[] = [];
+      const errChunks: string[] = [];
+
+      outStream.on("data", (chunk) => outChunks.push(chunk.toString()));
+      errStream.on("data", (chunk) => errChunks.push(chunk.toString()));
+
+      const listener = server.listenStdio({
+        in: inStream,
+        out: outStream,
+        err: errStream,
+      });
+
+      // 1. Initialize
+      inStream.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: { protocolVersion: MCP_PROTOCOL_VERSION },
+        }) + "\n"
+      );
+
+      // 2. Tool call
+      inStream.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: {} },
+        }) + "\n"
+      );
+
+      // 3. Resource read
+      inStream.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "resources/read",
+          params: { uri: "matryoshka://agents" },
+        }) + "\n"
+      );
+
+      // 4. Prompt get
+      inStream.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 4,
+          method: "prompts/get",
+          params: { name: "audit_repository" },
+        }) + "\n"
+      );
+
+      // 5. Malformed payload
+      inStream.write("{ bad-json ...\n");
+
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      listener.stop();
+
+      const rawErr = errChunks.join("");
+      expect(rawErr).toContain("initialize");
+      expect(rawErr).toContain("detect_stack");
+      expect(rawErr).toContain("matryoshka://agents");
+      expect(rawErr).toContain("audit_repository");
+      expect(rawErr).toContain("Parse error");
+
+      // All stdout messages are valid JSON-RPC
+      const lines = outChunks.join("").trim().split("\n").filter(Boolean);
+      expect(lines.length).toBe(5);
+      for (const line of lines) {
+        const msg = JSON.parse(line);
+        expect(msg.jsonrpc).toBe("2.0");
+      }
+    });
+
+    it("runs 'baba mcp serve [path]' with startup notice on stderr and pure JSON on stdout", async () => {
       const proc = Bun.spawn(["bun", "run", cliPath, "mcp", "serve", tempDir], {
         stdin: "pipe",
         stdout: "pipe",
@@ -1100,14 +1274,125 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       const { value } = await reader.read();
       const stdoutText = new TextDecoder().decode(value);
 
+      // Read response from stderr
+      const errReader = proc.stderr.getReader();
+      const { value: errValue } = await errReader.read();
+      const stderrText = new TextDecoder().decode(errValue);
+
       proc.kill();
 
       expect(stdoutText).toContain('"jsonrpc":"2.0"');
       expect(stdoutText).toContain('"id":555');
       const firstLine = stdoutText.trim().split("\n")[0] ?? "";
-      expect(firstLine).toBeDefined();
       const parsed = JSON.parse(firstLine);
       expect(parsed.result.serverInfo.name).toBe("matryoshka-mcp");
+
+      expect(stderrText).toContain("[matryoshka-mcp]");
+      expect(stderrText).toContain("Matryoshka MCP server listening on stdio");
+    });
+
+    it("ensures CLI alias parity across baba, bbyg, and matryoshka for mcp serve", async () => {
+      const runMcpServeInit = async (binAlias: string) => {
+        const proc = Bun.spawn(["bun", "run", binAlias, "mcp", "serve", tempDir], {
+          stdin: "pipe",
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+
+        const initMsg =
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 101,
+            method: "initialize",
+            params: { protocolVersion: MCP_PROTOCOL_VERSION },
+          }) + "\n";
+
+        proc.stdin.write(initMsg);
+        proc.stdin.flush();
+
+        const reader = proc.stdout.getReader();
+        const { value } = await reader.read();
+        const stdoutText = new TextDecoder().decode(value);
+
+        const errReader = proc.stderr.getReader();
+        const { value: errVal } = await errReader.read();
+        const stderrText = new TextDecoder().decode(errVal);
+
+        proc.kill();
+
+        const firstLine = stdoutText.trim().split("\n")[0] ?? "";
+        const parsed = JSON.parse(firstLine);
+
+        return { parsed, stderrText };
+      };
+
+      const babaRes = await runMcpServeInit("baba");
+      const bbygRes = await runMcpServeInit("bbyg");
+      const matryoshkaRes = await runMcpServeInit("matryoshka");
+
+      expect(babaRes.parsed.result.serverInfo.name).toBe("matryoshka-mcp");
+      expect(bbygRes.parsed.result.serverInfo.name).toBe("matryoshka-mcp");
+      expect(matryoshkaRes.parsed.result.serverInfo.name).toBe("matryoshka-mcp");
+
+      expect(babaRes.stderrText).toContain("Matryoshka MCP server listening on stdio");
+      expect(bbygRes.stderrText).toContain("Matryoshka MCP server listening on stdio");
+      expect(matryoshkaRes.stderrText).toContain("Matryoshka MCP server listening on stdio");
+    });
+
+    it("serves custom target directory passed via positional CLI argument", async () => {
+      const pySubDir = path.join(tempDir, "python-sub-repo");
+      fs.mkdirSync(pySubDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(pySubDir, "pyproject.toml"),
+        `[project]\nname = "microservice-py"\ndependencies = ["fastapi", "pytest"]\n`
+      );
+
+      const proc = Bun.spawn(["bun", "run", cliPath, "mcp", "serve", pySubDir], {
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const callDetectMsg =
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 777,
+          method: "tools/call",
+          params: { name: "detect_stack", arguments: {} },
+        }) + "\n";
+
+      proc.stdin.write(callDetectMsg);
+      proc.stdin.flush();
+
+      const reader = proc.stdout.getReader();
+      const { value } = await reader.read();
+      const stdoutText = new TextDecoder().decode(value);
+
+      proc.kill();
+
+      const line = stdoutText.trim().split("\n")[0] ?? "";
+      const parsed = JSON.parse(line);
+      expect(parsed.result.isError).toBeFalsy();
+      const payload = JSON.parse(parsed.result.content[0].text);
+      expect(payload.stack.primary).toBe("python");
+      expect(payload.rootPath).toBe(pySubDir);
+    });
+
+    it("supports 'baba mcp serve --help' and rejects unknown subcommands gracefully", () => {
+      // 1. Help flag
+      const helpProc = Bun.spawnSync(["bun", "run", cliPath, "mcp", "serve", "--help"]);
+      expect(helpProc.exitCode).toBe(0);
+      const helpText = helpProc.stdout.toString();
+      expect(helpText).toContain("Usage: baba mcp serve [path]");
+      expect(helpText).toContain("stdout");
+      expect(helpText).toContain("stderr");
+
+      // 2. Unknown subcommand
+      const unknownProc = Bun.spawnSync(["bun", "run", cliPath, "mcp", "invalid_sub"]);
+      expect(unknownProc.exitCode).toBe(1);
+      const errText = unknownProc.stderr.toString();
+      expect(errText).toContain("Unknown subcommand 'invalid_sub'");
+      expect(errText).toContain("Usage: baba mcp");
     });
   });
 });
