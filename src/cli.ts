@@ -24,6 +24,7 @@ import {
   runMaturityScan,
 } from "./scanner";
 import { formatMcpWireHumanOutput, wireMcpTargets } from "./mcp";
+import { createMatryoshkaMcpServer } from "./mcp-server";
 import { evaluateCompositeHarness } from "./scorer";
 import {
   formatWrapHumanOutput,
@@ -46,6 +47,7 @@ Usage:
   baba agents skill <name> [path] [--json]
   baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
   baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
+  baba mcp serve [path]
 
 Commands:
   detect   Inspect codebase and detect primary stack, frameworks, and test runner
@@ -53,6 +55,7 @@ Commands:
   agents   Generate adaptive AGENTS.md and modular skills
   wrap     Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
   mcp wire Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
+  mcp serve Start native MCP server over stdio for AI coding agents
 
 Options:
   --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
@@ -651,14 +654,26 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const [subcommand, ...mcpArgs] = rest;
 
       if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
-        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp wire [path] [--dry-run] [--json]"));
+        console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp wire [path] [--dry-run] [--json] | baba mcp serve [path]"));
         process.exit(1);
+      }
+
+      if (subcommand === "serve") {
+        const positional = mcpArgs.filter((arg) => !arg.startsWith("-"));
+        const targetDir = positional[0] || process.cwd();
+        const resolvedPath = path.resolve(targetDir);
+
+        const server = createMatryoshkaMcpServer(resolvedPath);
+        process.stderr.write(`[matryoshka-mcp] stdio transport active for ${resolvedPath}\n`);
+        server.listenStdio();
+        // Server stays running until stdin closes or process terminated
+        return;
       }
 
       if (subcommand !== "wire") {
         console.error(
           pc.red(
-            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp wire [path] [--dry-run] [--json]`
+            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp wire [path] [--dry-run] [--json] | baba mcp serve [path]`
           )
         );
         process.exit(1);

@@ -211,7 +211,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       const lines = combinedStdout.split("\n").filter((l) => l.trim().length > 0);
       expect(lines.length).toBe(1);
 
-      const parsed = JSON.parse(lines[0]);
+      const firstLine = lines[0];
+      expect(firstLine).toBeDefined();
+      const parsed = JSON.parse(firstLine!);
       expect(parsed.jsonrpc).toBe("2.0");
       expect(parsed.id).toBe(101);
       expect(parsed.result).toEqual({});
@@ -409,7 +411,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
 
       expect(stdoutText).toContain('"jsonrpc":"2.0"');
       expect(stdoutText).toContain('"id":555');
-      const parsed = JSON.parse(stdoutText.trim().split("\n")[0]);
+      const firstLine = stdoutText.trim().split("\n")[0];
+      expect(firstLine).toBeDefined();
+      const parsed = JSON.parse(firstLine!);
       expect(parsed.result.serverInfo.name).toBe("matryoshka-mcp");
     });
   });

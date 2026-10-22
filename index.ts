@@ -5,6 +5,7 @@ export * from "./src/scanner";
 export * from "./src/governance";
 export * from "./src/release";
 export * from "./src/mcp";
+export * from "./src/mcp-server";
 export * from "./src/agents";
 export * from "./src/ast";
 export * from "./src/rules";
