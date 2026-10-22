@@ -1505,7 +1505,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       const detectCall = await client.callTool("detect_stack", {});
       expect(detectCall.isError).toBeFalsy();
       expect(detectCall.content.length).toBeGreaterThan(0);
-      const detectData = JSON.parse(detectCall.content[0].text!);
+      const detectItem = detectCall.content[0];
+      expect(detectItem).toBeDefined();
+      const detectData = JSON.parse(detectItem?.text || "{}");
       expect(detectData.status).toBe("success");
       expect(detectData.stack.primary).toBe("typescript");
       expect(detectData.rootPath).toBe(tempDir);
@@ -1513,7 +1515,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       // 2. scan_harness
       const scanCall = await client.callTool("scan_harness", {});
       expect(scanCall.isError).toBeFalsy();
-      const scanData = JSON.parse(scanCall.content[0].text!);
+      const scanItem = scanCall.content[0];
+      expect(scanItem).toBeDefined();
+      const scanData = JSON.parse(scanItem?.text || "{}");
       expect(typeof scanData.score).toBe("number");
       expect(scanData.score).toBeGreaterThanOrEqual(0);
       expect(scanData.level).toBeDefined();
@@ -1522,14 +1526,18 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       // 3. generate_agents in dryRun
       const dryRunCall = await client.callTool("generate_agents", { dryRun: true });
       expect(dryRunCall.isError).toBeFalsy();
-      const dryRunData = JSON.parse(dryRunCall.content[0].text!);
+      const dryRunItem = dryRunCall.content[0];
+      expect(dryRunItem).toBeDefined();
+      const dryRunData = JSON.parse(dryRunItem?.text || "{}");
       expect(dryRunData.dryRun).toBe(true);
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
 
       // 4. generate_agents with force: true
       const genCall = await client.callTool("generate_agents", { force: true });
       expect(genCall.isError).toBeFalsy();
-      const genData = JSON.parse(genCall.content[0].text!);
+      const genItem = genCall.content[0];
+      expect(genItem).toBeDefined();
+      const genData = JSON.parse(genItem?.text || "{}");
       expect(genData.status).toBe("success");
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, ".agents/skills"))).toBe(true);
@@ -1537,7 +1545,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       // 5. wrap_context
       const wrapCall = await client.callTool("wrap_context", { threshold: 80 });
       expect(wrapCall.isError).toBeFalsy();
-      const wrapData = JSON.parse(wrapCall.content[0].text!);
+      const wrapItem = wrapCall.content[0];
+      expect(wrapItem).toBeDefined();
+      const wrapData = JSON.parse(wrapItem?.text || "{}");
       expect(typeof wrapData.compositeScore).toBe("number");
       expect(Array.isArray(wrapData.actionPlan)).toBe(true);
 
@@ -1567,13 +1577,15 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       // 2. resources/read
       const readResult = await client.readResource("matryoshka://agents");
       expect(readResult.length).toBe(1);
-      expect(readResult[0].uri).toBe("matryoshka://agents");
-      expect(readResult[0].text).toBe(sampleAgents);
+      const firstResource = readResult[0];
+      expect(firstResource?.uri).toBe("matryoshka://agents");
+      expect(firstResource?.text).toBe(sampleAgents);
 
       // 3. prompts/list
       const prompts = await client.listPrompts();
       expect(prompts.length).toBe(1);
-      expect(prompts[0].name).toBe("audit_repository");
+      const firstPrompt = prompts[0];
+      expect(firstPrompt?.name).toBe("audit_repository");
 
       // 4. prompts/get
       const promptRes = await client.getPrompt("audit_repository", {
@@ -1581,8 +1593,9 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
         threshold: 90,
       });
       expect(promptRes.messages.length).toBe(1);
-      expect(promptRes.messages[0].role).toBe("user");
-      const text = promptRes.messages[0].content.text!;
+      const firstMsg = promptRes.messages[0];
+      expect(firstMsg?.role).toBe("user");
+      const text = firstMsg?.content.text || "";
       expect(text).toContain(tempDir);
       expect(text).toContain("strict");
       expect(text).toContain("90");
@@ -1637,26 +1650,27 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
 
       // 1. Parse error (-32700) on malformed JSON
       const parseErrRes = await client.sendRawAndExpect("{ bad-json-syntax ...\n");
-      expect(parseErrRes.error.code).toBe(JSONRPC_PARSE_ERROR);
+      expect(parseErrRes.error?.code).toBe(JSONRPC_PARSE_ERROR);
 
       // 2. Invalid Request (-32600) on non-compliant JSON-RPC
       const invReqRes = await client.sendRawAndExpect(
         JSON.stringify({ not_jsonrpc: true, id: 99 }) + "\n"
       );
-      expect(invReqRes.error.code).toBe(JSONRPC_INVALID_REQUEST);
+      expect(invReqRes.error?.code).toBe(JSONRPC_INVALID_REQUEST);
 
       // 3. Method not found (-32601)
       const unkMethod = await client.request("unknown_nonexistent_method", {}, "err-method");
-      expect(unkMethod.error.code).toBe(JSONRPC_METHOD_NOT_FOUND);
+      expect(unkMethod.error?.code).toBe(JSONRPC_METHOD_NOT_FOUND);
 
       // 4. Invalid params (-32602) when calling tool with missing name
       const invParams = await client.request("tools/call", {}, "err-params");
-      expect(invParams.error.code).toBe(JSONRPC_INVALID_PARAMS);
+      expect(invParams.error?.code).toBe(JSONRPC_INVALID_PARAMS);
 
       // 5. Unregistered tool returns tool error result with isError: true
       const unregTool = await client.callTool("unregistered_phantom_tool");
       expect(unregTool.isError).toBe(true);
-      expect(unregTool.content[0].text).toContain("not found");
+      const unregItem = unregTool.content[0];
+      expect(unregItem?.text).toContain("not found");
 
       // 6. Verify server is still alive and resilient
       const healthyPing = await client.ping();
@@ -1717,7 +1731,6 @@ describe("SPEC-12: Native MCP Server (Subtask 1: stdio transport & message dispa
       for (const alias of aliases) {
         const client = McpClient.spawn({
           command: ["bun", "run", alias, "mcp", "serve", tempDir],
-          cwd: tempDir,
         });
 
         const initRes = await client.initialize();

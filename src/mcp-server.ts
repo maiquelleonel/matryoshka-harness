@@ -17,11 +17,18 @@ import {
   type GenerateAgentsToolArgs,
   type WrapContextToolArgs,
   type AuditRepositoryPromptArgs,
+  type JsonRpcClientResponse,
+  type JsonRpcResponse,
+  type McpClientOptions,
+  type McpInitializeResult,
   type McpPromptArgument,
   type McpPromptDefinition,
+  type McpPromptResult,
+  type McpResourceContent,
   type McpResourceDefinition,
   type McpServerInfo,
   type McpServerOptions,
+  type McpToolCallResult,
   type McpToolDefinition,
   type ProjectStack,
   type StderrLoggingGuardOptions,
@@ -198,6 +205,7 @@ export {
   type McpServerInfo,
   type McpServerOptions,
   type McpToolDefinition,
+  type McpClientOptions,
   type StderrLoggingGuardOptions,
 };
 
@@ -1004,4 +1012,277 @@ export function createMatryoshkaMcpServer(targetDir: string = process.cwd()): Mc
   registerMatryoshkaPrompts(server, resolvedDir);
 
   return server;
+}
+
+/**
+ * Zero-dependency Model Context Protocol (MCP) Client over stdio pipes.
+ * Facilitates BDD acceptance verification, agent loop execution, and automated testing.
+ */
+export class McpClient {
+  public readonly proc: any;
+  public readonly rootDir: string;
+  public readonly options: McpClientOptions;
+
+  private stdoutLines: string[] = [];
+  private stderrChunks: string[] = [];
+  private rawWaiters: Array<(msg: any) => void> = [];
+  private pendingRequests = new Map<
+    string | number,
+    {
+      resolve: (value: any) => void;
+      reject: (reason?: any) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  private running = true;
+  private idCounter = 0;
+
+  constructor(options: McpClientOptions = {}) {
+    this.options = options;
+    this.rootDir = path.resolve(options.cwd || process.cwd());
+
+    const defaultCli = path.resolve(__dirname, "./cli.ts");
+    const cmd =
+      options.command && options.command.length > 0
+        ? options.command
+        : ["bun", "run", defaultCli, "mcp", "serve", this.rootDir];
+
+    this.proc = Bun.spawn(cmd, {
+      cwd: this.rootDir,
+      env: { ...process.env, ...options.env },
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    this.startStdoutLoop();
+    this.startStderrLoop();
+  }
+
+  static spawn(options: McpClientOptions = {}): McpClient {
+    return new McpClient(options);
+  }
+
+  private startStdoutLoop(): void {
+    const reader = this.proc.stdout.getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      let buffer = "";
+      try {
+        while (this.running) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newlineIdx: number;
+          while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+            const line = buffer.slice(0, newlineIdx).trim();
+            buffer = buffer.slice(newlineIdx + 1);
+            if (line.length > 0) {
+              this.stdoutLines.push(line);
+              try {
+                const msg = JSON.parse(line);
+                if (this.rawWaiters.length > 0) {
+                  const waiter = this.rawWaiters.shift()!;
+                  waiter(msg);
+                } else if (
+                  msg &&
+                  msg.id !== undefined &&
+                  msg.id !== null &&
+                  this.pendingRequests.has(msg.id)
+                ) {
+                  const pending = this.pendingRequests.get(msg.id)!;
+                  this.pendingRequests.delete(msg.id);
+                  clearTimeout(pending.timer);
+                  pending.resolve(msg);
+                }
+              } catch {
+                // Ignore parsing errors for raw stdout line tracking
+              }
+            }
+          }
+        }
+      } catch {
+        // Stream ended or cancelled
+      }
+    })();
+  }
+
+  private startStderrLoop(): void {
+    const reader = this.proc.stderr.getReader();
+    const decoder = new TextDecoder();
+
+    (async () => {
+      try {
+        while (this.running) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          this.stderrChunks.push(decoder.decode(value, { stream: true }));
+        }
+      } catch {
+        // Stream ended or cancelled
+      }
+    })();
+  }
+
+  sendRaw(raw: string): void {
+    this.proc.stdin.write(raw);
+    this.proc.stdin.flush();
+  }
+
+  sendRawAndExpect(raw: string, timeoutMs: number = 10000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.rawWaiters.indexOf(resolver);
+        if (idx !== -1) {
+          this.rawWaiters.splice(idx, 1);
+        }
+        reject(new Error(`sendRawAndExpect timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      const resolver = (msg: any) => {
+        clearTimeout(timer);
+        resolve(msg);
+      };
+
+      this.rawWaiters.push(resolver);
+      this.sendRaw(raw);
+    });
+  }
+
+  request<T = any>(
+    method: string,
+    params: Record<string, any> = {},
+    customId?: string | number
+  ): Promise<JsonRpcClientResponse<T>> {
+    const id = customId !== undefined ? customId : `req-${++this.idCounter}-${Date.now()}`;
+    const timeoutMs = this.options.timeoutMs ?? 10000;
+
+    return new Promise<JsonRpcClientResponse<T>>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          reject(
+            new Error(
+              `MCP request timeout after ${timeoutMs}ms (method: ${method}, id: ${id})`
+            )
+          );
+        }
+      }, timeoutMs);
+
+      this.pendingRequests.set(id, { resolve, reject, timer });
+
+      const payload = JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method,
+        params,
+      });
+
+      this.sendRaw(payload + "\n");
+    });
+  }
+
+  notify(method: string, params: Record<string, any> = {}): void {
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      method,
+      params,
+    });
+    this.sendRaw(payload + "\n");
+  }
+
+  async initialize(
+    clientInfo?: McpServerInfo,
+    protocolVersion: string = MCP_PROTOCOL_VERSION
+  ): Promise<McpInitializeResult> {
+    const res = await this.request<McpInitializeResult>("initialize", {
+      protocolVersion,
+      clientInfo: clientInfo || {
+        name: "mcp-client",
+        version: "0.1.0",
+      },
+    });
+    if (!res.result) {
+      throw new Error(`Initialize failed: ${res.error?.message || "Unknown error"}`);
+    }
+    return res.result;
+  }
+
+  async ping(): Promise<Record<string, unknown>> {
+    const res = await this.request("ping", {});
+    return res.result ?? {};
+  }
+
+  async listTools(): Promise<McpToolDefinition[]> {
+    const res = await this.request("tools/list", {});
+    return res.result?.tools ?? [];
+  }
+
+  async callTool(
+    name: string,
+    args: Record<string, any> = {}
+  ): Promise<McpToolCallResult> {
+    const res = await this.request<McpToolCallResult>("tools/call", { name, arguments: args });
+    return (
+      res.result ?? {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: res.error?.message || `Tool call failed for ${name}`,
+          },
+        ],
+      }
+    );
+  }
+
+  async listResources(): Promise<McpResourceDefinition[]> {
+    const res = await this.request("resources/list", {});
+    return res.result?.resources ?? [];
+  }
+
+  async readResource(uri: string): Promise<McpResourceContent[]> {
+    const res = await this.request("resources/read", { uri });
+    return res.result?.contents ?? [];
+  }
+
+  async listPrompts(): Promise<McpPromptDefinition[]> {
+    const res = await this.request("prompts/list", {});
+    return res.result?.prompts ?? [];
+  }
+
+  async getPrompt(
+    name: string,
+    args: Record<string, any> = {}
+  ): Promise<McpPromptResult> {
+    const res = await this.request<McpPromptResult>("prompts/get", { name, arguments: args });
+    return res.result ?? { messages: [] };
+  }
+
+  getStdoutLines(): string[] {
+    return [...this.stdoutLines];
+  }
+
+  getStderrOutput(): string {
+    return this.stderrChunks.join("");
+  }
+
+  async close(): Promise<number | null> {
+    this.running = false;
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timer);
+    }
+    this.pendingRequests.clear();
+    this.rawWaiters.length = 0;
+
+    try {
+      this.proc.stdin.end();
+    } catch {
+      // Ignore if already ended
+    }
+
+    const exitCode = await this.proc.exited;
+    return exitCode;
+  }
 }

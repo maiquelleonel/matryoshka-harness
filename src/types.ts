@@ -481,6 +481,13 @@ export interface JsonRpcErrorResponse {
   error: JsonRpcErrorObject;
 }
 
+export interface JsonRpcClientResponse<T = any> {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  result?: T;
+  error?: JsonRpcErrorObject;
+}
+
 export type JsonRpcMessage =
   | JsonRpcRequest
   | JsonRpcNotification
@@ -638,6 +645,14 @@ export interface McpServerOptions {
     [key: string]: any;
   };
 }
+
+export interface McpClientOptions {
+  command?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+
 
 
 

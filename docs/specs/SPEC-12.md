@@ -1,7 +1,7 @@
 # 📐 SPEC-12: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 5: BDD acceptance tests verifying MCP client handshake and tool invocation)  
+**Status:** completed (Subtask 5: BDD acceptance tests verifying MCP client handshake and tool invocation)  
 **Gatilho:** Issue #12  
 **Target:** Bun + TypeScript + Model Context Protocol (stdio transport)  
 
