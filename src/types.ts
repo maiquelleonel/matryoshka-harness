@@ -584,6 +584,12 @@ export interface McpServerOptions {
   serverInfo?: McpServerInfo;
   instructions?: string;
   projectPath?: string;
+  capabilities?: {
+    tools?: Record<string, any>;
+    resources?: Record<string, any>;
+    prompts?: Record<string, any>;
+    [key: string]: any;
+  };
 }
 
 

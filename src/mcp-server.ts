@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Readable, Writable } from "node:stream";
 import { detectStack } from "./detector";
 import { runMaturityScan } from "./scanner";
 import { generateAgents } from "./agents";
@@ -12,20 +11,14 @@ import {
   JSONRPC_INVALID_PARAMS,
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
-  MATRYOSHKA_MCP_SERVER_NAME,
-  MCP_SERVER_VERSION,
-  type JsonRpcErrorResponse,
-  type JsonRpcNotification,
-  type JsonRpcRequest,
-  type JsonRpcResponse,
-  type McpInitializeResult,
+  type DetectResult,
+  type McpPromptArgument,
   type McpPromptDefinition,
-  type McpPromptResult,
-  type McpResourceContent,
   type McpResourceDefinition,
+  type McpServerInfo,
   type McpServerOptions,
-  type McpToolCallResult,
   type McpToolDefinition,
+  type ProjectStack,
 } from "./types";
 
 export {
@@ -35,391 +28,474 @@ export {
   JSONRPC_INVALID_PARAMS,
   JSONRPC_INTERNAL_ERROR,
   MCP_PROTOCOL_VERSION,
-  MATRYOSHKA_MCP_SERVER_NAME,
-  MCP_SERVER_VERSION,
+  type McpPromptArgument,
+  type McpPromptDefinition,
+  type McpResourceDefinition,
+  type McpServerInfo,
+  type McpServerOptions,
+  type McpToolDefinition,
 };
 
-export type MethodHandler = (params: any, id: string | number | null) => Promise<any> | any;
-export type ToolHandler = (args: any) => Promise<McpToolCallResult | any>;
-export type ResourceHandler = (uri: string) => Promise<McpResourceContent | string>;
-export type PromptHandler = (args: any) => Promise<McpPromptResult>;
-
-export interface StdioStreamOptions {
-  in?: Readable | NodeJS.ReadableStream;
-  out?: Writable | NodeJS.WritableStream;
-  err?: Writable | NodeJS.WritableStream;
-}
-
-export interface StdioTransportController {
-  stop: () => void;
-}
-
-/**
- * Native Model Context Protocol (MCP) Server running over stdio or message streams.
- * Complies with JSON-RPC 2.0 and MCP Protocol 2024-11-05.
- */
 export class McpServer {
-  private methodHandlers: Map<string, MethodHandler> = new Map();
-  private tools: Map<string, { definition: McpToolDefinition; handler: ToolHandler }> = new Map();
-  private resources: Map<string, { definition: McpResourceDefinition; handler: ResourceHandler }> = new Map();
-  private prompts: Map<string, { definition: McpPromptDefinition; handler: PromptHandler }> = new Map();
-  private options: McpServerOptions;
-  private stderrStream: Writable | NodeJS.WritableStream | null = null;
+  public serverInfo: McpServerInfo;
+  public capabilities: Record<string, any>;
+  private methods = new Map<string, (params: any) => Promise<any> | any>();
+  private tools = new Map<
+    string,
+    { definition: McpToolDefinition; handler: (args: any) => Promise<any> | any }
+  >();
+  private resources = new Map<
+    string,
+    { definition: McpResourceDefinition; handler: () => Promise<string> | string }
+  >();
+  private prompts = new Map<
+    string,
+    { definition: McpPromptDefinition; handler: (args: any) => Promise<any> | any }
+  >();
+  private activeStderr: NodeJS.WritableStream | null = null;
 
   constructor(options: McpServerOptions = {}) {
-    this.options = options;
-    this.registerBuiltinHandlers();
+    this.serverInfo = options.serverInfo || {
+      name: "matryoshka-mcp",
+      version: "0.1.0",
+    };
+    this.capabilities = options.capabilities || {
+      tools: {},
+      resources: {},
+      prompts: {},
+    };
+    if (!this.capabilities.tools) {
+      this.capabilities.tools = {};
+    }
   }
 
-  /**
-   * Registers default MCP protocol methods (initialize, ping, notifications/initialized, tools, resources, prompts).
-   */
-  private registerBuiltinHandlers(): void {
-    // Protocol Handshake: initialize
-    this.registerMethod("initialize", async (params: any) => {
-      const result: McpInitializeResult = {
-        protocolVersion: MCP_PROTOCOL_VERSION,
-        capabilities: {
-          tools: { listChanged: false },
-          resources: { subscribe: false, listChanged: false },
-          prompts: { listChanged: false },
-          logging: {},
-        },
-        serverInfo: this.options.serverInfo || {
-          name: MATRYOSHKA_MCP_SERVER_NAME,
-          version: MCP_SERVER_VERSION,
-        },
-        instructions:
-          this.options.instructions ||
-          "Matryoshka-Harness MCP Server: Adaptive context-fencing, anti-slop AGENTS.md generator and L4 harness score remediation.",
-      };
-      return result;
-    });
-
-    // Client Initialized Notification
-    this.registerMethod("notifications/initialized", async () => {
-      // Notifications produce no return value and no response
-      return undefined;
-    });
-
-    // Keepalive Ping
-    this.registerMethod("ping", async () => {
-      return {};
-    });
-
-    // Tools List
-    this.registerMethod("tools/list", async () => {
-      return {
-        tools: Array.from(this.tools.values()).map((t) => t.definition),
-      };
-    });
-
-    // Tools Call
-    this.registerMethod("tools/call", async (params: any) => {
-      const toolName = params?.name;
-      if (!toolName || typeof toolName !== "string") {
-        return {
-          isError: true,
-          content: [{ type: "text", text: "Error: Missing or invalid 'name' in tools/call parameters" }],
-        };
-      }
-
-      const toolEntry = this.tools.get(toolName);
-      if (!toolEntry) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Error: Tool '${toolName}' not found` }],
-        };
-      }
-
-      try {
-        const rawResult = await toolEntry.handler(params?.arguments || {});
-
-        if (
-          rawResult &&
-          typeof rawResult === "object" &&
-          Array.isArray(rawResult.content)
-        ) {
-          return rawResult as McpToolCallResult;
-        }
-
-        const serialized =
-          typeof rawResult === "string"
-            ? rawResult
-            : JSON.stringify(rawResult, null, 2);
-
-        return {
-          content: [{ type: "text", text: serialized }],
-        };
-      } catch (err: any) {
-        this.log("error", `Exception in tool '${toolName}': ${err?.message || String(err)}`);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Tool execution failed for '${toolName}': ${err?.message || String(err)}`,
-            },
-          ],
-        };
-      }
-    });
-
-    // Resources List
-    this.registerMethod("resources/list", async () => {
-      return {
-        resources: Array.from(this.resources.values()).map((r) => r.definition),
-      };
-    });
-
-    // Resources Read
-    this.registerMethod("resources/read", async (params: any) => {
-      const uri = params?.uri;
-      if (!uri || typeof uri !== "string") {
-        throw new Error("Missing or invalid 'uri' parameter for resources/read");
-      }
-
-      const resourceEntry = this.resources.get(uri);
-      if (!resourceEntry) {
-        throw new Error(`Resource '${uri}' not found`);
-      }
-
-      const content = await resourceEntry.handler(uri);
-      if (typeof content === "object" && content !== null && "uri" in content) {
-        return { contents: [content] };
-      }
-
-      return {
-        contents: [
-          {
-            uri,
-            mimeType: resourceEntry.definition.mimeType || "text/plain",
-            text: String(content),
-          },
-        ],
-      };
-    });
-
-    // Prompts List
-    this.registerMethod("prompts/list", async () => {
-      return {
-        prompts: Array.from(this.prompts.values()).map((p) => p.definition),
-      };
-    });
-
-    // Prompts Get
-    this.registerMethod("prompts/get", async (params: any) => {
-      const promptName = params?.name;
-      if (!promptName || typeof promptName !== "string") {
-        throw new Error("Missing or invalid 'name' parameter for prompts/get");
-      }
-
-      const promptEntry = this.prompts.get(promptName);
-      if (!promptEntry) {
-        throw new Error(`Prompt '${promptName}' not found`);
-      }
-
-      return await promptEntry.handler(params?.arguments || {});
-    });
+  registerMethod(name: string, handler: (params: any) => Promise<any> | any): void {
+    this.methods.set(name, handler);
   }
 
-  /**
-   * Registers a generic JSON-RPC method handler.
-   */
-  public registerMethod(method: string, handler: MethodHandler): void {
-    this.methodHandlers.set(method, handler);
-  }
-
-  /**
-   * Registers an MCP tool with its metadata schema and execution callback.
-   */
-  public registerTool(definition: McpToolDefinition, handler: ToolHandler): void {
+  registerTool(
+    definition: McpToolDefinition,
+    handler: (args: any) => Promise<any> | any
+  ): void {
     this.tools.set(definition.name, { definition, handler });
+    if (!this.capabilities.tools) {
+      this.capabilities.tools = {};
+    }
   }
 
-  /**
-   * Registers an MCP resource provider.
-   */
-  public registerResource(definition: McpResourceDefinition, handler: ResourceHandler): void {
+  registerResource(
+    definition: McpResourceDefinition,
+    handler: () => Promise<string> | string
+  ): void {
     this.resources.set(definition.uri, { definition, handler });
+    if (!this.capabilities.resources) {
+      this.capabilities.resources = {};
+    }
   }
 
-  /**
-   * Registers an MCP prompt template provider.
-   */
-  public registerPrompt(definition: McpPromptDefinition, handler: PromptHandler): void {
+  registerPrompt(
+    definition: McpPromptDefinition,
+    handler: (args: any) => Promise<any> | any
+  ): void {
     this.prompts.set(definition.name, { definition, handler });
+    if (!this.capabilities.prompts) {
+      this.capabilities.prompts = {};
+    }
   }
 
-  /**
-   * Writes diagnostic messages strictly to stderr, preserving clean stdout for JSON-RPC.
-   */
-  public log(level: string, message: string, data?: any): void {
-    const formatted = `[matryoshka-mcp][${level}] ${message}${data ? ` ${JSON.stringify(data)}` : ""}\n`;
-    if (this.stderrStream && typeof (this.stderrStream as any).write === "function") {
-      (this.stderrStream as any).write(formatted);
+  log(level: string, message: string): void {
+    const formatted = `[matryoshka-mcp] [${level}] ${message}\n`;
+    if (this.activeStderr) {
+      this.activeStderr.write(formatted);
     } else {
       process.stderr.write(formatted);
     }
   }
 
-  /**
-   * Processes a single parsed JSON-RPC message object.
-   * Returns a response message, or null for notifications.
-   */
-  public async handleMessage(message: unknown): Promise<JsonRpcResponse | JsonRpcErrorResponse | null> {
-    if (typeof message !== "object" || message === null || Array.isArray(message)) {
-      return {
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: JSONRPC_INVALID_REQUEST,
-          message: "Invalid Request: root payload must be a JSON object",
-        },
-      };
-    }
-
-    const msg = message as Record<string, any>;
-
-    if (msg.jsonrpc !== "2.0") {
-      return {
-        jsonrpc: "2.0",
-        id: msg.id ?? null,
-        error: {
-          code: JSONRPC_INVALID_REQUEST,
-          message: "Invalid Request: 'jsonrpc' must be '2.0'",
-        },
-      };
-    }
-
-    if (typeof msg.method !== "string" || msg.method.trim().length === 0) {
-      return {
-        jsonrpc: "2.0",
-        id: msg.id ?? null,
-        error: {
-          code: JSONRPC_INVALID_REQUEST,
-          message: "Invalid Request: 'method' must be a non-empty string",
-        },
-      };
-    }
-
-    const isNotification = msg.id === undefined;
-    const handler = this.methodHandlers.get(msg.method);
-
-    if (!handler) {
-      if (isNotification) {
-        this.log("warn", `Unhandled notification method '${msg.method}'`);
-        return null;
-      }
-      return {
-        jsonrpc: "2.0",
-        id: msg.id,
-        error: {
-          code: JSONRPC_METHOD_NOT_FOUND,
-          message: `Method not found: ${msg.method}`,
-        },
-      };
-    }
-
-    try {
-      const result = await handler(msg.params, msg.id ?? null);
-      if (isNotification) {
-        return null;
-      }
-      return {
-        jsonrpc: "2.0",
-        id: msg.id,
-        result: result ?? {},
-      };
-    } catch (err: any) {
-      this.log("error", `Error executing method '${msg.method}': ${err?.message || String(err)}`);
-      if (isNotification) {
-        return null;
-      }
-      return {
-        jsonrpc: "2.0",
-        id: msg.id,
-        error: {
-          code: JSONRPC_INTERNAL_ERROR,
-          message: err?.message || String(err),
-        },
-      };
-    }
-  }
-
-  /**
-   * Processes a raw string message (validating JSON parsing, then handling message).
-   * Returns a JSON string response or null (for notifications).
-   */
-  public async handleRawMessage(raw: string): Promise<string | null> {
+  async handleRawMessage(raw: string): Promise<string | null> {
     const trimmed = raw.trim();
-    if (trimmed.length === 0) {
+    if (!trimmed) {
       return null;
     }
 
-    let parsed: unknown;
+    let payload: any;
     try {
-      parsed = JSON.parse(trimmed);
-    } catch (err: any) {
-      const errorResponse: JsonRpcErrorResponse = {
+      payload = JSON.parse(trimmed);
+    } catch {
+      return JSON.stringify({
         jsonrpc: "2.0",
         id: null,
         error: {
           code: JSONRPC_PARSE_ERROR,
-          message: `Parse error: Invalid JSON (${err?.message || String(err)})`,
+          message: "Parse error: Invalid JSON payload",
         },
-      };
-      return JSON.stringify(errorResponse);
+      });
     }
 
-    const response = await this.handleMessage(parsed);
-    if (response === null) {
+    // Strict validation of JSON-RPC 2.0 structure
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      payload.jsonrpc !== "2.0" ||
+      typeof payload.method !== "string"
+    ) {
+      const msgId =
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        "id" in payload &&
+        (typeof payload.id === "string" || typeof payload.id === "number")
+          ? payload.id
+          : null;
+
+      return JSON.stringify({
+        jsonrpc: "2.0",
+        id: msgId,
+        error: {
+          code: JSONRPC_INVALID_REQUEST,
+          message: "Invalid Request: expected JSON-RPC 2.0 object with valid method",
+        },
+      });
+    }
+
+    const { id, method, params } = payload;
+    const isNotification = typeof id === "undefined";
+
+    // Handle notifications
+    if (isNotification) {
+      if (this.methods.has(method)) {
+        try {
+          await this.methods.get(method)!(params);
+        } catch (err: any) {
+          this.log("warn", `Error processing notification ${method}: ${err?.message || String(err)}`);
+        }
+      }
       return null;
     }
-    return JSON.stringify(response);
-  }
 
-  /**
-   * Attaches the server to stdio or custom streams.
-   * Consumes line-delimited JSON-RPC messages and writes responses to stdout.
-   */
-  public listenStdio(options: StdioStreamOptions = {}): StdioTransportController {
-    const inStream = options.in || process.stdin;
-    const outStream = options.out || process.stdout;
-    const errStream = options.err || process.stderr;
+    // Handle registered custom methods first
+    if (this.methods.has(method)) {
+      try {
+        const result = await this.methods.get(method)!(params);
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: result ?? {},
+        });
+      } catch (err: any) {
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSONRPC_INTERNAL_ERROR,
+            message: err?.message || String(err),
+          },
+        });
+      }
+    }
 
-    this.stderrStream = errStream;
+    // Built-in MCP handlers
+    switch (method) {
+      case "initialize": {
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            protocolVersion: params?.protocolVersion || MCP_PROTOCOL_VERSION,
+            serverInfo: this.serverInfo,
+            capabilities: this.capabilities,
+          },
+        });
+      }
 
-    let buffer = "";
-    let isStopped = false;
+      case "ping": {
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {},
+        });
+      }
 
-    const onData = async (chunk: Buffer | string) => {
-      if (isStopped) return;
-      buffer += chunk.toString("utf-8");
+      case "tools/list": {
+        const toolsList = Array.from(this.tools.values()).map((t) => t.definition);
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            tools: toolsList,
+          },
+        });
+      }
 
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+      case "tools/call": {
+        const toolName = params?.name;
+        const toolArgs = params?.arguments || {};
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!toolName || typeof toolName !== "string") {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: 'name' is required for tools/call",
+            },
+          });
+        }
+
+        const tool = this.tools.get(toolName);
+        if (!tool) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: `Tool '${toolName}' not found`,
+                },
+              ],
+            },
+          });
+        }
 
         try {
-          const response = await this.handleRawMessage(trimmed);
-          if (response && !isStopped) {
-            (outStream as any).write(response + "\n");
+          const rawResult = await tool.handler(toolArgs);
+          if (
+            rawResult &&
+            typeof rawResult === "object" &&
+            Array.isArray(rawResult.content)
+          ) {
+            return JSON.stringify({
+              jsonrpc: "2.0",
+              id,
+              result: rawResult,
+            });
           }
+
+          const text =
+            typeof rawResult === "string"
+              ? rawResult
+              : JSON.stringify(rawResult, null, 2);
+
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text,
+                },
+              ],
+            },
+          });
         } catch (err: any) {
-          this.log("error", `Fatal error in stdio transport line dispatcher: ${err?.message || String(err)}`);
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: `Tool error (${toolName}): ${err?.message || String(err)}`,
+                },
+              ],
+            },
+          });
+        }
+      }
+
+      case "resources/list": {
+        const resourcesList = Array.from(this.resources.values()).map(
+          (r) => r.definition
+        );
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            resources: resourcesList,
+          },
+        });
+      }
+
+      case "resources/read": {
+        const uri = params?.uri;
+        if (!uri || typeof uri !== "string") {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: 'uri' is required for resources/read",
+            },
+          });
+        }
+
+        const resource = this.resources.get(uri);
+        if (!resource) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: `Resource not found: ${uri}`,
+            },
+          });
+        }
+
+        try {
+          const text = await resource.handler();
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              contents: [
+                {
+                  uri,
+                  mimeType: resource.definition.mimeType || "text/plain",
+                  text,
+                },
+              ],
+            },
+          });
+        } catch (err: any) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INTERNAL_ERROR,
+              message: `Error reading resource ${uri}: ${err?.message || String(err)}`,
+            },
+          });
+        }
+      }
+
+      case "prompts/list": {
+        const promptsList = Array.from(this.prompts.values()).map(
+          (p) => p.definition
+        );
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            prompts: promptsList,
+          },
+        });
+      }
+
+      case "prompts/get": {
+        const promptName = params?.name;
+        if (!promptName || typeof promptName !== "string") {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: "Invalid params: 'name' is required for prompts/get",
+            },
+          });
+        }
+
+        const prompt = this.prompts.get(promptName);
+        if (!prompt) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INVALID_PARAMS,
+              message: `Prompt not found: ${promptName}`,
+            },
+          });
+        }
+
+        try {
+          const result = await prompt.handler(params?.arguments || {});
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            result,
+          });
+        } catch (err: any) {
+          return JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: JSONRPC_INTERNAL_ERROR,
+              message: `Error executing prompt ${promptName}: ${err?.message || String(err)}`,
+            },
+          });
+        }
+      }
+
+      default: {
+        return JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSONRPC_METHOD_NOT_FOUND,
+            message: `Method not found: ${method}`,
+          },
+        });
+      }
+    }
+  }
+
+  listenStdio(streams?: {
+    in?: NodeJS.ReadableStream;
+    out?: NodeJS.WritableStream;
+    err?: NodeJS.WritableStream;
+  }): { stop: () => void } {
+    const inStream: NodeJS.ReadableStream = streams?.in || process.stdin;
+    const outStream: NodeJS.WritableStream = streams?.out || process.stdout;
+    this.activeStderr = streams?.err || process.stderr;
+
+    let active = true;
+    let buffer = "";
+
+    const onData = (chunk: Buffer | string) => {
+      if (!active) return;
+      buffer += chunk.toString();
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (line.length > 0) {
+          this.handleRawMessage(line)
+            .then((res) => {
+              if (res !== null && active) {
+                outStream.write(res + "\n");
+              }
+            })
+            .catch((err) => {
+              this.log("error", `Dispatcher failure: ${err?.message || String(err)}`);
+            });
         }
       }
     };
 
-    (inStream as any).on("data", onData);
+    inStream.on("data", onData);
+
+    const onEnd = () => {
+      stop();
+      if (!streams?.in) {
+        process.exit(0);
+      }
+    };
+    inStream.on("end", onEnd);
 
     const stop = () => {
-      isStopped = true;
-      (inStream as any).removeListener("data", onData);
+      active = false;
+      if (typeof (inStream as any).off === "function") {
+        (inStream as any).off("data", onData);
+        (inStream as any).off("end", onEnd);
+      } else if (typeof (inStream as any).removeListener === "function") {
+        (inStream as any).removeListener("data", onData);
+        (inStream as any).removeListener("end", onEnd);
+      }
+      this.activeStderr = null;
     };
 
     return { stop };
@@ -427,44 +503,39 @@ export class McpServer {
 }
 
 /**
- * Creates and configures a Matryoshka MCP Server equipped with all native tools and resources.
+ * Creates and initializes a Native Matryoshka MCP Server instance with all tools,
+ * resources, and prompts registered.
  */
-export function createMatryoshkaMcpServer(
-  projectPath: string = process.cwd(),
-  options: McpServerOptions = {}
-): McpServer {
-  const resolvedPath = path.resolve(projectPath);
-
+export function createMatryoshkaMcpServer(targetDir: string = process.cwd()): McpServer {
+  const resolvedDir = path.resolve(targetDir);
   const server = new McpServer({
-    projectPath: resolvedPath,
     serverInfo: {
-      name: MATRYOSHKA_MCP_SERVER_NAME,
-      version: MCP_SERVER_VERSION,
+      name: "matryoshka-mcp",
+      version: "0.1.0",
     },
-    instructions:
-      "Matryoshka-Harness MCP Server: Use 'detect_stack' to inspect frameworks, 'scan_harness' to evaluate maturity (L0-L4), 'generate_agents' to create lean AGENTS.md, and 'wrap_context' to run AST audits and generate DIAGNOSTIC.md.",
-    ...options,
+    capabilities: {
+      tools: {},
+      resources: {},
+      prompts: {},
+    },
   });
 
   // Tool 1: detect_stack
   server.registerTool(
     {
       name: "detect_stack",
-      description: "Detect project framework, testing conventions, and repo archetype.",
+      description: "Detect project framework, testing conventions, and repo archetype",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Target repository directory (defaults to server root)",
-          },
+          path: { type: "string", description: "Target repository path" },
         },
       },
     },
     async (args: any) => {
-      const targetDir = args?.path ? path.resolve(args.path) : resolvedPath;
-      const stack = detectStack(targetDir);
-      return {
+      const p = path.resolve(args?.path || resolvedDir);
+      const stack: ProjectStack = detectStack(p);
+      const res: DetectResult = {
         status: "success",
         stack: {
           primary: stack.primary,
@@ -472,8 +543,9 @@ export function createMatryoshkaMcpServer(
           testRunner: stack.testRunner,
           archetype: stack.archetype,
         },
-        rootPath: targetDir,
+        rootPath: p,
       };
+      return res;
     }
   );
 
@@ -481,21 +553,17 @@ export function createMatryoshkaMcpServer(
   server.registerTool(
     {
       name: "scan_harness",
-      description: "Evaluate current L1-L4 harness score, gaps, and maturity metrics.",
+      description: "Evaluate current L1-L4 harness score and generate maturity metrics",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Target repository directory (defaults to server root)",
-          },
+          path: { type: "string", description: "Target repository path" },
         },
       },
     },
     async (args: any) => {
-      const targetDir = args?.path ? path.resolve(args.path) : resolvedPath;
-      const scanResult = await runMaturityScan(targetDir);
-      return scanResult;
+      const p = path.resolve(args?.path || resolvedDir);
+      return await runMaturityScan(p);
     }
   );
 
@@ -503,32 +571,23 @@ export function createMatryoshkaMcpServer(
   server.registerTool(
     {
       name: "generate_agents",
-      description: "Autonomously produce lean AGENTS.md (<200 tokens) and modular .agents/skills/.",
+      description: "Autonomously produce lean AGENTS.md and modular .agents/skills/",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Target repository directory (defaults to server root)",
-          },
-          force: {
-            type: "boolean",
-            description: "Overwrite existing AGENTS.md (creates backup .bak)",
-          },
-          dryRun: {
-            type: "boolean",
-            description: "Simulate without writing files to disk",
-          },
+          path: { type: "string", description: "Target repository path" },
+          force: { type: "boolean", description: "Overwrite existing files" },
+          dryRun: { type: "boolean", description: "Simulate without writing to disk" },
         },
       },
     },
     async (args: any) => {
-      const targetDir = args?.path ? path.resolve(args.path) : resolvedPath;
-      const result = generateAgents(targetDir, {
+      const p = path.resolve(args?.path || resolvedDir);
+      return generateAgents(p, {
         force: Boolean(args?.force),
         dryRun: Boolean(args?.dryRun),
+        json: true,
       });
-      return result;
     }
   );
 
@@ -536,27 +595,20 @@ export function createMatryoshkaMcpServer(
   server.registerTool(
     {
       name: "wrap_context",
-      description: "Run polyglot AST audit, detect antipatterns, and generate remediation plan.",
+      description: "Run polyglot AST audit and generate remediation plan",
       inputSchema: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Target repository directory (defaults to server root)",
-          },
-          threshold: {
-            type: "number",
-            description: "Minimum acceptable composite score threshold (default: 80)",
-          },
+          path: { type: "string", description: "Target repository path" },
+          threshold: { type: "number", description: "Minimum acceptable harness score" },
         },
       },
     },
     async (args: any) => {
-      const targetDir = args?.path ? path.resolve(args.path) : resolvedPath;
-      const evaluation = await evaluateCompositeHarness(targetDir, {
+      const p = path.resolve(args?.path || resolvedDir);
+      return await evaluateCompositeHarness(p, {
         threshold: typeof args?.threshold === "number" ? args.threshold : 80,
       });
-      return evaluation;
     }
   );
 
@@ -564,16 +616,16 @@ export function createMatryoshkaMcpServer(
   server.registerResource(
     {
       uri: "matryoshka://agents",
-      name: "AGENTS.md",
-      description: "Exposes the compiled root AGENTS.md guidelines for the workspace",
+      name: "Current Compiled AGENTS.md",
+      description: "Exposes currently compiled AGENTS.md",
       mimeType: "text/markdown",
     },
-    async (uri: string) => {
-      const agentsPath = path.join(resolvedPath, "AGENTS.md");
-      if (fs.existsSync(agentsPath)) {
-        return fs.readFileSync(agentsPath, "utf-8");
+    async () => {
+      const filePath = path.join(resolvedDir, "AGENTS.md");
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, "utf-8");
       }
-      return "# AGENTS.md not found\nRun 'generate_agents' to create adaptive governance.";
+      return "# AGENTS.md\n(No AGENTS.md compiled yet)";
     }
   );
 
@@ -581,42 +633,42 @@ export function createMatryoshkaMcpServer(
   server.registerResource(
     {
       uri: "matryoshka://diagnostic",
-      name: "DIAGNOSTIC.md",
-      description: "Exposes the latest DIAGNOSTIC.md remediation report",
+      name: "Latest DIAGNOSTIC.md Report",
+      description: "Exposes latest DIAGNOSTIC.md",
       mimeType: "text/markdown",
     },
-    async (uri: string) => {
-      const diagnosticPath = path.join(resolvedPath, "DIAGNOSTIC.md");
-      if (fs.existsSync(diagnosticPath)) {
-        return fs.readFileSync(diagnosticPath, "utf-8");
+    async () => {
+      const filePath = path.join(resolvedDir, "DIAGNOSTIC.md");
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, "utf-8");
       }
-      return "# DIAGNOSTIC.md not found\nRun 'wrap_context' to analyze AST antipatterns and generate report.";
+      return "# DIAGNOSTIC.md\n(No DIAGNOSTIC.md generated yet)";
     }
   );
 
-  // Prompt 1: audit_repository
+  // Prompt: audit_repository
   server.registerPrompt(
     {
       name: "audit_repository",
       description: "Guided system prompt for an agent to inspect and remediate repository harness score",
       arguments: [
         {
-          name: "threshold",
-          description: "Target harness score threshold (default 80)",
+          name: "targetDir",
+          description: "Path to repository to audit",
           required: false,
         },
       ],
     },
     async (args: any) => {
-      const threshold = args?.threshold || 80;
+      const p = path.resolve(args?.targetDir || resolvedDir);
       return {
-        description: `Audit and remediate repository harness score targeting ${threshold}+`,
+        description: "Guided system prompt for an agent to inspect and remediate repository harness score",
         messages: [
           {
             role: "user",
             content: {
               type: "text",
-              text: `You are a Matryoshka-Harness Auditor Agent. Inspect the repository at '${resolvedPath}' using 'scan_harness' and 'wrap_context'. Ensure the composite score satisfies the threshold (${threshold}). Remediate any critical AST violations immediately following SDD principles.`,
+              text: `Please audit the repository at "${p}". First run detect_stack to understand project archetype, test runners and language idioms. Then run scan_harness and wrap_context to discover harness gaps and contextual AST vulnerabilities. Finally remediate identified critical issues and generate clean AGENTS.md and modular skills using generate_agents.`,
             },
           },
         ],
