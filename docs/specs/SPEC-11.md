@@ -1,9 +1,107 @@
 # 📐 SPEC-11: feat(ast): polyglot tree-sitter wasm engine and canonical baba wrap
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 2: Contextual AST Antipattern Rule Suite)  
+**Status:** in_progress (Subtask 3: Harness² Composite Scorer & Gap Aggregator)  
 **Gatilho:** Issue #11  
 **Target:** Bun + TypeScript + WebAssembly (WASM)  
+
+### 2.7 Contratos do Harness² Composite Scorer & Gap Aggregator (Subtask 3)
+
+```typescript
+export interface AstDeductionPenalties {
+  critical: number; // default: 15
+  high: number;     // default: 8
+  medium: number;   // default: 4
+  low: number;      // default: 2
+}
+
+export interface Harness2Weights {
+  oracleWeight: number; // default: 0.4
+  astWeight: number;    // default: 0.6
+}
+
+export interface CompositeScorerOptions {
+  weights?: Partial<Harness2Weights>;
+  penalties?: Partial<AstDeductionPenalties>;
+  threshold?: number;            // default: 80
+  normalizeOracleScore?: boolean; // default: true
+}
+
+export interface AstHealthBreakdown {
+  score: number; // 0..100
+  totalDeductions: number;
+  violationsCount: number;
+  bySeverity: Record<AstViolationSeverity, number>;
+  penaltiesApplied: Record<AstViolationSeverity, number>;
+}
+
+export interface OracleScoreBreakdown {
+  rawScore: number;
+  maxScore: number;
+  normalizedScore: number; // 0..100
+  level: MaturityLevel;
+  source: "subprocess" | "fallback";
+  totalGaps: number;
+}
+
+export interface SurgicalActionItem {
+  id: string;
+  source: "ast" | "oracle";
+  severity: AstViolationSeverity;
+  title: string;
+  description?: string;
+  target?: string;
+  action: string;
+  remediation?: string;
+}
+
+export interface AggregatedGapsResult {
+  totalCount: number;
+  astViolationsCount: number;
+  oracleGapsCount: number;
+  hasCriticalViolations: boolean;
+  bySeverity: Record<AstViolationSeverity, number>;
+  byRule: Record<string, number>;
+  byAxis: Record<GovernanceAxis, number>;
+  actionPlan: SurgicalActionItem[];
+}
+
+export interface CompositeScoreResult {
+  compositeScore: number; // 0..100
+  status: "PASS" | "NEEDS_REMEDIATION";
+  threshold: number;
+  passedThreshold: boolean;
+  hasCriticalViolations: boolean;
+  passedStrict: boolean;
+  oracle: OracleScoreBreakdown;
+  ast: AstHealthBreakdown;
+  aggregatedGaps: AggregatedGapsResult;
+  executionTimeMs: number;
+}
+
+export interface CompositeEvaluationOptions extends CompositeScorerOptions {
+  cwd?: string;
+  oracleOptions?: HarnessScoreOptions;
+  astOptions?: AstWalkerOptions;
+  ruleOptions?: AstRuleSuiteOptions;
+}
+
+export interface Harness2EvaluationResult extends CompositeScoreResult {
+  projectPath: string;
+  totalFilesAnalyzed: number;
+  languagesCount: Record<AstLanguage, number>;
+  skippedFilesCount: number;
+  timestamp: string;
+}
+```
+
+### 2.8 Funções Canônicas (Subtask 3)
+- `calculateAstHealthScore(violations: AstViolation[], penalties?: Partial<AstDeductionPenalties>): AstHealthBreakdown`
+- `normalizeOracleBaseScore(oracle: HarnessScoreResult | number, maxScore?: number, normalize?: boolean): OracleScoreBreakdown`
+- `calculateCompositeScore(oracle: HarnessScoreResult | number, astViolations: AstViolation[] | AstRuleSuiteResult, options?: CompositeScorerOptions): CompositeScoreResult`
+- `aggregateHarnessGaps(oracleGaps: HarnessGap[] | null | undefined, astViolations: AstViolation[] | null | undefined): AggregatedGapsResult`
+- `evaluateCompositeHarness(projectPath: string, options?: CompositeEvaluationOptions): Promise<Harness2EvaluationResult>`
+- `class Harness2Scorer` (Orquestrador integrado de pontuação e agregação)
 
 ---
 
@@ -12,8 +110,8 @@ Implement Phase 4 of the Matryoshka-Harness roadmap: zero-host-dependency Polygl
 
 ### 1.1 Escopo das Subtasks
 - **Subtask 1 (Concluída):** Polyglot AST Walker & Tree-sitter WASM Engine
-- **Subtask 2 (Ativa):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
-- **Subtask 3:** Harness² Composite Scorer & Gap Aggregator
+- **Subtask 2 (Concluída):** Contextual AST Antipattern Rule Suite (SQL, Tests, Secrets)
+- **Subtask 3 (Ativa):** Harness² Composite Scorer & Gap Aggregator
 - **Subtask 4:** `DIAGNOSTIC.md` & JSON Report Compilers
 - **Subtask 5:** CLI Subcommand Integration, Guardrails & Strict Mode
 
@@ -226,6 +324,38 @@ Feature: Contextual AST Antipattern Rule Suite (SPEC-11 Subtask 2)
     When AstRuleSuite.run is executed
     Then it returns a deterministic AstRuleSuiteResult with total count, bySeverity, and byRule aggregates
     And supports disabledRuleIds and minSeverity filtering
+
+Feature: Harness² Composite Scorer & Gap Aggregator (SPEC-11 Subtask 3)
+
+  Scenario: AST health score deduction penalties
+    Given AST violations with known severities (critical: -15, high: -8, medium: -4, low: -2)
+    When calculateAstHealthScore is evaluated
+    Then the AST health score starts at 100 and applies exact deductions
+    And never drops below 0 even under extreme penalties (clamped to [0, 100])
+
+  Scenario: Weighted composite score calculation
+    Given an oracle base hygiene score of 88 and an AST health score of 81
+    When calculateCompositeScore is evaluated with default weights (Oracle 0.4, AST 0.6)
+    Then composite score evaluates to 84 (Math.round(88 * 0.4 + 81 * 0.6))
+    And assigns status "PASS" when composite score >= 80
+
+  Scenario: Strict CI threshold and critical violation gate
+    Given a project with composite score below threshold or containing critical AST violations
+    When calculateCompositeScore evaluates strict status
+    Then passedStrict evaluates to false if hasCriticalViolations is true even if score >= threshold
+    And passedThreshold evaluates to false if compositeScore < threshold
+
+  Scenario: Gap aggregation and surgical action plan generation
+    Given oracle governance gaps (e.g., CTX-01, CI-01) and AST violations (SQL injection, secrets)
+    When aggregateHarnessGaps is invoked
+    Then it aggregates total count, bySeverity, byRule, and byAxis
+    And compiles a prioritized step-by-step surgical action plan with critical items first
+
+  Scenario: End-to-end composite evaluation with graceful fallback
+    Given a target repository path
+    When evaluateCompositeHarness is executed
+    Then it orchestrates stack detection, oracle scan (with fallback), AST walker, and rule suite
+    And returns complete Harness2EvaluationResult with timing metrics and deterministic output
 ```
 
 ---
@@ -248,6 +378,9 @@ Feature: Contextual AST Antipattern Rule Suite (SPEC-11 Subtask 2)
 - `src/types.ts`
 - `src/ast.ts`
 - `src/rules.ts`
+- `src/scorer.ts`
+- `src/core/oracle.ts`
 - `index.ts`
 - `tests/ast_rules.test.ts`
 - `tests/ast_engine.test.ts`
+- `tests/composite_scorer.test.ts`
