@@ -7,6 +7,7 @@ export * from "./src/release";
 export * from "./src/mcp";
 export * from "./src/agents";
 export * from "./src/ast";
+export * from "./src/rules";
 export * from "./src/cli";
 
 import { runCli } from "./src/cli";

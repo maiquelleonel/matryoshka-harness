@@ -222,4 +222,34 @@ export interface AstViolation {
   remediation: string;
 }
 
+export interface AstRuleContext {
+  file: ParsedFileAst;
+  allFiles?: ParsedFileAst[];
+}
+
+export interface AstRule {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly defaultSeverity: AstViolationSeverity;
+  check(context: AstRuleContext): AstViolation[];
+}
+
+export interface AstRuleSuiteOptions {
+  rules?: AstRule[];
+  disabledRuleIds?: string[];
+  severityOverrides?: Partial<Record<string, AstViolationSeverity>>;
+  minSeverity?: AstViolationSeverity;
+}
+
+export interface AstRuleSuiteResult {
+  totalViolations: number;
+  violations: AstViolation[];
+  bySeverity: Record<AstViolationSeverity, number>;
+  byRule: Record<string, number>;
+  scannedFilesCount: number;
+  cleanFilesCount: number;
+  executionTimeMs: number;
+}
+
 
