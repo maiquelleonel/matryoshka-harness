@@ -1,7 +1,7 @@
 # 📐 SPEC-12: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 1: Lightweight MCP Protocol stdio transport & message dispatcher)  
+**Status:** in_progress (Subtask 2: Tool registration & schema definitions (`detect_stack`, `scan_harness`, `generate_agents`, `wrap_context`))  
 **Gatilho:** Issue #12  
 **Target:** Bun + TypeScript + Model Context Protocol (stdio transport)  
 
@@ -131,6 +131,119 @@ export interface McpToolCallResult {
   }>;
   isError?: boolean;
 }
+
+### 2.4 Schemas Canônicos das Ferramentas Matryoshka (Subtask 2)
+
+```typescript
+export interface DetectStackToolArgs {
+  path?: string;
+}
+
+export interface ScanHarnessToolArgs {
+  path?: string;
+}
+
+export interface GenerateAgentsToolArgs {
+  path?: string;
+  force?: boolean;
+  dryRun?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface WrapContextToolArgs {
+  path?: string;
+  threshold?: number;
+  strict?: boolean;
+}
+
+export const DETECT_STACK_TOOL_DEFINITION: McpToolDefinition = {
+  name: "detect_stack",
+  description: "Detect project framework, testing conventions, and repo archetype",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to analyze (defaults to server working directory)",
+      },
+    },
+  },
+};
+
+export const SCAN_HARNESS_TOOL_DEFINITION: McpToolDefinition = {
+  name: "scan_harness",
+  description: "Evaluate current L1-L4 harness score and generate maturity metrics",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to scan (defaults to server working directory)",
+      },
+    },
+  },
+};
+
+export const GENERATE_AGENTS_TOOL_DEFINITION: McpToolDefinition = {
+  name: "generate_agents",
+  description: "Autonomously produce lean AGENTS.md and modular .agents/skills/",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path (defaults to server working directory)",
+      },
+      force: {
+        type: "boolean",
+        description: "Overwrite existing files with backup creation",
+      },
+      dryRun: {
+        type: "boolean",
+        description: "Simulate generation without writing to disk",
+      },
+      maxTokens: {
+        type: "number",
+        description: "Maximum token budget for root AGENTS.md (default: 250)",
+      },
+      strictTokenGuard: {
+        type: "boolean",
+        description: "Enforce strict token guard threshold",
+      },
+    },
+  },
+};
+
+export const WRAP_CONTEXT_TOOL_DEFINITION: McpToolDefinition = {
+  name: "wrap_context",
+  description: "Run polyglot AST audit and generate remediation plan",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Target repository path to audit (defaults to server working directory)",
+      },
+      threshold: {
+        type: "number",
+        description: "Minimum acceptable harness score (default: 80)",
+      },
+      strict: {
+        type: "boolean",
+        description: "Enforce strict mode (zero critical violations permitted)",
+      },
+    },
+  },
+};
+
+export const MATRYOSHKA_MCP_TOOLS: McpToolDefinition[] = [
+  DETECT_STACK_TOOL_DEFINITION,
+  SCAN_HARNESS_TOOL_DEFINITION,
+  GENERATE_AGENTS_TOOL_DEFINITION,
+  WRAP_CONTEXT_TOOL_DEFINITION,
+];
+```
 ```
 
 ---
@@ -154,7 +267,15 @@ Feature: feat(mcp): native mcp server for ide agents (matryoshka mcp serve)
     Given The native MCP server with registered Matryoshka tools
     When A "tools/list" request is received
     Then It returns schemas for "detect_stack", "scan_harness", "generate_agents", and "wrap_context"
+    And Each tool inputSchema has type "object" and documented properties
     And Calling "tools/call" with "detect_stack" executes non-destructively and returns structured JSON text
+    And Calling "tools/call" with "scan_harness" executes non-destructively and returns maturity metrics
+    And Calling "tools/call" with "generate_agents" in dryRun mode returns planned files without touching disk
+    And Calling "tools/call" with "generate_agents" without force on existing AGENTS.md returns tool error without crashing server
+    And Calling "tools/call" with "wrap_context" executes composite audit returning score, violations, and action plan
+    And Calling "tools/call" with missing tool name returns error code -32602 (Invalid params)
+    And Calling "tools/call" with non-object arguments returns error code -32602 (Invalid params)
+    And Calling "tools/call" for unregistered tool returns result with isError true
 
   Scenario: AC-3 - Subtask 3: Resource & Prompt provider handlers
     Given The native MCP server
