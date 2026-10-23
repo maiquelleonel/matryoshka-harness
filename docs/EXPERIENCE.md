@@ -64,3 +64,17 @@ Biblioteca canônica de lições arquiteturais, cicatrizes de segurança e gover
 - [cli] Dual Format Envelope for CLI Tooling & Agents: Ao expor resultados de auditoria agêntica via CLI, forneça simultaneamente saída visual rica em cores ANSI (via picocolors) para operadores humanos e envelope estruturado com duplo chaveamento camelCase/snake_case via flag '--json' (ex: remediationIssues e remediation_issues). Isso garante interoperabilidade plug-and-play tanto para ferramentas TypeScript tipadas quanto para pipelines de orquestração agêntica em Python.
 - [sandbox] Permissões de Cache Bun em Ambientes Efêmeros: Em containers e sandboxes onde `/home/sandbox/.bun/install/cache` pertença ao `root`, configure `BUN_INSTALL_CACHE_DIR=/tmp/bun-cache` para evitar erros de permissão (`EACCES accessing temporary directory`) durante comandos `bun install`.
 - [badge] Emissão Autônoma de Badges SVG Shields.io: Ao exportar selos visuais de governança agêntica (--badge), gere SVGs puros e autocontidos com dimensões calculadas, gradientes lineares, viewBox e tags semânticas de acessibilidade (role="img", aria-label e title), colorindo dinamicamente as réguas de maturidade (L0 vermelho #cf222e a L4 verde #2ea44f). O parser de argumentos do CLI deve diferenciar com segurança flags com parâmetros opcionais (--badge [path]) dos argumentos posicionais de diretório alvo, garantindo que subdiretórios pais inexistentes sejam criados recursivamente sem lançar ENOENT.
+
+
+---
+
+## 🧪 Aprendizados Empíricos dos Testes em Projetos Satélites (Fase 5/6)
+
+- **Calibração de Arquétipos Específicos:** Projetos reais exigem diferenciação granular:
+  - *Python Web (`fastapi`, `flask`):* Deve classificar como `api-backend` em vez de `generic`.
+  - *Browser Extensions:* Detecção de `manifest.json` com `manifest_version` classifica como `browser-extension`.
+  - *Static Site Generators:* Detecção de `_config.yml` ou `jekyll` classifica como `static-site`.
+- **Introspecção AST de Rotas vs Nomes de Pastas:** Em micro-projetos consolidados (ex: `main.py` de 4 arquivos), rotas e models vivem no arquivo raiz. O scanner deve inspecionar decorators (`@app.get`) e classes Pydantic via Tree-sitter WASM em vez de depender apenas de caminhos de diretório (`routes/`, `models/`).
+- **Preservação de AGENTS.md Legado com Frontmatter:** Substituições destrutivas de arquivos de instruções perdem contexto humano valioso. A estratégia recomendada é fatiar o arquivo antigo para `.agents/skills/custom-instructions.md` com YAML Frontmatter (`origin: legacy_agents_md`), apontando o novo root `AGENTS.md` para ele.
+- **Prevenção de Pré-Carregamento Guloso (Greedy Preload):** Modelos autorregressivos leem links no root e tendem a carregar todas as skills no primeiro turno se a instrução for passiva. A regra deve ser imperativa (`⛔ STRICT FINOPS INVARIANT: DO NOT pre-fetch all skills at startup`).
+- **Linter Cognitivo de Instruções (`baba agents audit`):** Combina análise de links mortos com detecção heurística de antipatterns de prompt (Negative Phrasing Trap, Permissive Leaks) para garantir máxima obediência do modelo sem queima de tokens de API.
