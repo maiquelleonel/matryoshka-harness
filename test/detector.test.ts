@@ -30,7 +30,7 @@ describe("Polyglot Stack Detector (src/detector.ts)", () => {
         expect(stack.primary).toBe("python");
         expect(stack.frameworks).toContain("fastapi");
         expect(stack.testRunner).toBe("pytest");
-        expect(stack.archetype).toBe("generic");
+        expect(stack.archetype).toBe("api-backend");
       });
 
       it("detects Python with requirements.txt and Django", () => {
@@ -56,7 +56,7 @@ describe("Polyglot Stack Detector (src/detector.ts)", () => {
         expect(stack.primary).toBe("python");
         expect(stack.frameworks).toContain("flask");
         expect(stack.testRunner).toBe("unittest");
-        expect(stack.archetype).toBe("generic");
+        expect(stack.archetype).toBe("api-backend");
       });
 
       it("detects pytest runner via pytest.ini file presence", () => {
@@ -601,6 +601,37 @@ describe("Polyglot Stack Detector (src/detector.ts)", () => {
       expect(stack.primary).toBe("unknown");
       expect(stack.testRunner).toBeNull();
       expect(stack.frameworks).toEqual([]);
+    });
+
+    it("detects browser-extension archetype when manifest.json has manifest_version", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        `{"name": "chrome-ext", "devDependencies": {"@types/bun": "latest"}}`
+      );
+      fs.writeFileSync(
+        path.join(tempDir, "manifest.json"),
+        `{"manifest_version": 3, "name": "Chrome Ext"}`
+      );
+
+      const stack = detectStack(tempDir);
+      expect(stack.primary).toBe("typescript");
+      expect(stack.archetype).toBe("browser-extension");
+    });
+
+    it("detects static-site archetype for Ruby Jekyll repositories", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "Gemfile"),
+        `source "https://rubygems.org"\ngem "jekyll"\n`
+      );
+      fs.writeFileSync(
+        path.join(tempDir, "_config.yml"),
+        `title: Jekyll Engineering Blog\n`
+      );
+
+      const stack = detectStack(tempDir);
+      expect(stack.primary).toBe("ruby");
+      expect(stack.frameworks).toContain("jekyll");
+      expect(stack.archetype).toBe("static-site");
     });
 
     it("defaults to current working directory when projectPath argument is omitted", () => {
