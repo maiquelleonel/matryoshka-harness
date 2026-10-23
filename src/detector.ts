@@ -162,7 +162,24 @@ function detectJsTsStack(root: string, packageJsonPath: string): ProjectStack {
   }
 
   let archetype: ProjectArchetype = "generic";
-  if (frameworks.includes("nestjs")) {
+  const manifestCandidates = [
+    path.join(root, "manifest.json"),
+    path.join(root, "public", "manifest.json"),
+    path.join(root, "src", "manifest.json"),
+  ];
+  const hasBrowserManifest = manifestCandidates.some((p) => {
+    if (!fs.existsSync(p)) return false;
+    try {
+      const m = JSON.parse(fs.readFileSync(p, "utf-8"));
+      return Boolean(m.manifest_version);
+    } catch {
+      return false;
+    }
+  });
+
+  if (hasBrowserManifest) {
+    archetype = "browser-extension";
+  } else if (frameworks.includes("nestjs")) {
     archetype = "opinionated-framework";
   } else if (
     frameworks.includes("nextjs") ||
@@ -170,6 +187,13 @@ function detectJsTsStack(root: string, packageJsonPath: string): ProjectStack {
     frameworks.includes("vue")
   ) {
     archetype = "reactive-frontend";
+  } else if (
+    frameworks.includes("express") ||
+    frameworks.includes("fastify") ||
+    frameworks.includes("hono") ||
+    frameworks.includes("koa")
+  ) {
+    archetype = "api-backend";
   }
 
   return {
@@ -227,6 +251,8 @@ function detectPythonStack(
   let archetype: ProjectArchetype = "generic";
   if (frameworks.includes("django")) {
     archetype = "opinionated-framework";
+  } else if (frameworks.includes("fastapi") || frameworks.includes("flask")) {
+    archetype = "api-backend";
   }
 
   return {
@@ -309,6 +335,9 @@ function detectRubyStack(root: string, gemfilePath: string): ProjectStack {
   if (/\bhanami\b/i.test(content)) {
     frameworks.push("hanami");
   }
+  if (/\bjekyll\b/i.test(content) || fs.existsSync(path.join(root, "_config.yml"))) {
+    frameworks.push("jekyll");
+  }
 
   let testRunner = "bundle exec rake test";
   if (
@@ -322,6 +351,8 @@ function detectRubyStack(root: string, gemfilePath: string): ProjectStack {
   let archetype: ProjectArchetype = "generic";
   if (frameworks.includes("rails")) {
     archetype = "opinionated-framework";
+  } else if (frameworks.includes("jekyll") || fs.existsSync(path.join(root, "_config.yml"))) {
+    archetype = "static-site";
   }
 
   return {
