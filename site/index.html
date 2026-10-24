@@ -255,41 +255,27 @@
       line-height: 1.6;
     }
 
-    .hero-interactive-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-      max-width: 1050px;
-      margin: 0 auto;
-      text-align: left;
+    .quickstart-oneline-wrapper {
+      max-width: 620px;
+      margin: 0 auto 28px;
     }
 
-    .quickstart-box {
+    .quickstart-box-oneline {
       background: var(--terminal-bg);
       border: 2px solid var(--border-strong);
       box-shadow: 6px 6px 0px rgba(0,0,0,0.3);
-      padding: 20px;
+      padding: 12px 20px;
       display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .quickstart-header {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      color: #928b81;
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      gap: 16px;
     }
 
     .quickstart-code {
       font-family: var(--font-mono);
       color: var(--gold-cyrillic);
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       user-select: all;
-      margin-bottom: 16px;
     }
 
     .quickstart-code span {
@@ -300,12 +286,12 @@
       background: var(--gold-cyrillic);
       border: 2px solid var(--border-strong);
       color: var(--ink);
-      padding: 8px 16px;
+      padding: 7px 16px;
       font-family: var(--font-mono);
       font-size: 0.85rem;
       cursor: pointer;
       font-weight: 700;
-      align-self: flex-start;
+      white-space: nowrap;
       transition: background 0.15s, transform 0.15s;
     }
 
@@ -314,12 +300,77 @@
       transform: translate(-1px, -1px);
     }
 
+    .hero-evidence-wrapper {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
     .hero-evidence-card {
       background: var(--bg-card);
-      border: 2px solid var(--border-strong);
-      box-shadow: 6px 6px 0px rgba(0,0,0,0.3);
-      padding: 20px;
+      border: 3px solid var(--border-strong);
+      box-shadow: 8px 8px 0px rgba(0,0,0,0.3);
+      padding: 0;
+      overflow: hidden;
+      text-align: left;
+    }
+
+    .terminal-chrome {
+      background: #e6dacd;
+      border-bottom: 2px solid var(--border-strong);
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chrome-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+    }
+    .chrome-dot.red { background: #e05244; }
+    .chrome-dot.yellow { background: #f3a615; }
+    .chrome-dot.green { background: #52c462; }
+
+    .chrome-title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 700;
       color: var(--ink);
+      margin-left: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .terminal-body-full {
+      background: var(--terminal-bg);
+      color: var(--terminal-text);
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      padding: 20px 24px;
+      line-height: 1.6;
+    }
+
+    .term-line.prompt {
+      color: #ffffff;
+      font-weight: 700;
+      margin-bottom: 12px;
+      border-bottom: 1px dashed #333;
+      padding-bottom: 8px;
+    }
+
+    .term-ps1 { color: var(--gold-cyrillic); margin-right: 8px; }
+    .term-line.header { color: var(--gold-cyrillic); font-weight: 700; margin-bottom: 4px; }
+    .val-green { color: #6ee7b7; font-weight: 600; }
+    .val-pink { color: #fca5a5; font-weight: 600; }
+    .val-tag { color: #86efac; font-weight: 700; margin-left: 6px; }
+    .val-blue { color: #93c5fd; }
+    .term-line.footer {
+      color: var(--gold-cyrillic);
+      font-weight: 700;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed #444;
     }
 
     /* Interactive Matryoshka Scroll Showcase */
@@ -786,36 +837,38 @@
   <section class="hero-monumental">
     <div class="container">
       <div class="hero-tagline-box">★ The Concentric Context-Fencing Engine ★</div>
-      <h1 class="hero-monumental-title">МАТРЁШКА</h1>
-      <div class="hero-monumental-sub">MATRYOSHKA-HARNESS (BABA)</div>
+      <h1 class="hero-monumental-title">MATRYOSHKA</h1>
+      <div class="hero-monumental-sub">HARNESS (BABA)</div>
       <p class="hero-monumental-desc">
-        Stop the AI-Slop Tax on repositories. Monolithic instruction prompts waste tokens and dilute LLM attention. 
+        Stop the AI-Slop Tax on repositories. Monolithic instruction prompts waste tokens and dilute LLM attention.
         Matryoshka wraps codebases in five tight concentric governance layers, compiling ultra-lean <code>AGENTS.md</code> boundaries and deterministic Tree-sitter WASM rules.
       </p>
 
-      <div class="hero-interactive-grid">
-        <!-- Quickstart Terminal -->
-        <div class="quickstart-box">
-          <div class="quickstart-header">
-            <span>TERMINAL RUNTIME</span>
-            <span style="color: var(--gold-cyrillic);">ZERO-INSTALL</span>
-          </div>
+      <!-- Quickstart Oneline Preto -->
+      <div class="quickstart-oneline-wrapper">
+        <div class="quickstart-box-oneline">
           <code class="quickstart-code"><span>$</span> bunx @maiquelleonel/matryoshka wrap</code>
-          <button class="btn-copy" onclick="copySnippet(this)">COPY COMMAND</button>
+          <button class="btn-copy" onclick="copySnippet(this)">COPY</button>
         </div>
+      </div>
 
-        <!-- Evidence Card -->
+      <!-- Card Branco com Terminal Completo desde o Comando -->
+      <div class="hero-evidence-wrapper">
         <div class="hero-evidence-card">
-          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--red-constructivist); font-weight: 700; margin-bottom: 8px;">
-            // VERIFIED PRODUCTION EVIDENCE — 88% TOKEN SAVINGS
+          <div class="terminal-chrome">
+            <span class="chrome-dot red"></span>
+            <span class="chrome-dot yellow"></span>
+            <span class="chrome-dot green"></span>
+            <span class="chrome-title">// VERIFIED PRODUCTION EVIDENCE — 88% TOKEN SAVINGS</span>
           </div>
-          <div style="background: var(--terminal-bg); color: var(--terminal-text); font-family: var(--font-mono); font-size: 0.8rem; padding: 14px; border: 1px solid var(--border-strong); line-height: 1.5;">
-            <div>• Archetype:   <span style="color: #6ee7b7;">api_backend (Python/FastAPI)</span></div>
-            <div>• Root AGENTS: <span style="color: #fca5a5;">176 tokens</span> <span style="color: #86efac;">[PASS &lt; 200]</span></div>
-            <div>• On-Demand:   <span style="color: #93c5fd;">4 modular skills in .agents/</span></div>
-            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #444; color: var(--gold-cyrillic);">
-              ✓ Saved: 1,324 tokens per session turn
-            </div>
+          <div class="terminal-body-full">
+            <div class="term-line prompt"><span class="term-ps1">$</span> bunx @maiquelleonel/matryoshka agents generate --dry-run</div>
+            <div class="term-line header">🪆 Matryoshka Adaptive Agents Generator</div>
+            <div class="term-line">  • Target Stack:    <span class="val-green">FastAPI / Python (uv)</span></div>
+            <div class="term-line">  • Archetype:       <span class="val-green">api_backend</span></div>
+            <div class="term-line">  • Root AGENTS:     <span class="val-pink">176 tokens</span> <span class="val-tag">[PASS &lt; 200]</span></div>
+            <div class="term-line">  • On-Demand:       <span class="val-blue">4 modular skills in .agents/</span></div>
+            <div class="term-line footer">✓ Token Savings: 1,324 tokens per session turn (88% reduction)</div>
           </div>
         </div>
       </div>
@@ -1004,7 +1057,7 @@
         <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-cta-primary">
           EXPLORE ON GITHUB
         </a>
-        <a href="https://github.com/maiquelleonel/ouroboros-engine" target="_blank" class="btn-cta-secondary">
+        <a href="https://ouroboros.leonellabshq.dev" target="_blank" class="btn-cta-secondary">
           OUROBOROS ENGINE
         </a>
       </div>
@@ -1016,10 +1069,10 @@
   <footer>
     <div class="container">
       <p>
-        ⚡ Built with mathematical rigor by <a href="https://github.com/maiquelleonel/ouroboros-engine" target="_blank">LeonelLabs Ouroboros Engine</a>.
+        ⚡ Built with mathematical rigor by <a href="https://ouroboros.leonellabshq.dev" target="_blank">LeonelLabs Ouroboros Engine</a>.
       </p>
       <p style="margin-top: 8px; font-size: 0.75rem;">
-        Distributed under the <strong>MIT License</strong>. Maintained by <a href="https://github.com/maiquelleonel" target="_blank">Maiquel Leonel</a>.
+        Distributed under the <strong>MIT License</strong>. Maintained by <a href="https://maiquelleonel.com.br" target="_blank">Maiquel Leonel</a>.
       </p>
     </div>
   </footer>
