@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>МАТРЁШКА — Matryoshka Harness (baba)</title>
+  <title>Matryoshka Harness (baba)</title>
   <meta name="description" content="Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for AI Coding Agents.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@
       font-family: var(--font-body);
       line-height: 1.6;
       overflow-x: hidden;
-      background-image: 
+      background-image:
         radial-gradient(var(--border-subtle) 1px, transparent 0);
       background-size: 24px 24px;
     }
@@ -359,14 +359,14 @@
       align-items: start;
     }
 
-    /* Fixed SVG Doll Stage */
+    /* Fixed Real Doll Stage */
     .doll-stage {
       position: sticky;
       top: 80px;
       background: var(--bg-canvas);
       border: 2px solid var(--border-strong);
       box-shadow: var(--shadow-retro-lg);
-      padding: 32px 24px;
+      padding: 32px 20px;
       text-align: center;
     }
 
@@ -379,44 +379,100 @@
       margin-bottom: 16px;
     }
 
-    .doll-svg-wrapper {
+    .doll-artwork-wrapper {
       width: 220px;
-      height: 320px;
+      height: 340px;
       margin: 0 auto;
       position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    .doll-layer {
+    .real-doll-container {
+      position: relative;
+      width: 180px;
+      height: 335px;
+    }
+
+    .doll-cap {
       position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 52%;
+      overflow: hidden;
+      z-index: 10;
+      transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      transform-origin: bottom left;
+    }
+
+    .doll-cap.open {
+      transform: translateY(-50px) rotate(-8deg);
+      filter: drop-shadow(4px 4px 0px rgba(0,0,0,0.3));
+    }
+
+    .doll-base {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 50%;
+      overflow: hidden;
+      z-index: 8;
+    }
+
+    .doll-img-part {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 335px;
+      object-fit: contain;
+    }
+
+    .doll-img-part.top-part {
+      top: 0;
+    }
+
+    .doll-img-part.bottom-part {
+      bottom: 0;
+    }
+
+    /* Inner Core que aparece quando a boneca se abre */
+    .doll-inner-core {
+      position: absolute;
+      top: 38%;
       left: 50%;
-      transform: translateX(-50%);
-      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
-      cursor: pointer;
-    }
-
-    /* Concentric Doll Scalings */
-    .doll-5 { width: 200px; height: 300px; z-index: 5; } /* MCP Server */
-    .doll-4 { width: 165px; height: 250px; z-index: 4; top: 25px; } /* AST Engine */
-    .doll-3 { width: 130px; height: 200px; z-index: 3; top: 50px; } /* AGENTS.md */
-    .doll-2 { width: 100px; height: 150px; z-index: 2; top: 75px; } /* Semantic Graph */
-    .doll-1 { width: 70px; height: 105px; z-index: 1; top: 100px; } /* Core Oracle */
-
-    /* Active Layer Open Animation */
-    .doll-layer.open-top {
-      transform: translateX(-50%) translateY(-60px) rotate(-6deg);
-    }
-    .doll-layer.dimmed {
-      opacity: 0.25;
-    }
-
-    .stage-status {
-      margin-top: 24px;
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
+      transform: translate(-50%, -50%) scale(0.85);
+      z-index: 5;
       background: var(--terminal-bg);
+      border: 2px solid var(--gold-cyrillic);
+      box-shadow: 0 0 15px rgba(243, 166, 21, 0.35);
+      padding: 10px 14px;
+      text-align: center;
+      width: 140px;
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    .real-doll-container.opened .doll-inner-core {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .core-layer-badge {
+      font-family: var(--font-display);
+      font-size: 0.8rem;
       color: var(--gold-cyrillic);
-      padding: 8px 12px;
-      border: 1px solid var(--border-strong);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .core-subtext {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: #928b81;
+      margin-top: 4px;
     }
 
     /* Scroll Step Cards */
@@ -630,7 +686,7 @@
       <nav>
         <a href="#" class="brand">
           <span class="brand-icon">🪆</span>
-          <span class="brand-text">МАТРЁШКА</span>
+          <span class="brand-text">MATRYOSHKA</span>
           <span class="brand-badge">v0.4.0</span>
         </a>
         <div class="nav-links">
@@ -647,8 +703,7 @@
 
   <!-- Hero Monumental Centralizado -->
   <section class="hero-monumental">
-    <div class="container hero-container-flex">
-      <div class="hero-content-col">
+    <div class="container">
       <div class="hero-tagline-box">★ The Concentric Context-Fencing Engine ★</div>
       <h1 class="hero-monumental-title">МАТРЁШКА</h1>
       <div class="hero-monumental-sub">MATRYOSHKA-HARNESS (BABA)</div>
@@ -683,13 +738,6 @@
           </div>
         </div>
       </div>
-      </div>
-      <div class="hero-doll-art">
-        <picture>
-          <source srcset="baba-transparent.webp" type="image/webp">
-          <img src="baba-transparent.png" alt="Matryoshka Doll" class="hero-doll-img">
-        </picture>
-      </div>
     </div>
   </section>
 
@@ -708,45 +756,25 @@
         <!-- Sticky Doll Stage -->
         <div class="doll-stage">
           <div class="doll-stage-label">Current Active Layer</div>
-          <div class="doll-svg-wrapper" id="dollStage">
-            <!-- Doll 5 (Outer Shell: MCP Server) -->
-            <svg class="doll-layer doll-5" viewBox="0 0 100 150" fill="none" id="dollSvg5">
-              <path d="M50 5 C25 5 15 30 15 65 C15 95 20 145 50 145 C80 145 85 95 85 65 C85 30 75 5 50 5 Z" fill="#c53324" stroke="#191716" stroke-width="3"/>
-              <circle cx="50" cy="45" r="22" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
-              <circle cx="43" cy="42" r="3" fill="#191716"/>
-              <circle cx="57" cy="42" r="3" fill="#191716"/>
-              <path d="M46 54 Q50 58 54 54" stroke="#c53324" stroke-width="2" fill="none"/>
-              <path d="M25 85 Q50 105 75 85" stroke="#f3a615" stroke-width="4" fill="none"/>
-              <text x="50" y="125" font-family="'Russo One'" font-size="9" fill="#f3a615" text-anchor="middle">LAYER 5: MCP</text>
-            </svg>
-
-            <!-- Doll 4 (AST Engine baba wrap) -->
-            <svg class="doll-layer doll-4" viewBox="0 0 100 150" fill="none" id="dollSvg4">
-              <path d="M50 8 C28 8 18 32 18 65 C18 95 22 142 50 142 C78 142 82 95 82 65 C82 32 72 8 50 8 Z" fill="#f3a615" stroke="#191716" stroke-width="3"/>
-              <circle cx="50" cy="46" r="20" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
-              <circle cx="44" cy="44" r="2.5" fill="#191716"/>
-              <circle cx="56" cy="44" r="2.5" fill="#191716"/>
-              <text x="50" y="122" font-family="'Russo One'" font-size="9" fill="#191716" text-anchor="middle">LAYER 4: AST</text>
-            </svg>
-
-            <!-- Doll 3 (Adaptive AGENTS.md) -->
-            <svg class="doll-layer doll-3" viewBox="0 0 100 150" fill="none" id="dollSvg3">
-              <path d="M50 10 C30 10 20 35 20 65 C20 95 24 140 50 140 C76 140 80 95 80 65 C80 35 70 10 50 10 Z" fill="#962217" stroke="#191716" stroke-width="3"/>
-              <circle cx="50" cy="48" r="18" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
-              <text x="50" y="120" font-family="'Russo One'" font-size="8.5" fill="#f3a615" text-anchor="middle">LAYER 3: AGENTS</text>
-            </svg>
-
-            <!-- Doll 2 (Semantic Graph) -->
-            <svg class="doll-layer doll-2" viewBox="0 0 100 150" fill="none" id="dollSvg2">
-              <path d="M50 12 C32 12 22 38 22 65 C22 95 26 138 50 138 C74 138 78 95 78 65 C78 38 68 12 50 12 Z" fill="#e8940c" stroke="#191716" stroke-width="3"/>
-              <text x="50" y="115" font-family="'Russo One'" font-size="8" fill="#191716" text-anchor="middle">LAYER 2: GRAPH</text>
-            </svg>
-
-            <!-- Doll 1 (Core Oracle) -->
-            <svg class="doll-layer doll-1" viewBox="0 0 100 150" fill="none" id="dollSvg1">
-              <path d="M50 15 C35 15 25 40 25 65 C25 95 30 135 50 135 C70 135 75 95 75 65 C75 40 65 15 50 15 Z" fill="#191716" stroke="#f3a615" stroke-width="3"/>
-              <text x="50" y="105" font-family="'Russo One'" font-size="8" fill="#f3a615" text-anchor="middle">ORACLE</text>
-            </svg>
+          <div class="doll-artwork-wrapper" id="dollStage">
+            <div class="real-doll-container" id="realDoll">
+              <div class="doll-cap" id="dollCap">
+                <picture>
+                  <source srcset="baba-transparent.webp" type="image/webp">
+                  <img src="baba-transparent.png" alt="Matryoshka Top" class="doll-img-part top-part">
+                </picture>
+              </div>
+              <div class="doll-base" id="dollBase">
+                <picture>
+                  <source srcset="baba-transparent.webp" type="image/webp">
+                  <img src="baba-transparent.png" alt="Matryoshka Bottom" class="doll-img-part bottom-part">
+                </picture>
+              </div>
+              <div class="doll-inner-core" id="dollCore">
+                <div class="core-layer-badge" id="coreBadge">LAYER 5: MCP</div>
+                <div class="core-subtext" id="coreSub">Native Stdio Protocol</div>
+              </div>
+            </div>
           </div>
 
           <div class="stage-status" id="stageStatus">
@@ -918,60 +946,46 @@
     }
 
     // Scroll Observer for Concentric Doll Layers
-    const steps = document.querySelectorAll('.step-card');
-    const stageStatus = document.getElementById('stageStatus');
-    const dollLayers = {
-      5: document.getElementById('dollSvg5'),
-      4: document.getElementById('dollSvg4'),
-      3: document.getElementById('dollSvg3'),
-      2: document.getElementById('dollSvg2'),
-      1: document.getElementById('dollSvg1'),
-    };
+    const steps = document.querySelectorAll(".step-card");
+    const stageStatus = document.getElementById("stageStatus");
+    const dollCap = document.getElementById("dollCap");
+    const realDoll = document.getElementById("realDoll");
+    const coreBadge = document.getElementById("coreBadge");
+    const coreSub = document.getElementById("coreSub");
 
-    const layerLabels = {
-      5: "Layer 5: Native MCP Server (baba mcp serve)",
-      4: "Layer 4: Polyglot AST Engine (baba wrap)",
-      3: "Layer 3: Adaptive AGENTS.md (< 200 tokens)",
-      2: "Layer 2: Semantic Code Graph",
-      1: "Layer 1: Core Maturity Oracle (L1-L4)"
+    const layerMeta = {
+      5: { name: "LAYER 5: MCP", sub: "Native Stdio Protocol", label: "Layer 5: Native MCP Server (baba mcp serve)" },
+      4: { name: "LAYER 4: AST", sub: "Tree-sitter WASM Engine", label: "Layer 4: Polyglot AST Engine (baba wrap)" },
+      3: { name: "LAYER 3: AGENTS", sub: "176 Tokens Boundary", label: "Layer 3: Adaptive AGENTS.md (< 200 tokens)" },
+      2: { name: "LAYER 2: GRAPH", sub: "Semantic Seam Traversal", label: "Layer 2: Semantic Code Graph" },
+      1: { name: "LAYER 1: ORACLE", sub: "Maturity Baseline (L1-L4)", label: "Layer 1: Core Maturity Oracle (L1-L4)" },
     };
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const layer = entry.target.getAttribute('data-layer');
+          const layer = parseInt(entry.target.getAttribute("data-layer"), 10);
           
-          // Update active step UI
-          steps.forEach(s => s.classList.remove('active'));
-          entry.target.classList.add('active');
+          steps.forEach(s => s.classList.remove("active"));
+          entry.target.classList.add("active");
 
-          // Update Status
-          stageStatus.innerText = "ACTIVE: " + layerLabels[layer];
+          const meta = layerMeta[layer] || layerMeta[5];
+          stageStatus.innerText = "ACTIVE: " + meta.label;
 
-          // Animate Dolls: open outer shells as you scroll down
-          const numLayer = parseInt(layer, 10);
-          for (let i = 5; i >= 1; i--) {
-            const svg = dollLayers[i];
-            if (!svg) continue;
-            
-            if (i > numLayer) {
-              // Outer shells are opened/lifted
-              svg.classList.add('open-top');
-              svg.classList.add('dimmed');
-            } else if (i === numLayer) {
-              // Current active shell
-              svg.classList.remove('open-top');
-              svg.classList.remove('dimmed');
-            } else {
-              // Inner shells waiting inside
-              svg.classList.remove('open-top');
-              svg.classList.remove('dimmed');
-            }
+          if (coreBadge) coreBadge.innerText = meta.name;
+          if (coreSub) coreSub.innerText = meta.sub;
+
+          if (layer === 5) {
+            if (dollCap) dollCap.classList.remove("open");
+            if (realDoll) realDoll.classList.remove("opened");
+          } else {
+            if (dollCap) dollCap.classList.add("open");
+            if (realDoll) realDoll.classList.add("opened");
           }
         }
       });
     }, {
-      rootMargin: '-30% 0px -40% 0px',
+      rootMargin: "-30% 0px -40% 0px",
       threshold: 0.1
     });
 
