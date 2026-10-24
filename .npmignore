@@ -1,0 +1,13 @@
+dist/bin/
+binaries/
+packages/
+.github/
+.cursor/
+tests/
+test/
+scripts/
+site/
+dashboards/
+docs/
+*.svg
+*.tgz
