@@ -1,7 +1,7 @@
 # 📐 SPEC-16: feat(release): standalone bun binaries compilation & npm distribution (Phase 5.2)
 
 **Módulo:** Release Engineering / Multi-Platform Distribution  
-**Status:** in progress (Subtask 4: Update `.github/workflows/release.yml` with NPM publishing and asset attachments)  
+**Status:** completed (Subtask 4: Update `.github/workflows/release.yml` with NPM publishing and asset attachments)  
 **Gatilho:** Issue #16  
 **Target:** Bun + TypeScript + Standalone Native Executables  
 

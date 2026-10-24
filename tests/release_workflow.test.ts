@@ -287,7 +287,7 @@ describe("SPEC-16: Standalone Binaries CI/CD Release & NPM Distribution (Subtask
         (content.includes("@maiquelleonel/baba") &&
           content.includes("@maiquelleonel/bbyg"));
       expect(publishesShells).toBe(true);
-      expect(content).toMatch(/packages\/.*npm publish|npm publish.*packages\//);
+      expect(content).toMatch(/packages\/.*npm publish|npm publish.*packages\//s);
     });
   });
 });
