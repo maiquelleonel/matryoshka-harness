@@ -1,3 +1,10 @@
+/**
+ * Matryoshka-Harness (baba / bbyg / matryoshka)
+ * Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation
+ *
+ * Copyright (c) 2026 Maiquel Leonel
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type {
