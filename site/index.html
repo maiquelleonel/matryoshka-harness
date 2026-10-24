@@ -166,6 +166,32 @@
     }
 
     /* Hero Section Monumental Construtivista */
+    .hero-container-flex {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 48px;
+      align-items: center;
+      text-align: left;
+    }
+
+    .hero-doll-art {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .hero-doll-img {
+      max-height: 490px;
+      width: auto;
+      filter: drop-shadow(10px 10px 0px #191716);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .hero-doll-img:hover {
+      transform: scale(1.03) rotate(-2deg);
+    }
+
     .hero-monumental {
       background: var(--red-constructivist);
       color: #ffffff;
@@ -621,7 +647,8 @@
 
   <!-- Hero Monumental Centralizado -->
   <section class="hero-monumental">
-    <div class="container">
+    <div class="container hero-container-flex">
+      <div class="hero-content-col">
       <div class="hero-tagline-box">★ The Concentric Context-Fencing Engine ★</div>
       <h1 class="hero-monumental-title">МАТРЁШКА</h1>
       <div class="hero-monumental-sub">MATRYOSHKA-HARNESS (BABA)</div>
@@ -655,6 +682,13 @@
             </div>
           </div>
         </div>
+      </div>
+      </div>
+      <div class="hero-doll-art">
+        <picture>
+          <source srcset="baba-transparent.webp" type="image/webp">
+          <img src="baba-transparent.png" alt="Matryoshka Doll" class="hero-doll-img">
+        </picture>
       </div>
     </div>
   </section>
@@ -778,6 +812,13 @@
           </div>
         </div>
       </div>
+      </div>
+      <div class="hero-doll-art">
+        <picture>
+          <source srcset="baba-transparent.webp" type="image/webp">
+          <img src="baba-transparent.png" alt="Matryoshka Doll" class="hero-doll-img">
+        </picture>
+      </div>
     </div>
   </section>
 
@@ -817,6 +858,13 @@
           </p>
         </div>
       </div>
+      </div>
+      <div class="hero-doll-art">
+        <picture>
+          <source srcset="baba-transparent.webp" type="image/webp">
+          <img src="baba-transparent.png" alt="Matryoshka Doll" class="hero-doll-img">
+        </picture>
+      </div>
     </div>
   </section>
 
@@ -836,6 +884,13 @@
         <a href="https://github.com/maiquelleonel/ouroboros-engine" target="_blank" class="btn-cta-secondary">
           OUROBOROS ENGINE
         </a>
+      </div>
+      </div>
+      <div class="hero-doll-art">
+        <picture>
+          <source srcset="baba-transparent.webp" type="image/webp">
+          <img src="baba-transparent.png" alt="Matryoshka Doll" class="hero-doll-img">
+        </picture>
       </div>
     </div>
   </section>
