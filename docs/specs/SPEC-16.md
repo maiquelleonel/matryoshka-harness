@@ -1,7 +1,7 @@
 # 📐 SPEC-16: feat(release): standalone bun binaries compilation & npm distribution (Phase 5.2)
 
 **Módulo:** Release Engineering / Multi-Platform Distribution  
-**Status:** completed (Subtask 4: Update `.github/workflows/release.yml` with NPM publishing and asset attachments)  
+**Status:** completed (Subtask 5: Verification tests for standalone binary execution and CLI alias parity)  
 **Gatilho:** Issue #16  
 **Target:** Bun + TypeScript + Standalone Native Executables  
 
@@ -329,6 +329,52 @@ Feature: CI/CD Release Automation and NPM Distribution (Subtask 4)
     And it must publish the protective typosquatting shells ("@maiquelleonel/baba", "@maiquelleonel/bbyg", "@maiquelleonel/matrioska", "@maiquelleonel/matryoska") with "--access public"
 ```
 
+### Subtask 5: Verification tests for standalone binary execution and CLI alias parity
+```gherkin
+Feature: Standalone Binary Execution and CLI Alias Parity (Subtask 5)
+
+  Scenario: Standalone compiled binary properties and checksums verification
+    Given a compiled standalone binary for the current host architecture
+    Then the binary exists on disk with executable permissions
+    And the binary size is strictly under 100MB
+    And the SHA-256 hash matches the digest recorded in checksums.txt
+
+  Scenario: Standalone direct execution without external host toolchain
+    Given a compiled standalone binary
+    When executed directly as a native executable with minimal environment
+    Then it should print valid help text for "--help" and "-h"
+    And it should print SemVer version for "--version" and "-v" matching package.json
+    And it should fail gracefully with exit code 1 on unknown subcommands
+
+  Scenario: Subcommand functional execution via standalone binary
+    Given a compiled standalone binary
+    When executing "detect" or "detect --json"
+    Then it outputs valid project stack detection results
+    When executing "scan --json --badge"
+    Then it outputs maturity audit results and creates an SVG badge
+    When executing "wrap --json --dry-run"
+    Then it performs AST antipattern analysis without host toolchain dependencies
+    When executing "agents profile" or "agents skill"
+    Then it provides architectural profile and compiles modular skills guidance
+    When executing "wrap --strict" with failing threshold
+    Then it returns exit code 1 enforcing strict quality gates
+
+  Scenario: Strict CLI alias parity across standalone executables (baba, bbyg, matryoshka)
+    Given standalone binary executables named "baba", "bbyg", and "matryoshka"
+    When invoking "--version" across all three aliases
+    Then all three return exit code 0 and identical version strings
+    When invoking "--help" across all three aliases
+    Then all three return exit code 0 and identical help text
+    When invoking "detect --json", "scan --json", "wrap --dry-run --json"
+    Then all three aliases return byte-for-byte or semantically identical JSON outputs
+
+  Scenario: Distribution parity with compiled dispatcher and protective shells
+    Given the compiled CLI dispatcher "dist/cli.js"
+    Then it produces identical version, help, and detect JSON to the standalone binary
+    Given the protective forwarding shells in "packages/*"
+    Then all shells forward "--version" and "--help" with matching version and help text
+```
+
 ---
 
 ## 🔒 4. Invariantes & Casos de Borda
@@ -350,4 +396,5 @@ Feature: CI/CD Release Automation and NPM Distribution (Subtask 4)
 - `scripts/build-shells.ts` (Utilitário de geração, validação e sincronização de cascas)
 - `package.json` (Script de build de cascas `build:shells`)
 - `tests/protective_shells.test.ts` (Suíte de testes BDD de aceitação para Subtask 3)
+- `tests/standalone_execution.test.ts` (Suíte de testes BDD de aceitação para Subtask 5)
 - `docs/specs/SPEC-16.md` (Especificação formal SDD)
