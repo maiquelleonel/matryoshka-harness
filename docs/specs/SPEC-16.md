@@ -1,7 +1,7 @@
 # 📐 SPEC-16: feat(release): standalone bun binaries compilation & npm distribution (Phase 5.2)
 
 **Módulo:** Release Engineering / Multi-Platform Distribution  
-**Status:** completed (Subtask 2: Update `package.json` publishing metadata, entrypoints, and bin dispatchers)  
+**Status:** completed (Subtask 3: Implement forwarding wrappers for typosquatting protective shells)  
 **Gatilho:** Issue #16  
 **Target:** Bun + TypeScript + Standalone Native Executables  
 
@@ -124,6 +124,47 @@ export interface BuildSummary {
 - **SemVer Parity:** O CLI deve responder à flag `--version` reportando a versão exata do manifesto (`0.4.0`).
 - **Whitelisting de Pacote:** O pacote NPM final publicado deve conter apenas artefatos de distribuição (`dist`), metadados e documentação (`README.md`, `LICENSE`), prevenindo vazamento de testes ou arquivos efêmeros.
 
+### 2.4 Modelos e Contratos de Cascas de Typosquatting (Subtask 3)
+
+```typescript
+export interface ProtectiveShellConfig {
+  name: string;
+  packageName: string;
+  description: string;
+  binName: string;
+  aliases: string[];
+  targetPackage: string;
+  isTypoProtection?: boolean;
+}
+
+export interface ShellScaffoldResult {
+  packageName: string;
+  directory: string;
+  filesWritten: string[];
+  success: boolean;
+  error?: string;
+}
+
+export interface ShellVerificationResult {
+  packageName: string;
+  directory: string;
+  validManifest: boolean;
+  validForwarder: boolean;
+  validDependency: boolean;
+  isPublic: boolean;
+  success: boolean;
+  errors: string[];
+}
+```
+
+#### Definições Canônicas das Cascas (`PROTECTIVE_SHELLS`):
+1. `@maiquelleonel/baba` -> Alias ergonômico de 4 letras (matriarca eslava).
+2. `@maiquelleonel/bbyg` -> Atalho ultra-compacto (baba-yaga).
+3. `@maiquelleonel/matrioska` -> Proteção contra erro comum de digitação (`i` em vez de `y`).
+4. `@maiquelleonel/matryoska` -> Proteção contra erro comum de digitação (omissão do `h`).
+
+Cada pacote declara `@maiquelleonel/matryoshka: "^0.4.0"` como dependência direta, expõe executáveis de encaminhamento em `bin/` com permissão de execução (`chmod +x`), reexporta a API da biblioteca via `index.js`, e inclui `README.md` explicativo e licença MIT.
+
 ---
 
 ## 🧪 3. Acceptance Criteria (BDD / Gherkin)
@@ -199,6 +240,44 @@ Feature: NPM Publishing Metadata and Bin Dispatchers (Subtask 2)
     Given the root "package.json"
     Then "files" must include "dist", "README.md", and "LICENSE"
     And repository, license, and author metadata must be properly populated
+
+### Subtask 3: Protective Typosquatting Shells
+```gherkin
+Feature: Protective Typosquatting Forwarding Shells (Subtask 3)
+
+  Scenario: Canonical definitions and metadata of protective shells
+    Given the canonical PROTECTIVE_SHELLS configuration list
+    Then it defines exactly 4 protective shells: "baba", "bbyg", "matrioska", "matryoska"
+    And each shell targets "@maiquelleonel/matryoshka"
+    And "matrioska" and "matryoska" are flagged as typo protection packages
+
+  Scenario: Scaffolded shell package manifests and public distribution
+    Given the scaffolded directory for each shell in "packages/<name>"
+    Then "package.json" exists and has "name" matching "@maiquelleonel/<name>"
+    And "publishConfig.access" is strictly set to "public"
+    And "dependencies" explicitly declares "@maiquelleonel/matryoshka" with matching version
+    And "bin" exposes the primary alias and canonical aliases pointing to forwarding scripts
+    And "files" whitelists distribution assets ("bin", "index.js", "README.md", "LICENSE")
+
+  Scenario: Forwarding script mechanics and canonical CLI invocation
+    Given a forwarding script "packages/<name>/bin/<name>.js"
+    Then it starts with a valid shebang ("#!/usr/bin/env node")
+    And it has executable file mode permissions
+    And it successfully resolves the canonical CLI of "@maiquelleonel/matryoshka"
+    When invoked with arguments "--version"
+    Then it forwards arguments to the canonical CLI and returns exit code 0 with matching version
+
+  Scenario: Library re-export parity
+    Given the "index.js" entrypoint in each shell package
+    When required or imported
+    Then it re-exports the canonical library surface of "@maiquelleonel/matryoshka"
+
+  Scenario: Programmatic scaffolding and verification utilities
+    When scaffoldAllShells is executed with dryRun: true
+    Then it plans scaffolding for all 4 shells without modifying disk
+    When verifyAllShells is executed
+    Then all 4 shell packages pass verification with zero errors
+```
 ```
 
 ---
@@ -212,7 +291,11 @@ Feature: NPM Publishing Metadata and Bin Dispatchers (Subtask 2)
 ---
 
 ## 📁 5. Arquivos Afetados
-- `package.json` (Metadados de publicação, entrypoints, bin dispatchers, scripts de build)
-- `src/cli.ts` (Sincronização de versão para 0.4.0)
-- `tests/npm_distribution.test.ts` (Suíte de testes BDD de aceitação para Subtask 2)
+- `packages/baba/*` (Casca de encaminhamento para alias baba)
+- `packages/bbyg/*` (Casca de encaminhamento para alias bbyg)
+- `packages/matrioska/*` (Casca de proteção contra typosquatting matrioska)
+- `packages/matryoska/*` (Casca de proteção contra typosquatting matryoska)
+- `scripts/build-shells.ts` (Utilitário de geração, validação e sincronização de cascas)
+- `package.json` (Script de build de cascas `build:shells`)
+- `tests/protective_shells.test.ts` (Suíte de testes BDD de aceitação para Subtask 3)
 - `docs/specs/SPEC-16.md` (Especificação formal SDD)

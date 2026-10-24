@@ -1,0 +1,47 @@
+{
+  "name": "@maiquelleonel/bbyg",
+  "version": "0.4.0",
+  "description": "Protective shell and forwarding wrapper for @maiquelleonel/matryoshka (bbyg compact alias)",
+  "main": "bin/bbyg.js",
+  "module": "index.js",
+  "bin": {
+    "bbyg": "bin/bbyg.js",
+    "matryoshka": "bin/bbyg.js",
+    "baba": "bin/bbyg.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@maiquelleonel/matryoshka": "^0.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maiquelleonel/matryoshka-harness.git",
+    "directory": "packages/bbyg"
+  },
+  "bugs": {
+    "url": "https://github.com/maiquelleonel/matryoshka-harness/issues"
+  },
+  "homepage": "https://github.com/maiquelleonel/matryoshka-harness#readme",
+  "keywords": [
+    "matryoshka",
+    "harness",
+    "baba",
+    "bbyg",
+    "typosquatting",
+    "wrapper",
+    "forwarding",
+    "agentic",
+    "ai",
+    "mcp"
+  ],
+  "author": "Maiquel Leonel <skywishmtfk@gmail.com>",
+  "license": "MIT"
+}
