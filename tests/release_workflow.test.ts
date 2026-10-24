@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   determineSemverBump,
@@ -7,6 +9,7 @@ import {
   generateStructuredChangelog,
   incrementVersion,
   parseConventionalCommit,
+  getReleaseAssets,
 } from "../src/release";
 
 describe("SPEC-5: Subtask 3 - Automated SemVer Release Pipeline", () => {
@@ -187,6 +190,104 @@ describe("SPEC-5: Subtask 3 - Automated SemVer Release Pipeline", () => {
       expect(changelog).toContain("replace legacy engine");
       expect(changelog).toContain("add maintainer gate workflow");
       expect(changelog).toContain("fix yaml indentation");
+    });
+  });
+});
+
+describe("SPEC-16: Standalone Binaries CI/CD Release & NPM Distribution (Subtask 4)", () => {
+  const rootDir = process.cwd();
+  const releaseWorkflowPath = join(
+    rootDir,
+    ".github",
+    "workflows",
+    "release.yml",
+  );
+
+  const getWorkflowContent = () => readFileSync(releaseWorkflowPath, "utf-8");
+
+  describe("Workflow Triggers & Permissions", () => {
+    it("should trigger on push to main branch and semantic version tags (v*)", () => {
+      const content = getWorkflowContent();
+      expect(content).toContain("push:");
+      expect(content).toMatch(/branches:.*main/s);
+      expect(content).toMatch(/tags:.*['"]?v\*/s);
+    });
+
+    it("should support manual trigger via workflow_dispatch", () => {
+      const content = getWorkflowContent();
+      expect(content).toContain("workflow_dispatch:");
+    });
+
+    it("should configure contents: write permission for GitHub Releases and tags", () => {
+      const content = getWorkflowContent();
+      expect(content).toMatch(/permissions:.*contents:\s*write/s);
+    });
+  });
+
+  describe("Standalone Binary Compilation & Assets Preparation", () => {
+    it("should include a step to build multi-platform standalone binaries", () => {
+      const content = getWorkflowContent();
+      expect(content).toMatch(/bun run build:binaries|scripts\/build-binaries\.ts/);
+    });
+
+    it("should include a step to build/scaffold protective typosquatting shells", () => {
+      const content = getWorkflowContent();
+      expect(content).toMatch(/bun run build:shells|scripts\/build-shells\.ts/);
+    });
+
+    it("should resolve compiled binary assets and checksums for release attachment", () => {
+      expect(typeof getReleaseAssets).toBe("function");
+
+      const tempDir = fs.mkdtempSync(join(os.tmpdir(), "release-assets-test-"));
+      try {
+        const dummyBin = join(tempDir, "baba-linux-x64");
+        const dummyChecksums = join(tempDir, "checksums.txt");
+        const dummyOther = join(tempDir, "notes.txt");
+
+        writeFileSync(dummyBin, "binary content");
+        writeFileSync(dummyChecksums, "checksum content");
+        writeFileSync(dummyOther, "other");
+
+        const assets = getReleaseAssets(tempDir);
+        expect(assets).toContain(dummyBin);
+        expect(assets).toContain(dummyChecksums);
+        expect(assets).not.toContain(dummyOther);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should attach binary assets and checksums to the GitHub Release", () => {
+      const content = getWorkflowContent();
+      const hasAssetUpload =
+        content.includes("gh release upload") ||
+        content.includes("softprops/action-gh-release") ||
+        content.includes("dist/bin");
+      expect(hasAssetUpload).toBe(true);
+    });
+  });
+
+  describe("NPM Registry Authentication & Scoped Publishing", () => {
+    it("should authenticate against the NPM registry using NPM_TOKEN", () => {
+      const content = getWorkflowContent();
+      expect(content).toContain("NPM_TOKEN");
+      expect(content).toMatch(/NODE_AUTH_TOKEN|NPM_TOKEN/);
+      expect(content).toMatch(/registry\.npmjs\.org/);
+    });
+
+    it("should publish the canonical package @maiquelleonel/matryoshka with public access", () => {
+      const content = getWorkflowContent();
+      expect(content).toMatch(/npm publish.*--access\s+public/);
+    });
+
+    it("should publish all protective typosquatting shells to NPM with public access", () => {
+      const content = getWorkflowContent();
+      const publishesShells =
+        content.includes("packages/*") ||
+        (content.includes("@maiquelleonel/baba") &&
+          content.includes("@maiquelleonel/bbyg"));
+      expect(publishesShells).toBe(true);
+      expect(content).toMatch(/packages\/.*npm publish|npm publish.*packages\//);
     });
   });
 });

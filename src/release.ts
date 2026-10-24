@@ -232,6 +232,13 @@ export function getGitReleaseContext(cwd: string = process.cwd()): {
 }
 
 /**
+ * Identifies and returns compiled standalone binary assets and checksums for release attachment.
+ */
+export function getReleaseAssets(binDir?: string): string[] {
+  return [];
+}
+
+/**
  * Creates signed or annotated Git tag.
  * Uses GPG signed tag (-s) if signingkey is configured, otherwise fallback to annotated (-a).
  */
