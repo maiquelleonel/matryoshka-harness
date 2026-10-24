@@ -359,15 +359,20 @@
       align-items: start;
     }
 
-    /* Fixed Real Doll Stage */
+    /* Fixed Real Doll Stage (Concentric Dolls Inside One Another) */
     .doll-stage {
       position: sticky;
       top: 80px;
       background: var(--bg-canvas);
       border: 2px solid var(--border-strong);
       box-shadow: var(--shadow-retro-lg);
-      padding: 32px 20px;
+      padding: 32px 16px;
       text-align: center;
+      min-height: 480px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
     }
 
     .doll-stage-label {
@@ -376,12 +381,12 @@
       font-weight: 700;
       text-transform: uppercase;
       color: var(--red-constructivist);
-      margin-bottom: 16px;
+      margin-bottom: 8px;
     }
 
     .doll-artwork-wrapper {
-      width: 220px;
-      height: 340px;
+      width: 240px;
+      height: 360px;
       margin: 0 auto;
       position: relative;
       display: flex;
@@ -389,75 +394,116 @@
       align-items: center;
     }
 
-    .real-doll-container {
-      position: relative;
-      width: 180px;
-      height: 335px;
-    }
-
-    .doll-cap {
+    /* Cada boneca concêntrica empilhada no centro absoluto */
+    .concentric-doll {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 52%;
-      overflow: hidden;
-      z-index: 10;
-      transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-      transform-origin: bottom left;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
     }
 
-    .doll-cap.open {
-      transform: translateY(-50px) rotate(-8deg);
-      filter: drop-shadow(4px 4px 0px rgba(0,0,0,0.3));
-    }
+    /* Escalas aninhadas das 5 bonecas */
+    .doll-shell-5 { width: 190px; height: 350px; z-index: 10; }
+    .doll-shell-4 { width: 156px; height: 288px; z-index: 8; }
+    .doll-shell-3 { width: 126px; height: 232px; z-index: 6; }
+    .doll-shell-2 { width: 98px;  height: 180px; z-index: 4; }
+    .doll-shell-1 { width: 72px;  height: 132px; z-index: 2; }
 
-    .doll-base {
+    /* Metades Superior e Inferior com recorte simétrico */
+    .doll-half {
       position: absolute;
-      bottom: 0;
       left: 0;
       width: 100%;
       height: 50%;
       overflow: hidden;
-      z-index: 8;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
     }
 
-    .doll-img-part {
+    .doll-half-top {
+      top: 0;
+      transform-origin: bottom center;
+    }
+
+    .doll-half-bottom {
+      bottom: 0;
+      transform-origin: top center;
+    }
+
+    .doll-slice {
       position: absolute;
       left: 0;
       width: 100%;
-      height: 335px;
+      height: 200%;
       object-fit: contain;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
     }
 
-    .doll-img-part.top-part {
+    .doll-slice.slice-top {
       top: 0;
     }
 
-    .doll-img-part.bottom-part {
+    .doll-slice.slice-bottom {
       bottom: 0;
     }
 
-    /* Inner Core que aparece quando a boneca se abre */
-    .doll-inner-core {
-      position: absolute;
-      top: 38%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.85);
-      z-index: 5;
-      background: var(--terminal-bg);
-      border: 2px solid var(--gold-cyrillic);
-      box-shadow: 0 0 15px rgba(243, 166, 21, 0.35);
-      padding: 10px 14px;
-      text-align: center;
-      width: 140px;
+    /* ABERTURA BIDIRECIONAL COM ESVANECIMENTO */
+    .concentric-doll.opened .doll-half-top {
+      transform: translateY(-80px) rotate(-8deg);
       opacity: 0;
-      transition: opacity 0.35s ease, transform 0.35s ease;
+      pointer-events: none;
     }
 
-    .real-doll-container.opened .doll-inner-core {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+    .concentric-doll.opened .doll-half-bottom {
+      transform: translateY(+80px) rotate(+6deg);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Boneca sólida interna (Oracle) */
+    .doll-solid-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .doll-slice-solid {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 0 10px rgba(243, 166, 21, 0.6));
+    }
+
+    .core-solid-badge {
+      position: absolute;
+      bottom: -18px;
+      background: var(--terminal-bg);
+      color: var(--gold-cyrillic);
+      font-family: var(--font-display);
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border: 1px solid var(--gold-cyrillic);
+      white-space: nowrap;
+    }
+
+    /* Floating Card que acompanha a camada ativa */
+    .doll-inner-floating {
+      position: absolute;
+      bottom: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: var(--terminal-bg);
+      border: 2px solid var(--gold-cyrillic);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      padding: 8px 14px;
+      text-align: center;
+      width: 170px;
+      transition: all 0.3s ease;
     }
 
     .core-layer-badge {
@@ -472,7 +518,7 @@
       font-family: var(--font-mono);
       font-size: 0.68rem;
       color: #928b81;
-      margin-top: 4px;
+      margin-top: 2px;
     }
 
     /* Scroll Step Cards */
@@ -757,23 +803,58 @@
         <div class="doll-stage">
           <div class="doll-stage-label">Current Active Layer</div>
           <div class="doll-artwork-wrapper" id="dollStage">
-            <div class="real-doll-container" id="realDoll">
-              <div class="doll-cap" id="dollCap">
-                <picture>
-                  <source srcset="baba-transparent.webp" type="image/webp">
-                  <img src="baba-transparent.png" alt="Matryoshka Top" class="doll-img-part top-part">
-                </picture>
+            <!-- Camada 5: Outer Shell (MCP) -->
+            <div class="concentric-doll doll-shell-5" id="dollShell5">
+              <div class="doll-half doll-half-top">
+                <img src="baba-transparent.webp" alt="Doll 5 Top" class="doll-slice slice-top">
               </div>
-              <div class="doll-base" id="dollBase">
-                <picture>
-                  <source srcset="baba-transparent.webp" type="image/webp">
-                  <img src="baba-transparent.png" alt="Matryoshka Bottom" class="doll-img-part bottom-part">
-                </picture>
+              <div class="doll-half doll-half-bottom">
+                <img src="baba-transparent.webp" alt="Doll 5 Bottom" class="doll-slice slice-bottom">
               </div>
-              <div class="doll-inner-core" id="dollCore">
-                <div class="core-layer-badge" id="coreBadge">LAYER 5: MCP</div>
-                <div class="core-subtext" id="coreSub">Native Stdio Protocol</div>
+            </div>
+
+            <!-- Camada 4: Second Shell (AST) -->
+            <div class="concentric-doll doll-shell-4" id="dollShell4">
+              <div class="doll-half doll-half-top">
+                <img src="baba-transparent.webp" alt="Doll 4 Top" class="doll-slice slice-top">
               </div>
+              <div class="doll-half doll-half-bottom">
+                <img src="baba-transparent.webp" alt="Doll 4 Bottom" class="doll-slice slice-bottom">
+              </div>
+            </div>
+
+            <!-- Camada 3: Third Shell (AGENTS) -->
+            <div class="concentric-doll doll-shell-3" id="dollShell3">
+              <div class="doll-half doll-half-top">
+                <img src="baba-transparent.webp" alt="Doll 3 Top" class="doll-slice slice-top">
+              </div>
+              <div class="doll-half doll-half-bottom">
+                <img src="baba-transparent.webp" alt="Doll 3 Bottom" class="doll-slice slice-bottom">
+              </div>
+            </div>
+
+            <!-- Camada 2: Fourth Shell (Graph) -->
+            <div class="concentric-doll doll-shell-2" id="dollShell2">
+              <div class="doll-half doll-half-top">
+                <img src="baba-transparent.webp" alt="Doll 2 Top" class="doll-slice slice-top">
+              </div>
+              <div class="doll-half doll-half-bottom">
+                <img src="baba-transparent.webp" alt="Doll 2 Bottom" class="doll-slice slice-bottom">
+              </div>
+            </div>
+
+            <!-- Camada 1: Solid Core (Oracle) -->
+            <div class="concentric-doll doll-shell-1" id="dollShell1">
+              <div class="doll-solid-inner">
+                <img src="baba-transparent.webp" alt="Core Doll 1" class="doll-slice-solid">
+                <div class="core-solid-badge">L1 ORACLE</div>
+              </div>
+            </div>
+
+            <!-- Floating Badge Card da Camada Ativa -->
+            <div class="doll-inner-floating" id="dollCore">
+              <div class="core-layer-badge" id="coreBadge">LAYER 5: MCP</div>
+              <div class="core-subtext" id="coreSub">Native Stdio Protocol</div>
             </div>
           </div>
 
@@ -945,13 +1026,19 @@
       });
     }
 
-    // Scroll Observer for Concentric Doll Layers
+    // Scroll Observer for Concentric Nested Dolls with Bidirectional Fade
     const steps = document.querySelectorAll(".step-card");
     const stageStatus = document.getElementById("stageStatus");
-    const dollCap = document.getElementById("dollCap");
-    const realDoll = document.getElementById("realDoll");
     const coreBadge = document.getElementById("coreBadge");
     const coreSub = document.getElementById("coreSub");
+
+    const shells = {
+      5: document.getElementById("dollShell5"),
+      4: document.getElementById("dollShell4"),
+      3: document.getElementById("dollShell3"),
+      2: document.getElementById("dollShell2"),
+      1: document.getElementById("dollShell1"),
+    };
 
     const layerMeta = {
       5: { name: "LAYER 5: MCP", sub: "Native Stdio Protocol", label: "Layer 5: Native MCP Server (baba mcp serve)" },
@@ -964,29 +1051,37 @@
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const layer = parseInt(entry.target.getAttribute("data-layer"), 10);
+          const currentLayer = parseInt(entry.target.getAttribute("data-layer"), 10);
           
           steps.forEach(s => s.classList.remove("active"));
           entry.target.classList.add("active");
 
-          const meta = layerMeta[layer] || layerMeta[5];
+          const meta = layerMeta[currentLayer] || layerMeta[5];
           stageStatus.innerText = "ACTIVE: " + meta.label;
 
           if (coreBadge) coreBadge.innerText = meta.name;
           if (coreSub) coreSub.innerText = meta.sub;
 
-          if (layer === 5) {
-            if (dollCap) dollCap.classList.remove("open");
-            if (realDoll) realDoll.classList.remove("opened");
-          } else {
-            if (dollCap) dollCap.classList.add("open");
-            if (realDoll) realDoll.classList.add("opened");
+          // Mecânica da Matryoshka Concêntrica:
+          // Camadas MAIORES que a atual (já roladas para trás) abrem e esvanecem (opened: true)
+          // A camada atual e menores ficam fechadas no centro esperando a vez!
+          for (let i = 5; i >= 1; i--) {
+            const shell = shells[i];
+            if (!shell) continue;
+
+            if (i > currentLayer) {
+              // As cascas externas abrem pra cima e pra baixo e somem suavemente
+              shell.classList.add("opened");
+            } else {
+              // A casca atual e as interiores ficam fechadas, aninhadas
+              shell.classList.remove("opened");
+            }
           }
         }
       });
     }, {
-      rootMargin: "-30% 0px -40% 0px",
-      threshold: 0.1
+      rootMargin: "-25% 0px -35% 0px",
+      threshold: 0.15
     });
 
     steps.forEach(step => observer.observe(step));
