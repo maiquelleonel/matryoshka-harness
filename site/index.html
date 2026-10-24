@@ -1034,7 +1034,7 @@
       });
     }
 
-    // Concentric Nested Dolls Controller with Smooth Layer 5 Default
+    // Concentric Nested Dolls Controller with Pixel-Perfect Midline Trigger
     const steps = document.querySelectorAll(".step-card");
     const shells = {
       5: document.getElementById("dollShell5"),
@@ -1044,8 +1044,15 @@
       1: document.getElementById("dollShell1"),
     };
 
+    let lastActiveLayer = 5;
+
     function applyLayerState(currentLayer) {
-      // Atualizar classe active nos cards
+      if (currentLayer === lastActiveLayer && document.querySelector(".step-card.active")) {
+        return; // Estado ja aplicado
+      }
+      lastActiveLayer = currentLayer;
+
+      // 1. Atualizar classe active nos cards (apenas 1 de cada vez)
       steps.forEach(s => {
         const l = parseInt(s.getAttribute("data-layer"), 10);
         if (l === currentLayer) {
@@ -1055,7 +1062,7 @@
         }
       });
 
-      // Abertura bidirecional física:
+      // 2. Abertura bidirecional física:
       // Cascas MAIORES que a atual abrem e esvanecem (opened: true)
       // A casca atual e menores ficam aninhadas no centro
       for (let i = 5; i >= 1; i--) {
@@ -1069,7 +1076,7 @@
         }
       }
 
-      // Layer 1 só acende no último nível
+      // 3. Layer 1 só acende no último nível
       if (shells[1]) {
         if (currentLayer === 1) {
           shells[1].classList.add("active-core");
@@ -1079,26 +1086,42 @@
       }
     }
 
-    // LAYER 5 NASCE SELECIONADO POR PADRÃO:
-    applyLayerState(5);
+    // GATILHO MATEMÁTICO: SÓ TROCA QUANDO O CARD PASSAR DO MEIO DA MATRYOSHKA
+    function updateScrollTrigger() {
+      // O palco da matryoshka fica sticky em top: 80px e tem 640px de altura.
+      // O meio exato da imagem fica em 80px + (640 / 2) = 400px do topo do viewport.
+      const dollMidlineY = 400;
 
-    // Observer com janela ampla e estável (sem troca relâmpago)
-    let activeLayer = 5;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const layer = parseInt(entry.target.getAttribute("data-layer"), 10);
-          activeLayer = layer;
-          applyLayerState(layer);
+      let detectedLayer = 5; // Layer 5 é o default incondicional no topo
+
+      steps.forEach(step => {
+        const rect = step.getBoundingClientRect();
+        // O card so se torna ativo quando o seu topo ultrapassar o meio da altura da matryoshka!
+        if (rect.top <= dollMidlineY) {
+          detectedLayer = parseInt(step.getAttribute("data-layer"), 10);
         }
       });
-    }, {
-      /* Janela ampla para o card permanecer selecionado confortavelmente */
-      rootMargin: "-20% 0px -40% 0px",
-      threshold: 0.1
-    });
 
-    steps.forEach(step => observer.observe(step));
+      applyLayerState(detectedLayer);
+    }
+
+    // Inicializar no Layer 5
+    applyLayerState(5);
+
+    // Listener de scroll de alta precisão com requestAnimationFrame
+    let ticking = false;
+    window.addEventListener("scroll", () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateScrollTrigger();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    // Checagem imediata no carregamento
+    updateScrollTrigger();
   </script>
 </body>
 </html>
