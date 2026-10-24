@@ -26,10 +26,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./index.ts --target bun --outdir ./dist && bun build ./src/cli.ts --target bun --outdir ./dist && bun run tsc --declaration --emitDeclarationOnly --noEmit false --outDir dist",
+    "build": "bun build ./index.ts --target bun --outdir ./dist && bun build ./src/cli.ts --target bun --outdir ./dist && bun run tsc -p tsconfig.build.json",
     "build:binaries": "bun run scripts/build-binaries.ts",
     "build:shells": "bun run scripts/build-shells.ts",
-    "build:types": "tsc --declaration --emitDeclarationOnly --noEmit false --outDir dist",
+    "build:types": "tsc -p tsconfig.build.json",
     "release": "bun run ./src/release.ts",
     "baba": "bun run src/cli.ts",
     "bbyg": "bun run src/cli.ts",
