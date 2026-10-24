@@ -125,6 +125,36 @@
       border-radius: 2px;
     }
 
+    .lang-switch {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #191716;
+      padding: 4px 10px;
+      border: 1px solid var(--gold-cyrillic);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .btn-lang {
+      background: transparent;
+      border: none;
+      color: #928b81;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      transition: color 0.15s;
+    }
+
+    .btn-lang.active {
+      color: var(--gold-cyrillic);
+    }
+
+    .lang-divider {
+      color: #555;
+    }
+
     .nav-links {
       display: flex;
       gap: 20px;
@@ -809,7 +839,7 @@
 
   <!-- Top Ribbon / Mini Header (Vinho Soviético Escuro + Branco) -->
   <div class="top-strip">
-    <span>★</span> ZERO CODE EXFILTRATION <span>★</span> PURE WEB-ASSEMBLY AST <span>★</span> TOKEN BUDGET GUARD &lt; 200 TOKENS <span>★</span>
+    <span data-i18n="top_ribbon"><span>★</span> ZERO EXFILTRAÇÃO DE CÓDIGO <span>★</span> AST NATIVO EM WEB-ASSEMBLY <span>★</span> GUARDA DE CONTEXTO &lt; 200 TOKENS <span>★</span></span>
   </div>
 
   <!-- Site Header (Fundo Vermelho Construtivista) -->
@@ -822,8 +852,13 @@
           <span class="brand-badge">v0.4.0</span>
         </a>
         <div class="nav-links">
-          <a href="#concentric" class="nav-link">Concentric Layers</a>
-          <a href="#anti-slop" class="nav-link">Anti-Slop Safeguards</a>
+          <div class="lang-switch">
+            <button class="btn-lang active" onclick="setLang('pt')" id="btnLangPt">PT</button>
+            <span class="lang-divider">|</span>
+            <button class="btn-lang" onclick="setLang('en')" id="btnLangEn">EN</button>
+          </div>
+          <a href="#concentric" class="nav-link" data-i18n="nav_concentric">Camadas Concêntricas</a>
+          <a href="#anti-slop" class="nav-link" data-i18n="nav_safeguards">Garantias Anti-Slop</a>
           <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-github">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
             GITHUB
@@ -836,7 +871,7 @@
   <!-- Hero Monumental Centralizado -->
   <section class="hero-monumental">
     <div class="container">
-      <div class="hero-tagline-box">★ The Concentric Context-Fencing Engine ★</div>
+      <div class="hero-tagline-box" data-i18n="hero_tagline">★ Motor de Cercamento Contextual Concêntrico ★</div>
       <h1 class="hero-monumental-title">MATRYOSHKA</h1>
       <div class="hero-monumental-sub">HARNESS (BABA)</div>
       <p class="hero-monumental-desc">
@@ -859,7 +894,7 @@
             <span class="chrome-dot red"></span>
             <span class="chrome-dot yellow"></span>
             <span class="chrome-dot green"></span>
-            <span class="chrome-title">// VERIFIED PRODUCTION EVIDENCE — 88% TOKEN SAVINGS</span>
+            <span class="chrome-title">// EVIDÊNCIA REAL DE PRODUÇÃO — 88% DE ECONOMIA DE TOKENS</span>
           </div>
           <div class="terminal-body-full">
             <div class="term-line prompt"><span class="term-ps1">$</span> bunx @maiquelleonel/matryoshka agents generate --dry-run</div>
@@ -868,7 +903,7 @@
             <div class="term-line">  • Archetype:       <span class="val-green">api_backend</span></div>
             <div class="term-line">  • Root AGENTS:     <span class="val-pink">176 tokens</span> <span class="val-tag">[PASS &lt; 200]</span></div>
             <div class="term-line">  • On-Demand:       <span class="val-blue">4 modular skills in .agents/</span></div>
-            <div class="term-line footer">✓ Token Savings: 1,324 tokens per session turn (88% reduction)</div>
+            <div class="term-line footer">✓ Economia: 1.324 tokens por turno de sessão (88% de redução)</div>
           </div>
         </div>
       </div>
@@ -879,17 +914,17 @@
   <section class="showcase-section" id="concentric">
     <div class="container">
       <div class="section-header">
-        <div class="section-eyebrow">Concentric Architecture</div>
-        <h2 class="section-title">A Harness Inside a Harness Inside a Harness</h2>
+        <div class="section-eyebrow" data-i18n="showcase_eyebrow">Arquitetura Concêntrica</div>
+        <h2 class="section-title" data-i18n="showcase_title">Um Harness Dentro do Outro, Dentro do Outro...</h2>
         <p style="color: var(--ink-muted); max-width: 600px; margin: 12px auto 0;">
-          Like a traditional Russian Matryoshka doll, each governance layer tightly encapsulates the next. Scroll down to open the concentric shells:
+          <span data-i18n="showcase_desc">Como a tradicional boneca russa Matryoshka, cada camada de governança encapsula a próxima. Role para baixo para abrir as cascas concêntricas:</span>
         </p>
       </div>
 
       <div class="doll-interactive-container">
         <!-- Sticky Doll Stage -->
         <div class="doll-stage">
-          <div class="doll-stage-label">Current Active Layer</div>
+          <div class="doll-stage-label" data-i18n="stage_label">Camada Ativa Atual</div>
           <div class="doll-artwork-wrapper" id="dollStage">
             <!-- Camada 5: Outer Shell (MCP) -->
             <div class="concentric-doll doll-shell-5" id="dollShell5">
@@ -946,10 +981,10 @@
         <div class="doll-steps">
           <!-- Step 5 -->
           <div class="step-card active" data-layer="5">
-            <span class="step-badge">Outer Shell • Layer 5</span>
-            <h3 class="step-title">Native MCP Server (baba mcp serve)</h3>
+            <span class="step-badge" data-i18n="step5_badge">Casca Externa • Camada 5</span>
+            <h3 class="step-title" data-i18n="step5_title">Servidor MCP Nativo (baba mcp serve)</h3>
             <p class="step-desc">
-              Plugs directly into Cursor, Zed, Claude Code, and Gemini CLI over standard <code>stdio</code>. Exposes live tools (<code>detect_stack</code>, <code>wrap_context</code>, <code>generate_agents</code>) and real-time resources without filesystem poll pollution.
+              <span data-i18n="step5_desc">Conecta-se diretamente ao Cursor, Zed, Claude Code e Gemini CLI via <code>stdio</code> padrão. Expõe ferramentas em tempo real (<code>detect_stack</code>, <code>wrap_context</code>, <code>generate_agents</code>) e recursos sem poluir o sistema de arquivos.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Auto-wire all IDEs in one second:</span>
 <span class="keyword">baba</span> mcp wire --targets cursor,gemini,claude</code></pre>
@@ -957,10 +992,10 @@
 
           <!-- Step 4 -->
           <div class="step-card" data-layer="4">
-            <span class="step-badge">Second Shell • Layer 4</span>
-            <h3 class="step-title">Polyglot AST Engine (baba wrap)</h3>
+            <span class="step-badge" data-i18n="step4_badge">Segunda Casca • Camada 4</span>
+            <h3 class="step-title" data-i18n="step4_title">Motor AST Poliglota (baba wrap)</h3>
             <p class="step-desc">
-              WebAssembly Tree-sitter parser scanning TypeScript, Python, and Go in &lt; 200ms. Eliminates false-green tests without assertions, uncaught dynamic SQL injection, and hardcoded secrets before git push.
+              <span data-i18n="step4_desc">Parser sintático em WebAssembly Tree-sitter varrendo TypeScript, Python e Go em &lt; 200ms. Elimina testes falsos sem asserção, injeção dinâmica de SQL e credenciais hardcoded antes do push.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Deep AST audit &amp; DIAGNOSTIC.md compiler:</span>
 <span class="keyword">baba</span> wrap --strict --threshold <span class="accent">80</span></code></pre>
@@ -968,10 +1003,10 @@
 
           <!-- Step 3 -->
           <div class="step-card" data-layer="3">
-            <span class="step-badge">Third Shell • Layer 3</span>
-            <h3 class="step-title">Adaptive AGENTS.md &amp; Modular Skills</h3>
+            <span class="step-badge" data-i18n="step3_badge">Terceira Casca • Camada 3</span>
+            <h3 class="step-title" data-i18n="step3_title">AGENTS.md Adaptativo &amp; Skills Modulares</h3>
             <p class="step-desc">
-              Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/*.md</code> with strict YAML frontmatter.
+              <span data-i18n="step3_desc">Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Compile lean boundary without touching disk:</span>
 <span class="keyword">baba</span> agents generate --dry-run</code></pre>
@@ -979,10 +1014,10 @@
 
           <!-- Step 2 -->
           <div class="step-card" data-layer="2">
-            <span class="step-badge">Fourth Shell • Layer 2</span>
-            <h3 class="step-title">Semantic Code Graph Integration</h3>
+            <span class="step-badge" data-i18n="step2_badge">Quarta Casca • Camada 2</span>
+            <h3 class="step-title" data-i18n="step2_title">Integração com o Grafo Semântico de Código</h3>
             <p class="step-desc">
-              Crosses static filesystem paths with the codebase knowledge graph (codebase-memory-mcp). Maps routes, services, and call flows before an agent initiates a surgical change.
+              <span data-i18n="step2_desc">Cruza caminhos estáticos de arquivos com o grafo de conhecimento da base de código (codebase-memory-mcp). Mapeia rotas, serviços e fluxo de chamadas antes de qualquer alteração cirúrgica do agente.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Inspect project seams and active skills:</span>
 <span class="keyword">baba</span> agents profile</code></pre>
@@ -990,10 +1025,10 @@
 
           <!-- Step 1 -->
           <div class="step-card" data-layer="1">
-            <span class="step-badge">The Core • Layer 1</span>
-            <h3 class="step-title">Repository Maturity Oracle (L1 - L4)</h3>
+            <span class="step-badge" data-i18n="step1_badge">O Núcleo • Camada 1</span>
+            <h3 class="step-title" data-i18n="step1_title">Oráculo de Maturidade do Repositório (L1 - L4)</h3>
             <p class="step-desc">
-              Measures foundational hygiene (CI gates, licensing, test suites, architecture blueprints) powered by the canonical <code>paladini/harness-score</code> oracle and issues official SVG compliance badges.
+              <span data-i18n="step1_desc">Mede a higiene estrutural fundamental (gates de CI, licença, suíte de testes, blueprint de arquitetura) impulsionado pelo oráculo canônico <code>paladini/harness-score</code> e gera badges SVG oficiais de conformidade.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Audit structural hygiene and export badge:</span>
 <span class="keyword">baba</span> scan --badge ./harness-badge.svg</code></pre>
@@ -1008,35 +1043,35 @@
   <section class="manifesto-section" id="anti-slop">
     <div class="container">
       <div class="section-header">
-        <div class="section-eyebrow">Engineering Rigor</div>
-        <h2 class="section-title">The Anti-Slop Safeguards</h2>
+        <div class="section-eyebrow" data-i18n="mani_eyebrow">Rigor de Engenharia</div>
+        <h2 class="section-title" data-i18n="mani_title">As Garantias Anti-Slop</h2>
         <p style="color: var(--ink-muted); max-width: 600px; margin: 12px auto 0;">
-          Autonomous coding agents fail when context rots. Matryoshka enforces deterministic boundaries:
+          <span data-i18n="mani_desc">Agentes autônomos de código falham quando o contexto apodrece. O Matryoshka impõe fronteiras determinísticas:</span>
         </p>
       </div>
 
       <div class="cards-grid">
         <div class="feature-card">
           <span class="feature-icon">🛡️</span>
-          <h3 class="feature-title">Zero Token Exfiltration</h3>
+          <h3 class="feature-title" data-i18n="card1_title">Zero Exfiltração de Código</h3>
           <p class="feature-text">
-            100% of AST inspection and Tree-sitter grammar parsing executes locally on your machine via WebAssembly. Zero code leaves your workstation.
+            <span data-i18n="card1_desc">100% da inspeção de AST e gramáticas Tree-sitter roda localmente na sua máquina via WebAssembly. Zero código sai da sua estação de trabalho.</span>
           </p>
         </div>
 
         <div class="feature-card">
           <span class="feature-icon">⚡</span>
-          <h3 class="feature-title">Sub-15ms Execution</h3>
+          <h3 class="feature-title" data-i18n="card2_title">Execução Sub-15ms</h3>
           <p class="feature-text">
-            Compiled with Bun into single standalone native executables. Zero Python, Rust, or C++ toolchains required on host environments.
+            <span data-i18n="card2_desc">Compilado com Bun em executáveis nativos standalone únicos. Zero necessidade de toolchains de Python, Rust ou C++ no ambiente host.</span>
           </p>
         </div>
 
         <div class="feature-card">
           <span class="feature-icon">🚫</span>
-          <h3 class="feature-title">No False-Green Tests</h3>
+          <h3 class="feature-title" data-i18n="card3_title">Sem Testes Falsos (False-Greens)</h3>
           <p class="feature-text">
-            Detects fragile mock-heavy test suites generated by LLMs that pass locally while concealing zero behavioral assertions.
+            <span data-i18n="card3_desc">Detecta suítes frágeis cheias de mocks geradas por LLMs que passam no terminal mas não possuem nenhuma asserção comportamental real.</span>
           </p>
         </div>
       </div>
@@ -1047,15 +1082,15 @@
   <!-- CTA Banner -->
   <section class="cta-section">
     <div class="container">
-      <div class="cta-eyebrow">★ JOIN THE ANTI-SLOP COALITION ★</div>
-      <h2 class="cta-title">UNITE AGAINST AI HALLUCINATION.</h2>
+      <div class="cta-eyebrow" data-i18n="cta_eyebrow">★ UNI-VOS AO MOVIMENTO ANTI-ALUCINAÇÃO ★</div>
+      <h2 class="cta-title" data-i18n="cta_title">REASSUMA O CONTROLE DO SEU CONTEXTO.</h2>
       <p class="cta-desc">
-        Take back control of your repository context. Run Matryoshka in your CLI, IDE, and CI/CD pipelines today.
+        <span data-i18n="cta_desc">Pare de queimar dinheiro com prompts monolíticos. Execute o Matryoshka no seu terminal, na sua IDE e nas suas esteiras de CI/CD hoje mesmo.</span>
       </p>
 
       <div class="cta-buttons">
         <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-cta-primary">
-          EXPLORE ON GITHUB
+          EXPLORAR NO GITHUB
         </a>
         <a href="https://ouroboros.leonellabshq.dev" target="_blank" class="btn-cta-secondary">
           OUROBOROS ENGINE
@@ -1069,10 +1104,10 @@
   <footer>
     <div class="container">
       <p>
-        ⚡ Built with mathematical rigor by <a href="https://ouroboros.leonellabshq.dev" target="_blank">LeonelLabs Ouroboros Engine</a>.
+        <span data-i18n="footer_built">⚡ Construído com rigor matemático pela</span> <a href="https://ouroboros.leonellabshq.dev" target="_blank">LeonelLabs Ouroboros Engine</a>.
       </p>
       <p style="margin-top: 8px; font-size: 0.75rem;">
-        Distributed under the <strong>MIT License</strong>. Maintained by <a href="https://maiquelleonel.com.br" target="_blank">Maiquel Leonel</a>.
+        <span data-i18n="footer_license">Distribuído sob a <strong>Licença MIT</strong>. Mantido por</span> <a href="https://maiquelleonel.com.br" target="_blank">Maiquel Leonel</a>.
       </p>
     </div>
   </footer>
@@ -1083,9 +1118,128 @@
       const code = "bunx @maiquelleonel/matryoshka wrap";
       navigator.clipboard.writeText(code).then(() => {
         btn.innerText = "COPIED!";
-        setTimeout(() => { btn.innerText = "COPY COMMAND"; }, 2000);
+        setTimeout(() => { btn.innerText = "COPIAR COMANDO"; }, 2000);
       });
     }
+
+    // Dicionário Completo de Internacionalização (i18n: PT-BR & EN)
+    const translations = {
+      pt: {
+        top_ribbon: "<span>★</span> ZERO EXFILTRAÇÃO DE CÓDIGO <span>★</span> AST NATIVO EM WEB-ASSEMBLY <span>★</span> GUARDA DE CONTEXTO &lt; 200 TOKENS <span>★</span>",
+        nav_concentric: "Camadas Concêntricas",
+        nav_safeguards: "Garantias Anti-Slop",
+        hero_tagline: "★ Motor de Cercamento Contextual Concêntrico ★",
+        hero_sub: "MATRYOSHKA-HARNESS (BABA)",
+        hero_desc: "Acabe com a taxa do AI-Slop nos repositórios. Prompts de instrução monolíticos queimam tokens e diluem a atenção dos LLMs. O Matryoshka envolve as bases de código em cinco camadas concêntricas de governança, compilando fronteiras de <code>AGENTS.md</code> ultraleves e regras determinísticas de AST em WebAssembly.",
+        quick_runtime: "RUNTIME DE TERMINAL",
+        quick_zero: "INSTALAÇÃO-ZERO",
+        showcase_eyebrow: "Arquitetura Concêntrica",
+        showcase_title: "Um Harness Dentro do Outro, Dentro do Outro...",
+        showcase_desc: "Como a tradicional boneca russa Matryoshka, cada camada de governança encapsula a próxima. Role para baixo para abrir as cascas concêntricas:",
+        stage_label: "Camada Ativa Atual",
+        step5_badge: "Casca Externa • Camada 5",
+        step5_title: "Servidor MCP Nativo (baba mcp serve)",
+        step5_desc: "Conecta-se diretamente ao Cursor, Zed, Claude Code e Gemini CLI via <code>stdio</code> padrão. Expõe ferramentas em tempo real (<code>detect_stack</code>, <code>wrap_context</code>, <code>generate_agents</code>) e recursos sem poluir o sistema de arquivos.",
+        step4_badge: "Segunda Casca • Camada 4",
+        step4_title: "Motor AST Poliglota (baba wrap)",
+        step4_desc: "Parser sintático em WebAssembly Tree-sitter varrendo TypeScript, Python e Go em &lt; 200ms. Elimina testes falsos sem asserção, injeção dinâmica de SQL e credenciais hardcoded antes do push.",
+        step3_badge: "Terceira Casca • Camada 3",
+        step3_title: "AGENTS.md Adaptativo & Skills Modulares",
+        step3_desc: "Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.",
+        step2_badge: "Quarta Casca • Camada 2",
+        step2_title: "Integração com o Grafo Semântico de Código",
+        step2_desc: "Cruza caminhos estáticos de arquivos com o grafo de conhecimento da base de código (codebase-memory-mcp). Mapeia rotas, serviços e fluxo de chamadas antes de qualquer alteração cirúrgica do agente.",
+        step1_badge: "O Núcleo • Camada 1",
+        step1_title: "Oráculo de Maturidade do Repositório (L1 - L4)",
+        step1_desc: "Mede a higiene estrutural fundamental (gates de CI, licença, suíte de testes, blueprint de arquitetura) impulsionado pelo oráculo canônico <code>paladini/harness-score</code> e gera badges SVG oficiais de conformidade.",
+        mani_eyebrow: "Rigor de Engenharia",
+        mani_title: "As Garantias Anti-Slop",
+        mani_desc: "Agentes autônomos de código falham quando o contexto apodrece. O Matryoshka impõe fronteiras determinísticas:",
+        card1_title: "Zero Exfiltração de Código",
+        card1_desc: "100% da inspeção de AST e gramáticas Tree-sitter roda localmente na sua máquina via WebAssembly. Zero código sai da sua estação de trabalho.",
+        card2_title: "Execução Sub-15ms",
+        card2_desc: "Compilado com Bun em executáveis nativos standalone únicos. Zero necessidade de toolchains de Python, Rust ou C++ no ambiente host.",
+        card3_title: "Sem Testes Falsos (False-Greens)",
+        card3_desc: "Detecta suítes frágeis cheias de mocks geradas por LLMs que passam no terminal mas não possuem nenhuma asserção comportamental real.",
+        cta_eyebrow: "★ UNI-VOS AO MOVIMENTO ANTI-ALUCINAÇÃO ★",
+        cta_title: "REASSUMA O CONTROLE DO SEU CONTEXTO.",
+        cta_desc: "Pare de queimar dinheiro com prompts monolíticos. Execute o Matryoshka no seu terminal, na sua IDE e nas suas esteiras de CI/CD hoje mesmo.",
+        footer_built: "⚡ Construído com rigor matemático pela",
+        footer_license: "Distribuído sob a <strong>Licença MIT</strong>. Mantido por"
+      },
+      en: {
+        top_ribbon: "<span>★</span> ZERO CODE EXFILTRATION <span>★</span> PURE WEB-ASSEMBLY AST <span>★</span> TOKEN BUDGET GUARD &lt; 200 TOKENS <span>★</span>",
+        nav_concentric: "Concentric Layers",
+        nav_safeguards: "Anti-Slop Safeguards",
+        hero_tagline: "★ The Concentric Context-Fencing Engine ★",
+        hero_sub: "MATRYOSHKA-HARNESS (BABA)",
+        hero_desc: "Stop the AI-Slop Tax on repositories. Monolithic instruction prompts waste tokens and dilute LLM attention. Matryoshka wraps codebases in five tight concentric governance layers, compiling ultra-lean <code>AGENTS.md</code> boundaries and deterministic Tree-sitter WASM rules.",
+        quick_runtime: "TERMINAL RUNTIME",
+        quick_zero: "ZERO-INSTALL",
+        showcase_eyebrow: "Concentric Architecture",
+        showcase_title: "A Harness Inside a Harness Inside a Harness",
+        showcase_desc: "Like a traditional Russian Matryoshka doll, each governance layer tightly encapsulates the next. Scroll down to open the concentric shells:",
+        stage_label: "Current Active Layer",
+        step5_badge: "Outer Shell • Layer 5",
+        step5_title: "Native MCP Server (baba mcp serve)",
+        step5_desc: "Plugs directly into Cursor, Zed, Claude Code, and Gemini CLI over standard <code>stdio</code>. Exposes live tools (<code>detect_stack</code>, <code>wrap_context</code>, <code>generate_agents</code>) and real-time resources without filesystem poll pollution.",
+        step4_badge: "Second Shell • Layer 4",
+        step4_title: "Polyglot AST Engine (baba wrap)",
+        step4_desc: "WebAssembly Tree-sitter parser scanning TypeScript, Python, and Go in &lt; 200ms. Eliminates false-green tests without assertions, uncaught dynamic SQL injection, and hardcoded secrets before git push.",
+        step3_badge: "Third Shell • Layer 3",
+        step3_title: "Adaptive AGENTS.md & Modular Skills",
+        step3_desc: "Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/*.md</code> with strict YAML frontmatter.",
+        step2_badge: "Fourth Shell • Layer 2",
+        step2_title: "Semantic Code Graph Integration",
+        step2_desc: "Crosses static filesystem paths with the codebase knowledge graph (codebase-memory-mcp). Maps routes, services, and call flows before an agent initiates a surgical change.",
+        step1_badge: "The Core • Layer 1",
+        step1_title: "Repository Maturity Oracle (L1 - L4)",
+        step1_desc: "Measures foundational hygiene (CI gates, licensing, test suites, architecture blueprints) powered by the canonical <code>paladini/harness-score</code> oracle and issues official SVG compliance badges.",
+        mani_eyebrow: "Engineering Rigor",
+        mani_title: "The Anti-Slop Safeguards",
+        mani_desc: "Autonomous coding agents fail when context rots. Matryoshka enforces deterministic boundaries:",
+        card1_title: "Zero Token Exfiltration",
+        card1_desc: "100% of AST inspection and Tree-sitter grammar parsing executes locally on your machine via WebAssembly. Zero code leaves your workstation.",
+        card2_title: "Sub-15ms Execution",
+        card2_desc: "Compiled with Bun into single standalone native executables. Zero Python, Rust, or C++ toolchains required on host environments.",
+        card3_title: "No False-Green Tests",
+        card3_desc: "Detects fragile mock-heavy test suites generated by LLMs that pass locally while concealing zero behavioral assertions.",
+        cta_eyebrow: "★ JOIN THE ANTI-SLOP COALITION ★",
+        cta_title: "UNITE AGAINST AI HALLUCINATION.",
+        cta_desc: "Take back control of your repository context. Run Matryoshka in your CLI, IDE, and CI/CD pipelines today.",
+        footer_built: "⚡ Built with mathematical rigor by",
+        footer_license: "Distributed under the <strong>MIT License</strong>. Maintained by"
+      }
+    };
+
+    function setLang(lang) {
+      localStorage.setItem("matryoshka_lang", lang);
+      const dict = translations[lang] || translations.pt;
+      
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (dict[key]) {
+          el.innerHTML = dict[key];
+        }
+      });
+
+      // Atualizar botões de toggle
+      const btnPt = document.getElementById("btnLangPt");
+      const btnEn = document.getElementById("btnLangEn");
+      if (btnPt && btnEn) {
+        if (lang === "pt") {
+          btnPt.classList.add("active");
+          btnEn.classList.remove("active");
+        } else {
+          btnEn.classList.add("active");
+          btnPt.classList.remove("active");
+        }
+      }
+    }
+
+    // Inicialização de Idioma: Padrão PT-BR (ou localStorage)
+    const savedLang = localStorage.getItem("matryoshka_lang") || (navigator.language.startsWith("pt") ? "pt" : "pt");
+    setLang(savedLang);
 
     // Concentric Nested Dolls Controller with Pixel-Perfect Midline Trigger
     const steps = document.querySelectorAll(".step-card");
