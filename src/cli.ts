@@ -1,4 +1,11 @@
 #!/usr/bin/env bun
+/**
+ * Matryoshka-Harness (baba / bbyg / matryoshka)
+ * Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation
+ *
+ * Copyright (c) 2026 Maiquel Leonel
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
@@ -38,6 +45,8 @@ const VERSION = "0.4.0";
 const HELP_TEXT = `
 Matryoshka-Harness CLI (baba / bbyg / matryoshka)
 
+Concentric Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation
+
 Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
@@ -69,6 +78,142 @@ Options:
   --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
   -h, --help         Show help information
   -v, --version      Show version
+
+Aliases:
+  baba               Slavic matriarch of nesting dolls (4 letters, zero typos)
+  bbyg               Baba-Yaga mythology (silicon wizardry)
+  matryoshka         Formal academic package name
+`.trim();
+
+const DETECT_HELP = `
+Usage: baba detect [path] [--json]
+
+Inspect codebase and detect primary stack, frameworks, and test runner.
+
+Arguments:
+  [path]             Target project directory (default: current directory)
+
+Options:
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba detect
+  $ baba detect ./my-project --json
+`.trim();
+
+const SCAN_HELP = `
+Usage: baba scan [path] [--json] [--badge [path]]
+
+Execute repository maturity audit (L0 to L4) and semantic AST reconciliation.
+
+Arguments:
+  [path]             Target project directory (default: current directory)
+
+Options:
+  --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba scan
+  $ baba scan --badge
+  $ baba scan ./project --json --badge ./badges/harness.svg
+`.trim();
+
+const AGENTS_HELP = `
+Usage: baba agents <command> [path] [options]
+
+Adaptive Context-Aware AGENTS.md Compiler & Modular Skills Engine.
+
+Commands:
+  baba agents generate [path]   Generate ultra-lean root AGENTS.md (< 200 tokens) & on-demand skills
+  baba agents profile [path]    Inspect architectural seams and profile archetype governance
+  baba agents check [path]      Audit AGENTS.md token budget (< 250 tokens hard limit)
+  baba agents skill <name> [path] Render compiled on-demand skill (backend, frontend, database, security, testing)
+
+Options:
+  --force, -f        Overwrite existing AGENTS.md (creates .bak backup)
+  --dry-run          Simulate execution without modifying files on disk
+  --max-tokens <num> Maximum token limit for check audit (default: 250)
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba agents generate --dry-run
+  $ baba agents generate --force
+  $ baba agents check
+  $ baba agents skill backend --json
+`.trim();
+
+const WRAP_HELP = `
+Usage: baba wrap [path] [options]
+
+Polyglot AST anti-pattern scanner & remediation report powered by Tree-sitter WASM.
+
+Arguments:
+  [path]             Target project directory (default: current directory)
+
+Options:
+  --output <file>, -o Custom output report path (default: ./DIAGNOSTIC.md)
+  --strict           Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
+  --threshold <num>  Minimum acceptable Harness² composite score for strict gate (default: 80)
+  --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
+  --dry-run          Simulate execution without writing report to disk
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Anti-Pattern Rules Enforced:
+  • raw-sql             Detects unparameterized SQL interpolation / injection (CWE-89)
+  • assertionless-test  Detects test functions missing behavioral assertions
+  • hardcoded-credential Detects plaintext secrets, private keys, and tokens
+
+Examples:
+  $ baba wrap
+  $ baba wrap --strict --threshold 85
+  $ baba wrap ./service -o ./REMEDIATION.md --json
+`.trim();
+
+const MCP_HELP = `
+Usage: baba mcp <command> [path] [options]
+
+Model Context Protocol (MCP) integrations for AI coding agents.
+
+Commands:
+  baba mcp wire [path]   Auto-wire codebase-memory-mcp configuration for Cursor, Gemini, and Claude
+  baba mcp serve [path]  Start native Model Context Protocol (MCP) server over stdio
+
+Options:
+  --targets <list>   Comma-separated target environments (cursor, gemini, claude)
+  --dry-run          Preview changes without writing to disk
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba mcp wire
+  $ baba mcp wire --targets cursor,claude
+  $ baba mcp serve
+`.trim();
+
+const MCP_WIRE_HELP = `
+Usage: baba mcp wire [path] [options]
+
+Auto-wire codebase-memory-mcp configuration for Cursor, Gemini CLI, and Claude.
+
+Arguments:
+  [path]             Target project directory (default: current directory)
+
+Options:
+  --targets <list>   Comma-separated target environments: cursor, gemini, claude (default: all)
+  --target <name>    Singular alias for single target isolation
+  --dry-run          Preview configuration changes without writing to disk
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba mcp wire
+  $ baba mcp wire --targets cursor,claude
+  $ baba mcp wire --dry-run --json
 `.trim();
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -81,7 +226,17 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     process.exit(0);
   }
 
-  if (args.length === 0 || (isHelp && !(args[0] === "mcp" && args[1] === "serve"))) {
+  // Handle "help <subcommand>" syntax
+  if (args[0] === "help") {
+    const sub = args[1];
+    if (!sub) {
+      console.log(HELP_TEXT);
+      process.exit(0);
+    }
+    args = [sub, "--help", ...args.slice(2)];
+  }
+
+  if (args.length === 0 || (isHelp && (args.length === 1 || args[0] === "--help" || args[0] === "-h"))) {
     console.log(HELP_TEXT);
     process.exit(0);
   }
@@ -90,6 +245,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
   switch (command) {
     case "detect": {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
+        console.log(DETECT_HELP);
+        process.exit(0);
+      }
       const positional = rest.filter((arg) => !arg.startsWith("-"));
       const targetDir = positional[0] || process.cwd();
       const resolvedPath = path.resolve(targetDir);
@@ -131,6 +290,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "scan": {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
+        console.log(SCAN_HELP);
+        process.exit(0);
+      }
       let targetDir: string | undefined;
       let badgePath: string | null = null;
       let isBadge = false;
@@ -214,6 +377,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "agents": {
+      if (rest.includes("--help") || rest.includes("-h") || rest[0] === "help") {
+        console.log(AGENTS_HELP);
+        process.exit(0);
+      }
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
@@ -532,6 +699,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "wrap": {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
+        console.log(WRAP_HELP);
+        process.exit(0);
+      }
       let isStrict = rest.includes("--strict");
       let isDryRun = rest.includes("--dry-run");
       let targetDir: string | undefined;
@@ -653,13 +824,18 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     case "mcp": {
       const [subcommand, ...mcpArgs] = rest;
 
-      if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+      if (subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+        console.log(MCP_HELP);
+        process.exit(0);
+      }
+
+      if (!subcommand) {
         console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]"));
         process.exit(1);
       }
 
       if (subcommand === "serve") {
-        if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
+        if (mcpArgs.includes("--help") || mcpArgs.includes("-h") || mcpArgs.includes("help")) {
           console.log(`
 Usage: baba mcp serve [path]
 
@@ -691,6 +867,11 @@ Stream Guarantees:
           )
         );
         process.exit(1);
+      }
+
+      if (mcpArgs.includes("--help") || mcpArgs.includes("-h") || mcpArgs.includes("help")) {
+        console.log(MCP_WIRE_HELP);
+        process.exit(0);
       }
 
       const isDryRun = mcpArgs.includes("--dry-run");
