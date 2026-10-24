@@ -50,6 +50,9 @@ uvx --with mkdocs-material mkdocs build --strict
 ```
 
 ### 3.2 Canonical Configuration (`mkdocs.yml`)
+* **Strict Directory Isolation:**
+  * `docs_dir: docs/guide` (Isolates public documentation from internal PRDs, SPECs, and EXPERIENCE).
+  * `site_dir: site-docs` (Guarantees zero collisions with the existing interactive hotsite in `site/`).
 * Theme: `material` with dark slate/emerald palette matching the Ouroboros design language.
 * Features:
   * Instant search (`navigation.instant`, `search.highlight`).
@@ -85,7 +88,7 @@ Feature: Documentation Site Integrity & Interoperability
 ---
 
 ## 📋 5. Acceptance Criteria
-1. [ ] Complete suite of Markdown pages authored in `docs/` covering all 5 CLI commands and MCP integration.
+1. [ ] Complete suite of Markdown pages authored in `docs/guide/` covering all 5 CLI commands and MCP integration.
 2. [ ] Minimal, maintainable `mkdocs.yml` configured with dark mode and search.
 3. [ ] Automated documentation build test added to CI (`bun test` or GitHub Actions).
 4. [ ] Zero proprietary extensions preventing future migration to Astro Starlight or VitePress.
