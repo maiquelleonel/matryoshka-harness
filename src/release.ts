@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export type BumpType = "major" | "minor" | "patch";
 
@@ -232,6 +234,37 @@ export function getGitReleaseContext(cwd: string = process.cwd()): {
 }
 
 /**
+ * Identifies and returns compiled standalone binary assets and checksums for release attachment.
+ */
+export function getReleaseAssets(binDir: string = "dist/bin"): string[] {
+  const targetDir = path.isAbsolute(binDir)
+    ? binDir
+    : path.resolve(process.cwd(), binDir);
+
+  if (!fs.existsSync(targetDir)) {
+    return [];
+  }
+
+  const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+  const assets: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const name = entry.name;
+    // Standalone executables (baba-*) or checksum files (checksums*.txt)
+    if (
+      name.startsWith("baba-") ||
+      name === "checksums.txt" ||
+      name.startsWith("checksums")
+    ) {
+      assets.push(path.join(targetDir, name));
+    }
+  }
+
+  return assets.sort();
+}
+
+/**
  * Creates signed or annotated Git tag.
  * Uses GPG signed tag (-s) if signingkey is configured, otherwise fallback to annotated (-a).
  */
@@ -308,19 +341,19 @@ export async function runRelease(
   spawnSync("git", ["push", "origin", nextTag], { cwd, stdio: "inherit" });
 
   console.log("🌐 Publishing GitHub Release via GitHub CLI...");
-  const ghResult = spawnSync(
-    "gh",
-    [
-      "release",
-      "create",
-      nextTag,
-      "--title",
-      `Release ${nextTag}`,
-      "--notes",
-      changelog,
-    ],
-    { cwd, stdio: "inherit" },
-  );
+  const assets = getReleaseAssets(path.join(cwd, "dist/bin"));
+  const ghArgs = [
+    "release",
+    "create",
+    nextTag,
+    "--title",
+    `Release ${nextTag}`,
+    "--notes",
+    changelog,
+    ...assets,
+  ];
+
+  const ghResult = spawnSync("gh", ghArgs, { cwd, stdio: "inherit" });
 
   if (ghResult.status === 0) {
     console.log(`🎉 Successfully published GitHub Release for ${nextTag}!`);

@@ -4,13 +4,16 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Automated SemVer Release
+    name: Automated SemVer Release & NPM Distribution
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -32,7 +35,56 @@ jobs:
       - name: Run build
         run: bun run build
 
+      - name: Build standalone native binaries
+        run: bun run build:binaries
+
+      - name: Build protective typosquatting shells
+        run: bun run build:shells
+
       - name: Calculate SemVer and Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run release
+
+      - name: Attach standalone binary assets to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -d "dist/bin" ]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+            if [[ "$RELEASE_TAG" != v* ]]; then
+              RELEASE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            fi
+            if [ -n "$RELEASE_TAG" ]; then
+              echo "Uploading standalone binaries and checksums to release $RELEASE_TAG..."
+              gh release upload "$RELEASE_TAG" dist/bin/* --clobber || true
+            fi
+          fi
+
+      - name: Setup Node for NPM publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org/"
+
+      - name: Publish canonical package to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          npm publish --access public
+
+      - name: Publish protective typosquatting shells to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in packages/*; do
+            if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+              echo "Publishing $dir to NPM registry..."
+              npm publish "$dir" --access public
+            fi
+          done

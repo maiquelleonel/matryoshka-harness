@@ -1,0 +1,48 @@
+{
+  "name": "@maiquelleonel/matryoska",
+  "version": "0.4.0",
+  "description": "Protective typosquatting shell and forwarding wrapper for @maiquelleonel/matryoshka (matryoska typo protection)",
+  "main": "bin/matryoska.js",
+  "module": "index.js",
+  "bin": {
+    "matryoska": "bin/matryoska.js",
+    "matryoshka": "bin/matryoska.js",
+    "baba": "bin/matryoska.js",
+    "bbyg": "bin/matryoska.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@maiquelleonel/matryoshka": "^0.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maiquelleonel/matryoshka-harness.git",
+    "directory": "packages/matryoska"
+  },
+  "bugs": {
+    "url": "https://github.com/maiquelleonel/matryoshka-harness/issues"
+  },
+  "homepage": "https://github.com/maiquelleonel/matryoshka-harness#readme",
+  "keywords": [
+    "matryoshka",
+    "harness",
+    "baba",
+    "bbyg",
+    "typosquatting",
+    "wrapper",
+    "forwarding",
+    "agentic",
+    "ai",
+    "mcp"
+  ],
+  "author": "Maiquel Leonel <skywishmtfk@gmail.com>",
+  "license": "MIT"
+}
