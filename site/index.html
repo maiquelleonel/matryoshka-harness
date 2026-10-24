@@ -364,11 +364,12 @@
       position: sticky;
       top: 80px;
       background: var(--bg-canvas);
-      border: 2px solid var(--border-strong);
-      box-shadow: var(--shadow-retro-lg);
-      padding: 32px 20px;
+      border: 3px solid var(--border-strong);
+      box-shadow: 8px 8px 0px var(--border-strong);
+      padding: 24px 20px;
       text-align: center;
-      min-height: 600px;
+      height: 640px;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -560,21 +561,21 @@
 
     .step-card {
       background: var(--bg-card);
-      border: 2px solid var(--border-strong);
-      box-shadow: var(--shadow-retro);
-      padding: 48px 40px;
-      min-height: 600px; /* Mesmo tamanho e altura do card da matryoshka */
+      border: 3px solid var(--border-strong);
+      box-shadow: 8px 8px 0px var(--border-strong);
+      padding: 40px 36px;
+      height: 640px; /* Altura 1:1 idêntica ao palco da matryoshka */
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      transition: border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, transform 0.3s ease;
+      transition: border-color 0.25s ease;
     }
 
     .step-card.active {
       border-color: var(--red-constructivist);
-      border-width: 3px;
-      box-shadow: 8px 8px 0px var(--red-constructivist);
-      transform: translateX(6px);
+      box-shadow: 8px 8px 0px var(--border-strong);
+      /* Zero pulo, zero desalinhamento horizontal */
     }
 
     .step-badge {
