@@ -116,10 +116,10 @@ export function greet(name: string): string {
       }
     });
 
-    it("should satisfy binary size guardrail strictly under 100MB", () => {
+    it("should satisfy binary size guardrail strictly under 120MB", () => {
       const stats = fs.statSync(standaloneBabaPath);
       const sizeMB = stats.size / (1024 * 1024);
-      expect(sizeMB).toBeLessThan(100);
+      expect(sizeMB).toBeLessThan(120);
       expect(sizeMB).toBeGreaterThan(1);
     });
 

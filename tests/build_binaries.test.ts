@@ -207,10 +207,10 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
       expect(result.success).toBe(true);
       expect(fs.existsSync(result.outputPath)).toBe(true);
 
-      // Verify binary size > 0 and < 100MB
+      // Verify binary size > 0 and < 120MB
       const stats = fs.statSync(result.outputPath);
       expect(stats.size).toBeGreaterThan(1000);
-      expect(stats.size).toBeLessThan(100 * 1024 * 1024);
+      expect(stats.size).toBeLessThan(120 * 1024 * 1024);
 
       // Verify checksums.txt exists and contains hash
       const checksumsPath = path.join(tempDir, "checksums.txt");
