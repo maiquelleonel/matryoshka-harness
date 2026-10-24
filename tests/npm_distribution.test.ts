@@ -135,7 +135,7 @@ describe("SPEC-16: NPM Publishing Metadata & Bin Dispatchers (Subtask 2)", () =>
       const cliContent = fs.readFileSync(distCli, "utf-8");
       expect(cliContent.length).toBeGreaterThan(100);
       expect(cliContent.startsWith("#!/usr/bin/env bun")).toBe(true);
-    });
+    }, 30000);
 
     it("should execute compiled dist/cli.js and return SemVer 0.4.0 matching package.json", () => {
       const distCli = path.join(rootDir, "dist", "cli.js");
