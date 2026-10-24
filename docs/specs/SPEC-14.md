@@ -1,6 +1,6 @@
 # 📐 SPEC-14: docs(branding): launch-grade README, actionable CLI help & Ouroboros heritage
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** ready4dev  
+**Status:** implemented  
 **Gatilho:** Issue #14  
 
 ---
@@ -61,4 +61,7 @@ Feature: docs(branding): launch-grade README, actionable CLI help & Ouroboros he
 - `src/cli.ts`
 - `tests/cli_help.test.ts`
 - `README.md`
+- `site/index.html`
+- `tests/branding_and_heritage.test.ts`
+- `docs/EXPERIENCE.md`
 - `AGENTS.md`
