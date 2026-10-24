@@ -552,19 +552,29 @@
       gap: 32px;
     }
 
+    .doll-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+
     .step-card {
       background: var(--bg-card);
       border: 2px solid var(--border-strong);
       box-shadow: var(--shadow-retro);
-      padding: 32px;
-      transition: border-color 0.2s, transform 0.2s;
+      padding: 48px 40px;
+      min-height: 600px; /* Mesmo tamanho e altura do card da matryoshka */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, transform 0.3s ease;
     }
 
     .step-card.active {
       border-color: var(--red-constructivist);
       border-width: 3px;
-      box-shadow: 6px 6px 0px var(--red-constructivist);
-      transform: translateX(4px);
+      box-shadow: 8px 8px 0px var(--red-constructivist);
+      transform: translateX(6px);
     }
 
     .step-badge {
@@ -1082,8 +1092,9 @@
         }
       });
     }, {
-      rootMargin: "-25% 0px -35% 0px",
-      threshold: 0.15
+      /* Gatilho calibrado no meio exato da altura da matryoshka sticky */
+      rootMargin: "-44% 0px -44% 0px",
+      threshold: 0
     });
 
     steps.forEach(step => observer.observe(step));
