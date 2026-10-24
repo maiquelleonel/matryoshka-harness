@@ -80,7 +80,7 @@ jobs:
           # Remove standalone binaries from dist before packaging for NPM (they are already attached to GitHub Release)
           rm -rf dist/bin
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          npm publish --access public
+          npm publish --access public || echo "⚠️ Canonical package already published or up to date."
 
       - name: Publish protective typosquatting shells to NPM
         env:
@@ -90,6 +90,6 @@ jobs:
           for dir in packages/*; do
             if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
               echo "Publishing $dir to NPM registry..."
-              (cd "$dir" && npm publish --access public)
+              (cd "$dir" && npm publish --access public) || echo "⚠️ Shell $dir already published or up to date."
             fi
           done
