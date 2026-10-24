@@ -366,12 +366,13 @@
       background: var(--bg-canvas);
       border: 2px solid var(--border-strong);
       box-shadow: var(--shadow-retro-lg);
-      padding: 32px 16px;
+      padding: 36px 16px;
       text-align: center;
-      min-height: 480px;
+      min-height: 420px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: center;
+      align-items: center;
       overflow: hidden;
     }
 
@@ -851,15 +852,6 @@
               </div>
             </div>
 
-            <!-- Floating Badge Card da Camada Ativa -->
-            <div class="doll-inner-floating" id="dollCore">
-              <div class="core-layer-badge" id="coreBadge">LAYER 5: MCP</div>
-              <div class="core-subtext" id="coreSub">Native Stdio Protocol</div>
-            </div>
-          </div>
-
-          <div class="stage-status" id="stageStatus">
-            ACTIVE: Layer 5 — Native MCP Server
           </div>
         </div>
 
@@ -1057,10 +1049,10 @@
           entry.target.classList.add("active");
 
           const meta = layerMeta[currentLayer] || layerMeta[5];
-          stageStatus.innerText = "ACTIVE: " + meta.label;
+          // stageStatus removed
 
-          if (coreBadge) coreBadge.innerText = meta.name;
-          if (coreSub) coreSub.innerText = meta.sub;
+          // coreBadge removed
+          // coreSub removed
 
           // Mecânica da Matryoshka Concêntrica:
           // Camadas MAIORES que a atual (já roladas para trás) abrem e esvanecem (opened: true)
