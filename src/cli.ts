@@ -38,41 +38,202 @@ const VERSION = "0.4.0";
 const HELP_TEXT = `
 Matryoshka-Harness CLI (baba / bbyg / matryoshka)
 
-Usage:
-  baba detect [path] [--json]
-  baba scan [path] [--json] [--badge [path]]
-  baba agents generate [path] [--force] [--dry-run] [--json]
-  baba agents profile [path] [--json]
-  baba agents check [path] [--json] [--max-tokens <num>]
-  baba agents skill <name> [path] [--json]
-  baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
-  baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
-  baba mcp serve [path]
+Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation
 
-Commands:
-  detect     Inspect codebase and detect primary stack, frameworks, and test runner
-  scan       Execute maturity audit and semantic AST reconciliation
-  agents     Generate adaptive AGENTS.md and modular skills
-  wrap       Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
-  mcp wire   Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude
-  mcp serve  Start native Model Context Protocol (MCP) server over stdio
+Usage:
+  baba <command> [arguments] [options]
+  bbyg <command> [arguments] [options]
+  matryoshka <command> [arguments] [options]
+
+Aliases:
+  baba        Canonical ergonomic CLI command (short, fast, zero typos)
+  bbyg        Mythological Baba-Yaga alias
+  matryoshka  Formal package identity alias
+
+Command Groups:
+  Reconnaissance & Maturity Audit:
+    detect [path]                     Inspect codebase and detect primary stack, frameworks, and test runner
+    scan [path]                       Execute maturity audit (L0-L4) and semantic AST reconciliation via harness-score
+
+  Governance & Context-Fencing:
+    agents generate [path]            Generate lean root AGENTS.md (<200 tokens) and modular skills (.agents/skills/)
+    agents profile [path]             Profile repository archetype and discover architectural seams (API, DB, UI)
+    agents check [path]               Audit AGENTS.md token budget (<250 tokens guardrail to prevent context rot)
+    agents skill <name> [path]        Compile and output on-demand domain skill (backend, database, frontend, security, testing)
+
+  Antipattern Remediation & Quality Gates:
+    wrap [path]                       Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report
+
+  Agent Context Autowiring & Model Context Protocol:
+    mcp wire [path]                   Auto-wire codebase-memory-mcp into Cursor (.cursor/mcp.json), Gemini, and Claude
+    mcp serve [path]                  Start native Model Context Protocol (MCP) server over stdio for AI coding agents
+
+Global Options:
+  -h, --help                          Show help information for CLI or specific command
+  -v, --version                       Show version
+  --json                              Output strictly valid JSON for automation and AI orchestrators
+
+Command Options:
+  Audit & Remediation Options (scan, wrap):
+    --badge [path]                    Generate maturity SVG badge (default: ./harness-badge.svg)
+    -o, --output <file>               Custom output report path (default: ./DIAGNOSTIC.md)
+    --strict                          Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
+    --threshold <num>                 Minimum acceptable Harness² composite score for strict gate (default: 80)
+    --max-file-size <kb>              Maximum file size in KB to parse for AST traversal (default: 500)
+
+  Governance Generation Options (agents):
+    -f, --force                       Overwrite existing files (creates atomic .bak backup of AGENTS.md)
+    --dry-run                         Simulate execution without modifying files on disk
+    --max-tokens <num>                Maximum token budget ceiling for root AGENTS.md (default: 250)
+
+  MCP Configuration Options (mcp wire):
+    --targets <list>                  Comma-separated target environments (cursor, gemini, claude; default: all)
+    --dry-run                         Preview configuration changes without modifying files on disk
+
+Actionable Examples:
+  baba detect                         # Inspect tech stack of current directory
+  baba scan --badge                   # Run maturity scan and generate harness-badge.svg
+  baba agents generate --force        # Scaffold adaptive AGENTS.md and active skills
+  baba agents check                   # Verify AGENTS.md is within 250-token budget
+  baba wrap --strict --threshold 80   # CI quality gate blocking antipatterns and critical AST issues
+  baba mcp wire --targets cursor      # Wire codebase knowledge graph into Cursor IDE
+`.trim();
+
+const DETECT_HELP_TEXT = `
+Usage: baba detect [path] [options]
+
+Inspect codebase and detect primary stack, frameworks, and test runner.
+
+Arguments:
+  [path]             Target directory to inspect (default: current working directory)
 
 Options:
-  --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
-  --dry-run          Simulate execution without modifying files on disk
   --json             Output strictly valid JSON
-  --targets <list>   Comma-separated target environments (cursor, gemini, claude)
-  --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
-  --output <file>, -o Custom output report path (default: ./DIAGNOSTIC.md)
-  --strict           Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
-  --threshold <num>  Minimum acceptable Harness² composite score for strict gate (default: 80)
-  --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
   -h, --help         Show help information
-  -v, --version      Show version
+
+Examples:
+  baba detect
+  baba detect ./services/api --json
+`.trim();
+
+const SCAN_HELP_TEXT = `
+Usage: baba scan [path] [options]
+
+Execute maturity audit (L0-L4) and semantic AST reconciliation via harness-score.
+
+Arguments:
+  [path]             Target directory to scan (default: current working directory)
+
+Options:
+  --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  baba scan
+  baba scan --badge
+  baba scan --badge ./docs/badges/maturity.svg --json
+`.trim();
+
+const AGENTS_HELP_TEXT = `
+Usage: baba agents <subcommand> [path] [options]
+
+Generate adaptive AGENTS.md and modular skills (.agents/skills/) to prevent context rot.
+
+Subcommands:
+  generate [path]             Generate lean root AGENTS.md and modular skills
+  profile [path]              Profile repository archetype and architectural seams
+  check [path]                Audit AGENTS.md token budget (<250 tokens guardrail)
+  skill <name> [path]         Compile and output specialized skill (backend, database, frontend, security, testing)
+
+Options:
+  -f, --force                 Overwrite existing files (creates atomic .bak backup)
+  --dry-run                   Simulate execution without modifying files on disk
+  --max-tokens <num>          Custom token budget ceiling for root AGENTS.md (default: 250)
+  --strict                    Enforce strict token guardrail (fail if > max-tokens)
+  --json                      Output strictly valid JSON
+  -h, --help                  Show help information
+
+Examples:
+  baba agents generate --force
+  baba agents profile
+  baba agents check --max-tokens 200
+  baba agents skill backend
+`.trim();
+
+const WRAP_HELP_TEXT = `
+Usage: baba wrap [path] [options]
+
+Analyze AST antipatterns and compile DIAGNOSTIC.md remediation report.
+
+Arguments:
+  [path]                      Target directory to analyze (default: current working directory)
+
+Options:
+  -o, --output <file>         Custom output report path (default: ./DIAGNOSTIC.md)
+  --strict                    Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
+  --threshold <num>           Minimum acceptable Harness² composite score for strict gate (default: 80)
+  --max-file-size <kb>        Maximum file size in KB to parse for AST traversal (default: 500)
+  --dry-run                   Preview remediation report without writing to disk
+  --json                      Output strictly valid JSON
+  -h, --help                  Show help information
+
+Examples:
+  baba wrap
+  baba wrap --strict --threshold 85
+  baba wrap -o ./reports/DIAGNOSTIC.md --dry-run
+  baba wrap --strict --json
+`.trim();
+
+const MCP_HELP_TEXT = `
+Usage: baba mcp <wire|serve> [path] [options]
+
+Manage Model Context Protocol (MCP) autowiring and stdio server execution.
+
+Subcommands:
+  wire [path]                 Auto-wire codebase-memory-mcp into Cursor, Gemini CLI, and Claude
+  serve [path]                Start native Model Context Protocol (MCP) server over stdio
+
+Options:
+  -h, --help                  Show help information
+
+Run 'baba mcp <subcommand> --help' for details on a specific subcommand.
+`.trim();
+
+const MCP_WIRE_HELP_TEXT = `
+Usage: baba mcp wire [path] [options]
+
+Auto-wire codebase-memory-mcp for Cursor, Gemini CLI, and Claude Code.
+
+Arguments:
+  [path]                      Root repository path to configure (default: current working directory)
+
+Options:
+  --targets <list>            Comma-separated target environments (cursor, gemini, claude; default: all)
+  --dry-run                   Simulate configuration updates without writing to disk
+  --json                      Output strictly valid JSON
+  -h, --help                  Show help information
+
+Examples:
+  baba mcp wire
+  baba mcp wire --targets cursor,claude
+  baba mcp wire --dry-run --json
+`.trim();
+
+const MCP_SERVE_HELP_TEXT = `
+Usage: baba mcp serve [path]
+
+Start native Model Context Protocol (MCP) server over stdio for AI coding agents.
+
+Arguments:
+  [path]   Root repository path to serve (defaults to current working directory)
+
+Stream Guarantees:
+  stdout   Strictly reserved for newline-delimited JSON-RPC 2.0 protocol messages
+  stderr   Diagnostic telemetry, startup notices, and logging
 `.trim();
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
-  const isHelp = args.includes("--help") || args.includes("-h");
   const isVersion = args.includes("--version") || args.includes("-v");
   const isJson = args.includes("--json");
 
@@ -81,7 +242,18 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     process.exit(0);
   }
 
-  if (args.length === 0 || (isHelp && !(args[0] === "mcp" && args[1] === "serve"))) {
+  // Support "help <subcommand>" syntax
+  if (args[0] === "help") {
+    if (args.length === 1) {
+      console.log(HELP_TEXT);
+      process.exit(0);
+    }
+    args = [...args.slice(1), "--help"];
+  }
+
+  const isHelp = args.includes("--help") || args.includes("-h");
+
+  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     console.log(HELP_TEXT);
     process.exit(0);
   }
@@ -90,6 +262,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
   switch (command) {
     case "detect": {
+      if (isHelp) {
+        console.log(DETECT_HELP_TEXT);
+        process.exit(0);
+      }
+
       const positional = rest.filter((arg) => !arg.startsWith("-"));
       const targetDir = positional[0] || process.cwd();
       const resolvedPath = path.resolve(targetDir);
@@ -131,6 +308,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "scan": {
+      if (isHelp) {
+        console.log(SCAN_HELP_TEXT);
+        process.exit(0);
+      }
+
       let targetDir: string | undefined;
       let badgePath: string | null = null;
       let isBadge = false;
@@ -214,6 +396,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "agents": {
+      if (isHelp) {
+        console.log(AGENTS_HELP_TEXT);
+        process.exit(0);
+      }
+
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
@@ -532,6 +719,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "wrap": {
+      if (isHelp) {
+        console.log(WRAP_HELP_TEXT);
+        process.exit(0);
+      }
+
       let isStrict = rest.includes("--strict");
       let isDryRun = rest.includes("--dry-run");
       let targetDir: string | undefined;
@@ -653,25 +845,23 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     case "mcp": {
       const [subcommand, ...mcpArgs] = rest;
 
-      if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+      if (!subcommand) {
+        if (isHelp) {
+          console.log(MCP_HELP_TEXT);
+          process.exit(0);
+        }
         console.error(pc.red("Error: Missing MCP subcommand. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]"));
         process.exit(1);
       }
 
+      if (subcommand === "--help" || subcommand === "-h") {
+        console.log(MCP_HELP_TEXT);
+        process.exit(0);
+      }
+
       if (subcommand === "serve") {
         if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
-          console.log(`
-Usage: baba mcp serve [path]
-
-Start native Model Context Protocol (MCP) server over stdio for AI coding agents.
-
-Arguments:
-  [path]   Root repository path to serve (defaults to current working directory)
-
-Stream Guarantees:
-  stdout   Strictly reserved for newline-delimited JSON-RPC 2.0 protocol messages
-  stderr   Diagnostic telemetry, startup notices, and logging
-`.trim());
+          console.log(MCP_SERVE_HELP_TEXT);
           process.exit(0);
         }
 
@@ -684,85 +874,90 @@ Stream Guarantees:
         return;
       }
 
-      if (subcommand !== "wire") {
-        console.error(
-          pc.red(
-            `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]`
-          )
-        );
-        process.exit(1);
+      if (subcommand === "wire") {
+        if (mcpArgs.includes("--help") || mcpArgs.includes("-h")) {
+          console.log(MCP_WIRE_HELP_TEXT);
+          process.exit(0);
+        }
+
+        const isDryRun = mcpArgs.includes("--dry-run");
+
+        let targets: McpTargetName[] | undefined;
+        const targetsIdx = mcpArgs.indexOf("--targets");
+        const targetIdx = mcpArgs.indexOf("--target");
+
+        if (targetsIdx !== -1) {
+          const nextVal = mcpArgs[targetsIdx + 1];
+          if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+            targets = nextVal
+              .split(",")
+              .map((t) => t.trim().toLowerCase() as McpTargetName)
+              .filter(Boolean);
+          }
+        } else if (targetIdx !== -1) {
+          const nextVal = mcpArgs[targetIdx + 1];
+          if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
+            targets = [nextVal.trim().toLowerCase() as McpTargetName];
+          }
+        }
+
+        for (const arg of mcpArgs) {
+          if (arg.startsWith("--targets=")) {
+            const val = arg.slice("--targets=".length);
+            targets = val
+              .split(",")
+              .map((t) => t.trim().toLowerCase() as McpTargetName)
+              .filter(Boolean);
+          } else if (arg.startsWith("--target=")) {
+            const val = arg.slice("--target=".length);
+            targets = [val.trim().toLowerCase() as McpTargetName];
+          }
+        }
+
+        const positional = mcpArgs.filter((arg, idx) => {
+          if (arg.startsWith("-")) return false;
+          if (idx > 0 && (mcpArgs[idx - 1] === "--targets" || mcpArgs[idx - 1] === "--target")) return false;
+          return true;
+        });
+        const targetDir = positional[0] || process.cwd();
+        const resolvedPath = path.resolve(targetDir);
+
+        try {
+          const wireResult = wireMcpTargets(resolvedPath, { dryRun: isDryRun, targets });
+
+          if (isJson) {
+            console.log(JSON.stringify(wireResult, null, 2));
+          } else {
+            console.log(formatMcpWireHumanOutput(wireResult));
+          }
+          process.exit(wireResult.status === "error" ? 1 : 0);
+        } catch (error: any) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "mcp wire",
+                  rootPath: resolvedPath,
+                  message: error?.message || "MCP wire failed",
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(pc.red(`\nMCP wire failed: ${error?.message || "Unknown error"}\n`));
+          }
+          process.exit(1);
+        }
       }
 
-      const isDryRun = mcpArgs.includes("--dry-run");
-
-      let targets: McpTargetName[] | undefined;
-      const targetsIdx = mcpArgs.indexOf("--targets");
-      const targetIdx = mcpArgs.indexOf("--target");
-
-      if (targetsIdx !== -1) {
-        const nextVal = mcpArgs[targetsIdx + 1];
-        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
-          targets = nextVal
-            .split(",")
-            .map((t) => t.trim().toLowerCase() as McpTargetName)
-            .filter(Boolean);
-        }
-      } else if (targetIdx !== -1) {
-        const nextVal = mcpArgs[targetIdx + 1];
-        if (typeof nextVal === "string" && !nextVal.startsWith("-")) {
-          targets = [nextVal.trim().toLowerCase() as McpTargetName];
-        }
-      }
-
-      for (const arg of mcpArgs) {
-        if (arg.startsWith("--targets=")) {
-          const val = arg.slice("--targets=".length);
-          targets = val
-            .split(",")
-            .map((t) => t.trim().toLowerCase() as McpTargetName)
-            .filter(Boolean);
-        } else if (arg.startsWith("--target=")) {
-          const val = arg.slice("--target=".length);
-          targets = [val.trim().toLowerCase() as McpTargetName];
-        }
-      }
-
-      const positional = mcpArgs.filter((arg, idx) => {
-        if (arg.startsWith("-")) return false;
-        if (idx > 0 && (mcpArgs[idx - 1] === "--targets" || mcpArgs[idx - 1] === "--target")) return false;
-        return true;
-      });
-      const targetDir = positional[0] || process.cwd();
-      const resolvedPath = path.resolve(targetDir);
-
-      try {
-        const wireResult = wireMcpTargets(resolvedPath, { dryRun: isDryRun, targets });
-
-        if (isJson) {
-          console.log(JSON.stringify(wireResult, null, 2));
-        } else {
-          console.log(formatMcpWireHumanOutput(wireResult));
-        }
-        process.exit(wireResult.status === "error" ? 1 : 0);
-      } catch (error: any) {
-        if (isJson) {
-          console.log(
-            JSON.stringify(
-              {
-                status: "error",
-                command: "mcp wire",
-                rootPath: resolvedPath,
-                message: error?.message || "MCP wire failed",
-              },
-              null,
-              2
-            )
-          );
-        } else {
-          console.error(pc.red(`\nMCP wire failed: ${error?.message || "Unknown error"}\n`));
-        }
-        process.exit(1);
-      }
+      console.error(
+        pc.red(
+          `Error: Unknown subcommand '${subcommand}' for 'mcp'. Usage: baba mcp <wire|serve> [path] [--dry-run] [--json]`
+        )
+      );
+      process.exit(1);
       break;
     }
 
