@@ -70,6 +70,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "harness-score": "^1.8.3",
     "picocolors": "^1.1.1"
   }
 }

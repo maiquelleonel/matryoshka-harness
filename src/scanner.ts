@@ -69,9 +69,9 @@ export function resolveHarnessScoreBinary(
 ): string | null {
   const env = options?.env ?? process.env;
 
-  // 1. Explicit option binaryPath
-  if (options?.binaryPath && fs.existsSync(options.binaryPath)) {
-    return options.binaryPath;
+  // 1. Explicit option binaryPath (if specified by caller, use it exclusively)
+  if (options?.binaryPath !== undefined) {
+    return fs.existsSync(options.binaryPath) ? options.binaryPath : null;
   }
 
   // 2. HARNESS_SCORE_BIN environment variable
@@ -79,13 +79,18 @@ export function resolveHarnessScoreBinary(
     return env.HARNESS_SCORE_BIN.trim();
   }
 
-  // 3. Target directory local node_modules/.bin/harness-score
+  // 3. Isolated environment guard (if PATH was explicitly emptied and no env var provided, don't leak host workspace)
+  if (options?.env && options.env.PATH === "" && !options.env.HARNESS_SCORE_BIN) {
+    return null;
+  }
+
+  // 4. Target directory local node_modules/.bin/harness-score
   const localTargetBin = path.join(targetDir, "node_modules", ".bin", "harness-score");
   if (fs.existsSync(localTargetBin)) {
     return localTargetBin;
   }
 
-  // 4. Current workspace node_modules/.bin/harness-score
+  // 5. Current workspace node_modules/.bin/harness-score
   const workspaceBin = path.join(process.cwd(), "node_modules", ".bin", "harness-score");
   if (fs.existsSync(workspaceBin)) {
     return workspaceBin;
