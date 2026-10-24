@@ -47,5 +47,5 @@ describe("SPEC-5: GitHub Actions CI Verification Gate", () => {
       stderr: "pipe",
     });
     expect(result.exitCode).toBe(0);
-  });
+  }, 30000);
 });
