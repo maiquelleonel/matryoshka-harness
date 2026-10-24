@@ -1033,12 +1033,8 @@
       });
     }
 
-    // Scroll Observer for Concentric Nested Dolls with Bidirectional Fade
+    // Concentric Nested Dolls Controller with Smooth Layer 5 Default
     const steps = document.querySelectorAll(".step-card");
-    const stageStatus = document.getElementById("stageStatus");
-    const coreBadge = document.getElementById("coreBadge");
-    const coreSub = document.getElementById("coreSub");
-
     const shells = {
       5: document.getElementById("dollShell5"),
       4: document.getElementById("dollShell4"),
@@ -1047,54 +1043,58 @@
       1: document.getElementById("dollShell1"),
     };
 
-    const layerMeta = {
-      5: { name: "LAYER 5: MCP", sub: "Native Stdio Protocol", label: "Layer 5: Native MCP Server (baba mcp serve)" },
-      4: { name: "LAYER 4: AST", sub: "Tree-sitter WASM Engine", label: "Layer 4: Polyglot AST Engine (baba wrap)" },
-      3: { name: "LAYER 3: AGENTS", sub: "176 Tokens Boundary", label: "Layer 3: Adaptive AGENTS.md (< 200 tokens)" },
-      2: { name: "LAYER 2: GRAPH", sub: "Semantic Seam Traversal", label: "Layer 2: Semantic Code Graph" },
-      1: { name: "LAYER 1: ORACLE", sub: "Maturity Baseline (L1-L4)", label: "Layer 1: Core Maturity Oracle (L1-L4)" },
-    };
+    function applyLayerState(currentLayer) {
+      // Atualizar classe active nos cards
+      steps.forEach(s => {
+        const l = parseInt(s.getAttribute("data-layer"), 10);
+        if (l === currentLayer) {
+          s.classList.add("active");
+        } else {
+          s.classList.remove("active");
+        }
+      });
 
+      // Abertura bidirecional física:
+      // Cascas MAIORES que a atual abrem e esvanecem (opened: true)
+      // A casca atual e menores ficam aninhadas no centro
+      for (let i = 5; i >= 1; i--) {
+        const shell = shells[i];
+        if (!shell) continue;
+
+        if (i > currentLayer) {
+          shell.classList.add("opened");
+        } else {
+          shell.classList.remove("opened");
+        }
+      }
+
+      // Layer 1 só acende no último nível
+      if (shells[1]) {
+        if (currentLayer === 1) {
+          shells[1].classList.add("active-core");
+        } else {
+          shells[1].classList.remove("active-core");
+        }
+      }
+    }
+
+    // LAYER 5 NASCE SELECIONADO POR PADRÃO:
+    applyLayerState(5);
+
+    // Observer com janela ampla e estável (sem troca relâmpago)
+    let activeLayer = 5;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const currentLayer = parseInt(entry.target.getAttribute("data-layer"), 10);
-          
-          steps.forEach(s => s.classList.remove("active"));
-          entry.target.classList.add("active");
-
-          const meta = layerMeta[currentLayer] || layerMeta[5];
-          // stageStatus removed
-
-          // coreBadge removed
-          // coreSub removed
-
-          // Mecânica da Matryoshka Concêntrica:
-          // Camadas MAIORES que a atual (já roladas para trás) abrem e esvanecem (opened: true)
-          // A camada atual e menores ficam fechadas no centro esperando a vez!
-          for (let i = 5; i >= 1; i--) {
-            const shell = shells[i];
-            if (!shell) continue;
-
-            if (i > currentLayer) {
-              shell.classList.add("opened");
-            } else {
-              shell.classList.remove("opened");
-            }
-          }
-
-          // A boneca nuclear (Layer 1) e o badge L1 ORACLE só aparecem no último card!
-          if (currentLayer === 1) {
-            shells[1].classList.add("active-core");
-          } else {
-            shells[1].classList.remove("active-core");
-          }
+          const layer = parseInt(entry.target.getAttribute("data-layer"), 10);
+          activeLayer = layer;
+          applyLayerState(layer);
         }
       });
     }, {
-      /* Gatilho calibrado no meio exato da altura da matryoshka sticky */
-      rootMargin: "-44% 0px -44% 0px",
-      threshold: 0
+      /* Janela ampla para o card permanecer selecionado confortavelmente */
+      rootMargin: "-20% 0px -40% 0px",
+      threshold: 0.1
     });
 
     steps.forEach(step => observer.observe(step));
