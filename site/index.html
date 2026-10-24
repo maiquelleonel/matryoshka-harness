@@ -354,7 +354,7 @@
 
     .doll-interactive-container {
       display: grid;
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 460px 1fr;
       gap: 48px;
       align-items: start;
     }
@@ -366,9 +366,9 @@
       background: var(--bg-canvas);
       border: 2px solid var(--border-strong);
       box-shadow: var(--shadow-retro-lg);
-      padding: 36px 16px;
+      padding: 32px 20px;
       text-align: center;
-      min-height: 420px;
+      min-height: 600px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -378,16 +378,17 @@
 
     .doll-stage-label {
       font-family: var(--font-mono);
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       font-weight: 700;
       text-transform: uppercase;
       color: var(--red-constructivist);
-      margin-bottom: 8px;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
     }
 
     .doll-artwork-wrapper {
-      width: 240px;
-      height: 360px;
+      width: 320px;
+      height: 520px;
       margin: 0 auto;
       position: relative;
       display: flex;
@@ -404,18 +405,18 @@
       transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
     }
 
-    /* Escalas aninhadas das 5 bonecas */
-    .doll-shell-5 { width: 190px; height: 350px; z-index: 10; }
-    .doll-shell-4 { width: 156px; height: 288px; z-index: 8; }
-    .doll-shell-3 { width: 126px; height: 232px; z-index: 6; }
-    .doll-shell-2 { width: 98px;  height: 180px; z-index: 4; }
+    /* Escalas aninhadas das 5 bonecas com presença imponente em todas as camadas */
+    .doll-shell-5 { width: 280px; height: 520px; z-index: 10; }
+    .doll-shell-4 { width: 255px; height: 474px; z-index: 8; }
+    .doll-shell-3 { width: 230px; height: 428px; z-index: 6; }
+    .doll-shell-2 { width: 205px; height: 382px; z-index: 4; }
     .doll-shell-1 {
-      width: 76px;
-      height: 140px;
+      width: 180px;
+      height: 335px;
       z-index: 2;
       opacity: 0; /* Invisível nas camadas 5, 4, 3 e 2 */
       pointer-events: none;
-      transform: translate(-50%, -50%) scale(0.85);
+      transform: translate(-50%, -50%) scale(0.9);
       transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
     }
 
@@ -464,13 +465,13 @@
 
     /* ABERTURA BIDIRECIONAL COM ESVANECIMENTO */
     .concentric-doll.opened .doll-half-top {
-      transform: translateY(-80px) rotate(-8deg);
+      transform: translateY(-110px) rotate(-8deg);
       opacity: 0;
       pointer-events: none;
     }
 
     .concentric-doll.opened .doll-half-bottom {
-      transform: translateY(+80px) rotate(+6deg);
+      transform: translateY(+110px) rotate(+6deg);
       opacity: 0;
       pointer-events: none;
     }
