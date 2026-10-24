@@ -77,11 +77,12 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
     it("should resolve 'current' or 'host' to the active platform/arch target", () => {
       const current = resolveTargets(["current"]);
       expect(current.length).toBe(1);
+      const target = current[0]!;
 
       const expectedArch = os.arch();
       const expectedPlatform = os.platform();
-      expect(current[0].arch).toBe(expectedArch === "x64" ? "x64" : "arm64");
-      expect(current[0].platform).toBe(
+      expect(target.arch).toBe(expectedArch === "x64" ? "x64" : "arm64");
+      expect(target.platform).toBe(
         expectedPlatform === "win32" ? "windows" : (expectedPlatform as any),
       );
     });
@@ -105,9 +106,11 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
     });
 
     it("should format canonical checksums.txt string with <hash>  <filename>", () => {
+      const target0 = DEFAULT_TARGETS[0]!;
+      const target1 = DEFAULT_TARGETS[1]!;
       const dummyResults: BuildResult[] = [
         {
-          target: DEFAULT_TARGETS[0],
+          target: target0,
           outputFile: "baba-linux-x64",
           outputPath: "/dist/baba-linux-x64",
           sizeBytes: 123456,
@@ -116,7 +119,7 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
           durationMs: 100,
         },
         {
-          target: DEFAULT_TARGETS[1],
+          target: target1,
           outputFile: "baba-darwin-arm64",
           outputPath: "/dist/baba-darwin-arm64",
           sizeBytes: 654321,
@@ -134,9 +137,11 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
     });
 
     it("should omit failed builds from checksums file", () => {
+      const target0 = DEFAULT_TARGETS[0]!;
+      const target1 = DEFAULT_TARGETS[1]!;
       const dummyResults: BuildResult[] = [
         {
-          target: DEFAULT_TARGETS[0],
+          target: target0,
           outputFile: "baba-linux-x64",
           outputPath: "/dist/baba-linux-x64",
           sizeBytes: 123456,
@@ -145,7 +150,7 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
           durationMs: 100,
         },
         {
-          target: DEFAULT_TARGETS[1],
+          target: target1,
           outputFile: "baba-darwin-arm64",
           outputPath: "/dist/baba-darwin-arm64",
           sizeBytes: 0,
@@ -175,8 +180,8 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
 
       expect(summary.success).toBe(true);
       expect(summary.results.length).toBe(2);
-      expect(summary.results[0].success).toBe(true);
-      expect(summary.results[1].success).toBe(true);
+      expect(summary.results[0]!.success).toBe(true);
+      expect(summary.results[1]!.success).toBe(true);
 
       // Verify no files were created on disk in dry-run
       const files = fs.readdirSync(tempDir);
@@ -198,7 +203,7 @@ describe("SPEC-16: Standalone Bun Binaries Compilation (Subtask 1)", () => {
       expect(summary.success).toBe(true);
       expect(summary.results.length).toBe(1);
 
-      const result = summary.results[0];
+      const result = summary.results[0]!;
       expect(result.success).toBe(true);
       expect(fs.existsSync(result.outputPath)).toBe(true);
 
