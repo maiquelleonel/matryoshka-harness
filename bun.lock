@@ -5,6 +5,7 @@
     "": {
       "name": "matryoshka-harness",
       "dependencies": {
+        "codebase-memory-mcp": "^0.12.1",
         "harness-score": "^1.8.3",
         "picocolors": "^1.1.1",
       },
@@ -22,6 +23,8 @@
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "codebase-memory-mcp": ["codebase-memory-mcp@0.12.1", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "arm64", ], "bin": { "codebase-memory-mcp": "bin.js" } }, "sha512-vLLMOw2q91CphuMK3FrUJoimPDhQqD6LpfUDvTAdPbNz+MP+3YKlaX/2foI0l5zKWQvs7gM+UDUH7f+ObrHbQQ=="],
 
     "harness-score": ["harness-score@1.8.3", "", { "bin": { "harness-score": "dist/cli.js" } }, "sha512-Bll/PTjJNlKXVZsPvWoRG6CtuIBtCiOUX8DCp/uzqKlHYfBzhpTIgrboLXBNNxhO2+xVIs+wdlAkyCS3QuoeHw=="],
 
