@@ -1,7 +1,7 @@
 # 📐 SPEC-16: feat(release): standalone bun binaries compilation & npm distribution (Phase 5.2)
 
 **Módulo:** Release Engineering / Multi-Platform Distribution  
-**Status:** ready4dev (Subtask 1: Implement compilation script `scripts/build-binaries.ts` for multi-platform standalone targets)  
+**Status:** completed (Subtask 2: Update `package.json` publishing metadata, entrypoints, and bin dispatchers)  
 **Gatilho:** Issue #16  
 **Target:** Bun + TypeScript + Standalone Native Executables  
 
@@ -17,14 +17,18 @@ Implement `docs/prds/PRD_STANDALONE_BINARIES_AND_NPM_DISTRIBUTION.md` to package
      - `linux-x64` (`bun-linux-x64` -> `baba-linux-x64`)
      - `linux-arm64` (`bun-linux-arm64` -> `baba-linux-arm64`)
      - `darwin-arm64` (`bun-darwin-arm64` -> `baba-darwin-arm64`)
-     - `darwin-x64` (`bun-darwin-x64` -> `baba-darwin-x64`)
+     - `darwin-x64` (`bun-darwin-arm64` -> `baba-darwin-x64`)
      - `windows-x64` (`bun-windows-x64` -> `baba-windows-x64.exe`)
    - CLI flags: `--targets`, `--out-dir`, `--no-minify`, `--no-checksums`, `--dry-run`, `--json`.
    - Automatic generation of `checksums.txt` containing SHA-256 hashes in canonical format (`<hash>  <filename>`).
    - Binary size guardrail (< 100MB).
 2. **NPM Scoped Registry Publishing (Subtask 2):**
-   - Configure `package.json` for `@maiquelleonel/matryoshka` with public access.
-   - Expose binary aliases: `matryoshka`, `baba`, `bbyg`.
+   - Configure `package.json` for canonical package `@maiquelleonel/matryoshka` with public access (`publishConfig.access: "public"`).
+   - Remove `"private": true` to allow registry distribution.
+   - Configure canonical entrypoints: `main`, `module`, `types`, and `exports` mapping (`dist/index.js` and `dist/index.d.ts`).
+   - Expose binary aliases in `bin`: `matryoshka`, `baba`, `bbyg` all dispatching to `dist/cli.js`.
+   - Update `build` script to package both library (`index.js`), CLI dispatcher (`cli.js`), and declaration types (`index.d.ts`).
+   - Specify distribution whitelist in `files` (`dist`, `README.md`, `LICENSE`).
 3. **Protective Typosquatting Forwarding Shells (Subtask 3):**
    - Scaffold forwarding packages (`@maiquelleonel/baba`, `@maiquelleonel/bbyg`, `@maiquelleonel/matrioska`, `@maiquelleonel/matryoska`).
 4. **CI/CD Release Automation (Subtask 4):**
@@ -34,9 +38,9 @@ Implement `docs/prds/PRD_STANDALONE_BINARIES_AND_NPM_DISTRIBUTION.md` to package
 
 ---
 
-## 📋 2. Contratos de I/O & Tipagem (Subtask 1)
+## 📋 2. Contratos de I/O & Tipagem
 
-### 2.1 Modelos de Dados e Configuração
+### 2.1 Modelos de Dados e Configuração (Subtask 1)
 
 ```typescript
 export interface BuildTarget {
@@ -80,16 +84,51 @@ export interface BuildSummary {
 }
 ```
 
-### 2.2 Invariantes de Execução
-- **Idempotência:** A execução sucessiva sobre o mesmo diretório de saída deve sobrescrever os binários de forma atômica e atualizar `checksums.txt`.
-- **Target Filtering:** Permite selecionar alvos específicos via `--targets` (ex: `--targets linux-x64,darwin-arm64`) ou compilar apenas para a máquina host (`--targets current`).
-- **Dry Run:** Em modo `--dry-run`, nenhum arquivo ou diretório de build é criado no disco; simula o plano de compilação e valida parâmetros.
-- **Fail-Safe:** Em caso de falha de compilação em um alvo, o erro é isolado no resultado daquele target e reportado no resumo final.
+### 2.2 Contratos de Publicação NPM & Entrypoints (Subtask 2)
+
+```json
+{
+  "name": "@maiquelleonel/matryoshka",
+  "version": "0.4.0",
+  "description": "Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for Coding Agents",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "matryoshka": "dist/cli.js",
+    "baba": "dist/cli.js",
+    "bbyg": "dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}
+```
+
+### 2.3 Invariantes de Execução (Subtask 2)
+- **Acesso Público:** A publicação no NPM é restrita ao escopo `@maiquelleonel` com `access: "public"`; o campo `"private": true` deve ser removido.
+- **Tríade de Aliases no Bin:** `matryoshka`, `baba` e `bbyg` devem apontar de forma idêntica para o executável compilado `dist/cli.js`.
+- **Compilação Completa de Build:** O script `bun run build` deve produzir atomicamente `dist/index.js` (biblioteca), `dist/cli.js` (CLI e bin dispatcher), e `dist/index.d.ts` (definições de tipos).
+- **SemVer Parity:** O CLI deve responder à flag `--version` reportando a versão exata do manifesto (`0.4.0`).
+- **Whitelisting de Pacote:** O pacote NPM final publicado deve conter apenas artefatos de distribuição (`dist`), metadados e documentação (`README.md`, `LICENSE`), prevenindo vazamento de testes ou arquivos efêmeros.
 
 ---
 
 ## 🧪 3. Acceptance Criteria (BDD / Gherkin)
 
+### Subtask 1: Compilation Script
 ```gherkin
 Feature: Standalone Binaries Compilation Script (Subtask 1)
 
@@ -125,16 +164,55 @@ Feature: Standalone Binaries Compilation Script (Subtask 1)
     Then it outputs a valid JSON BuildSummary with exit code 0
 ```
 
+### Subtask 2: NPM Publishing Metadata & Bin Dispatchers
+```gherkin
+Feature: NPM Publishing Metadata and Bin Dispatchers (Subtask 2)
+
+  Scenario: Package identity and public registry publishing configuration
+    Given the root "package.json" file
+    Then the package name must be "@maiquelleonel/matryoshka"
+    And the package must have version "0.4.0"
+    And the "publishConfig.access" must be strictly set to "public"
+    And the "private" flag must be removed or false
+
+  Scenario: Canonical library entrypoints and type definitions
+    Given the root "package.json" file
+    Then "main" must point to "dist/index.js"
+    And "module" must point to "dist/index.js"
+    And "types" must point to "dist/index.d.ts"
+    And "exports" must configure root "." mapping types and import to dist artifacts
+
+  Scenario: Binary aliases configuration and execution parity
+    Given the "bin" mapping in "package.json"
+    Then "matryoshka" must resolve to "dist/cli.js"
+    And "baba" must resolve to "dist/cli.js"
+    And "bbyg" must resolve to "dist/cli.js"
+
+  Scenario: Build script compilation of distribution artifacts
+    When executing "bun run build"
+    Then "dist/index.js" exists and is non-empty
+    And "dist/cli.js" exists, is executable, and starts with shebang
+    And "dist/index.d.ts" exists and contains type declarations
+    And executing "dist/cli.js --version" outputs "0.4.0"
+
+  Scenario: Distribution whitelisting and metadata completeness
+    Given the root "package.json"
+    Then "files" must include "dist", "README.md", and "LICENSE"
+    And repository, license, and author metadata must be properly populated
+```
+
 ---
 
 ## 🔒 4. Invariantes & Casos de Borda
 - Validação estrita de opções e argumentos CLI.
 - Isolamento de erros: falhas de compilação são capturadas e estruturadas em `BuildResult.error`.
 - Zero dependência externa não empacotada: o script utiliza APIs nativas do Bun e Node.js built-ins (`crypto`, `fs`, `path`).
+- Idempotência: rodar `bun run build` repetidas vezes produz a mesma saída consistente sem corromper symlinks ou permissões de execução.
 
 ---
 
 ## 📁 5. Arquivos Afetados
-- `scripts/build-binaries.ts` (Implementação do script de compilação)
-- `tests/build_binaries.test.ts` (Suíte de testes de aceitação BDD)
+- `package.json` (Metadados de publicação, entrypoints, bin dispatchers, scripts de build)
+- `src/cli.ts` (Sincronização de versão para 0.4.0)
+- `tests/npm_distribution.test.ts` (Suíte de testes BDD de aceitação para Subtask 2)
 - `docs/specs/SPEC-16.md` (Especificação formal SDD)

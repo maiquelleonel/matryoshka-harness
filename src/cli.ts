@@ -33,7 +33,7 @@ import {
 } from "./report";
 import type { DetectResult, McpTargetName, ProjectStack } from "./types";
 
-const VERSION = "0.1.0";
+const VERSION = "0.4.0";
 
 const HELP_TEXT = `
 Matryoshka-Harness CLI (baba / bbyg / matryoshka)

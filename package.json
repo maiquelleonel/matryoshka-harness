@@ -1,25 +1,34 @@
 {
-  "name": "matryoshka-harness",
-  "module": "index.ts",
-  "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "name": "@maiquelleonel/matryoshka",
+  "version": "0.4.0",
+  "description": "Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for Coding Agents",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
-    "picocolors": "^1.1.1"
-  },
-  "description": "Adaptive context-fencing, anti-slop AGENTS.md generator and L4 harness-score remediation",
   "bin": {
-    "baba": "./src/cli.ts",
-    "bbyg": "./src/cli.ts",
-    "matryoshka": "./src/cli.ts"
+    "matryoshka": "dist/cli.js",
+    "baba": "dist/cli.js",
+    "bbyg": "dist/cli.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "bun build ./index.ts --outdir ./dist",
+    "build": "bun build ./index.ts --target bun --outdir ./dist && bun build ./src/cli.ts --target bun --outdir ./dist && bun run tsc --declaration --emitDeclarationOnly --noEmit false --outDir dist",
+    "build:binaries": "bun run scripts/build-binaries.ts",
+    "build:types": "tsc --declaration --emitDeclarationOnly --noEmit false --outDir dist",
     "release": "bun run ./src/release.ts",
     "baba": "bun run src/cli.ts",
     "bbyg": "bun run src/cli.ts",
@@ -30,6 +39,36 @@
     "mcp": "bun run src/cli.ts mcp",
     "test": "bun test"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maiquelleonel/matryoshka-harness.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maiquelleonel/matryoshka-harness/issues"
+  },
+  "homepage": "https://github.com/maiquelleonel/matryoshka-harness#readme",
+  "keywords": [
+    "harness",
+    "matryoshka",
+    "baba",
+    "bbyg",
+    "agentic",
+    "ai",
+    "mcp",
+    "tree-sitter",
+    "ast",
+    "context-fencing",
+    "agents-md"
+  ],
+  "author": "Maiquel Leonel <skywishmtfk@gmail.com>",
   "license": "MIT",
-  "author": "Maiquel Leonel <skywishmtfk@gmail.com>"
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  }
 }
