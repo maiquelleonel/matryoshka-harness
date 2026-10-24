@@ -1,0 +1,47 @@
+{
+  "name": "@maiquelleonel/baba",
+  "version": "0.4.0",
+  "description": "Protective shell and forwarding wrapper for @maiquelleonel/matryoshka (baba ergonomic alias)",
+  "main": "bin/baba.js",
+  "module": "index.js",
+  "bin": {
+    "baba": "bin/baba.js",
+    "matryoshka": "bin/baba.js",
+    "bbyg": "bin/baba.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@maiquelleonel/matryoshka": "^0.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maiquelleonel/matryoshka-harness.git",
+    "directory": "packages/baba"
+  },
+  "bugs": {
+    "url": "https://github.com/maiquelleonel/matryoshka-harness/issues"
+  },
+  "homepage": "https://github.com/maiquelleonel/matryoshka-harness#readme",
+  "keywords": [
+    "matryoshka",
+    "harness",
+    "baba",
+    "bbyg",
+    "typosquatting",
+    "wrapper",
+    "forwarding",
+    "agentic",
+    "ai",
+    "mcp"
+  ],
+  "author": "Maiquel Leonel <skywishmtfk@gmail.com>",
+  "license": "MIT"
+}

@@ -484,6 +484,13 @@ export interface JsonRpcErrorResponse {
   error: JsonRpcErrorObject;
 }
 
+export interface JsonRpcClientResponse<T = any> {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  result?: T;
+  error?: JsonRpcErrorObject;
+}
+
 export type JsonRpcMessage =
   | JsonRpcRequest
   | JsonRpcNotification
@@ -530,6 +537,28 @@ export interface McpToolDefinition {
   name: string;
   description: string;
   inputSchema: McpToolInputSchema;
+}
+
+export interface DetectStackToolArgs {
+  path?: string;
+}
+
+export interface ScanHarnessToolArgs {
+  path?: string;
+}
+
+export interface GenerateAgentsToolArgs {
+  path?: string;
+  force?: boolean;
+  dryRun?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface WrapContextToolArgs {
+  path?: string;
+  threshold?: number;
+  strict?: boolean;
 }
 
 export interface McpToolContentItem {
@@ -583,10 +612,48 @@ export interface McpPromptResult {
   messages: McpPromptMessage[];
 }
 
+export interface AuditRepositoryPromptArgs {
+  targetDir?: string;
+  path?: string;
+  strict?: boolean;
+  threshold?: number;
+}
+
+export interface McpResourcesListResult {
+  resources: McpResourceDefinition[];
+}
+
+export interface McpResourceReadResult {
+  contents: McpResourceContent[];
+}
+
+export interface McpPromptsListResult {
+  prompts: McpPromptDefinition[];
+}
+
+export interface StderrLoggingGuardOptions {
+  stderr?: NodeJS.WritableStream;
+  prefix?: string;
+}
+
 export interface McpServerOptions {
   serverInfo?: McpServerInfo;
   instructions?: string;
   projectPath?: string;
+  rootDir?: string;
+  capabilities?: {
+    tools?: Record<string, any>;
+    resources?: Record<string, any>;
+    prompts?: Record<string, any>;
+    [key: string]: any;
+  };
+}
+
+export interface McpClientOptions {
+  command?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
 }
 
 
