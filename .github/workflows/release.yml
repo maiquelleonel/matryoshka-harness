@@ -90,6 +90,6 @@ jobs:
           for dir in packages/*; do
             if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
               echo "Publishing $dir to NPM registry..."
-              npm publish "$dir" --access public
+              (cd "$dir" && npm publish --access public)
             fi
           done
