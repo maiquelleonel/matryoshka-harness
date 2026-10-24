@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>МАТРЁШКА — Matryoshka Harness (baba)</title>
+  <meta name="description" content="Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for AI Coding Agents.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #f3eae0;
+      --bg-card: #fdfaf6;
+      --bg-card-alt: #ece1d3;
+      --red-constructivist: #c53324;
+      --red-deep: #962217;
+      --red-tint: #faeee9;
+      --gold-cyrillic: #f3a615;
+      --gold-deep: #c98408;
+      --gold-light: #fef4e2;
+      --ink: #191716;
+      --ink-muted: #5e5954;
+      --border-strong: #23201e;
+      --border-subtle: #d6c6b6;
+      --terminal-bg: #151312;
+      --terminal-text: #ebe6df;
+      --font-display: 'Russo One', sans-serif;
+      --font-body: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow-retro: 4px 4px 0px var(--border-strong);
+      --shadow-retro-lg: 8px 8px 0px var(--border-strong);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--ink);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(var(--border-subtle) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+
+    /* Top Banner / Ticker */
+    .top-strip {
+      background: var(--red-constructivist);
+      color: var(--gold-cyrillic);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 8px 16px;
+      text-align: center;
+      border-bottom: 2px solid var(--border-strong);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .top-strip span {
+      margin: 0 12px;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navbar */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 0;
+      border-bottom: 2px solid var(--border-strong);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .brand-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .brand-text {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      color: var(--red-constructivist);
+      letter-spacing: 1px;
+    }
+
+    .brand-badge {
+      background: var(--gold-cyrillic);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 2px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .nav-link {
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--ink);
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover {
+      color: var(--red-constructivist);
+    }
+
+    .btn-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--ink);
+      color: var(--bg-card);
+      padding: 10px 18px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 2px solid var(--border-strong);
+      box-shadow: var(--shadow-retro);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn-github:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px var(--border-strong);
+      background: #000;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 64px 0 48px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-block;
+      background: var(--red-tint);
+      color: var(--red-constructivist);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 6px 14px;
+      border: 2px solid var(--red-constructivist);
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: 3.8rem;
+      line-height: 1.05;
+      color: var(--ink);
+      margin-bottom: 24px;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-title .highlight-gold {
+      color: var(--red-constructivist);
+      background: linear-gradient(to right, var(--gold-cyrillic), var(--gold-deep));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+    }
+
+    .hero-desc {
+      font-size: 1.2rem;
+      color: var(--ink-muted);
+      margin-bottom: 32px;
+      max-width: 540px;
+    }
+
+    .quickstart-box {
+      background: var(--terminal-bg);
+      border: 2px solid var(--border-strong);
+      box-shadow: var(--shadow-retro);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .quickstart-code {
+      font-family: var(--font-mono);
+      color: var(--gold-cyrillic);
+      font-size: 1.05rem;
+      user-select: all;
+    }
+
+    .quickstart-code span {
+      color: #928b81;
+    }
+
+    .btn-copy {
+      background: transparent;
+      border: 1px solid var(--gold-cyrillic);
+      color: var(--gold-cyrillic);
+      padding: 6px 14px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .btn-copy:hover {
+      background: var(--gold-cyrillic);
+      color: var(--terminal-bg);
+    }
+
+    /* Interactive Matryoshka Scroll Showcase */
+    .showcase-section {
+      padding: 64px 0;
+      border-top: 2px solid var(--border-strong);
+      border-bottom: 2px solid var(--border-strong);
+      background: var(--bg-card);
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--red-constructivist);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .doll-interactive-container {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    /* Fixed SVG Doll Stage */
+    .doll-stage {
+      position: sticky;
+      top: 100px;
+      background: var(--bg-canvas);
+      border: 2px solid var(--border-strong);
+      box-shadow: var(--shadow-retro-lg);
+      padding: 32px 24px;
+      text-align: center;
+    }
+
+    .doll-stage-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--red-constructivist);
+      margin-bottom: 16px;
+    }
+
+    .doll-svg-wrapper {
+      width: 220px;
+      height: 320px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .doll-layer {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+      cursor: pointer;
+    }
+
+    /* Concentric Doll Scalings */
+    .doll-5 { width: 200px; height: 300px; z-index: 5; } /* MCP Server */
+    .doll-4 { width: 165px; height: 250px; z-index: 4; top: 25px; } /* AST Engine */
+    .doll-3 { width: 130px; height: 200px; z-index: 3; top: 50px; } /* AGENTS.md */
+    .doll-2 { width: 100px; height: 150px; z-index: 2; top: 75px; } /* Semantic Graph */
+    .doll-1 { width: 70px; height: 105px; z-index: 1; top: 100px; } /* Core Oracle */
+
+    /* Active Layer Open Animation */
+    .doll-layer.open-top {
+      transform: translateX(-50%) translateY(-60px) rotate(-6deg);
+    }
+    .doll-layer.dimmed {
+      opacity: 0.25;
+    }
+
+    .stage-status {
+      margin-top: 24px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      background: var(--terminal-bg);
+      color: var(--gold-cyrillic);
+      padding: 8px 12px;
+      border: 1px solid var(--border-strong);
+    }
+
+    /* Scroll Step Cards */
+    .doll-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .step-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border-strong);
+      box-shadow: var(--shadow-retro);
+      padding: 32px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .step-card.active {
+      border-color: var(--red-constructivist);
+      border-width: 3px;
+      box-shadow: 6px 6px 0px var(--red-constructivist);
+      transform: translateX(4px);
+    }
+
+    .step-badge {
+      display: inline-block;
+      background: var(--red-constructivist);
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .step-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+      color: var(--ink);
+    }
+
+    .step-desc {
+      color: var(--ink-muted);
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+
+    .step-code-preview {
+      background: var(--terminal-bg);
+      color: var(--terminal-text);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 16px;
+      border: 1px solid var(--border-strong);
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    .step-code-preview .keyword { color: var(--gold-cyrillic); font-weight: 700; }
+    .step-code-preview .comment { color: #8a8277; }
+    .step-code-preview .accent { color: #ff6b6b; }
+
+    /* Manifesto / Anti-Slop Grid */
+    .manifesto-section {
+      padding: 80px 0;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 40px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border-strong);
+      box-shadow: var(--shadow-retro);
+      padding: 28px;
+    }
+
+    .feature-icon {
+      font-size: 2.2rem;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+
+    .feature-title {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      margin-bottom: 12px;
+      color: var(--ink);
+    }
+
+    .feature-text {
+      color: var(--ink-muted);
+      font-size: 0.95rem;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      background: var(--red-constructivist);
+      color: #fff;
+      padding: 80px 0;
+      text-align: center;
+      border-top: 2px solid var(--border-strong);
+      border-bottom: 2px solid var(--border-strong);
+    }
+
+    .cta-eyebrow {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--gold-cyrillic);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .cta-title {
+      font-family: var(--font-display);
+      font-size: 3rem;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      text-transform: uppercase;
+    }
+
+    .cta-desc {
+      font-size: 1.2rem;
+      max-width: 650px;
+      margin: 0 auto 36px;
+      color: #fae4de;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn-cta-primary {
+      background: var(--gold-cyrillic);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      padding: 16px 32px;
+      text-decoration: none;
+      border: 2px solid var(--border-strong);
+      box-shadow: 4px 4px 0px var(--border-strong);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn-cta-primary:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px var(--border-strong);
+      background: #ffb72b;
+    }
+
+    .btn-cta-secondary {
+      background: var(--bg-card);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      padding: 16px 32px;
+      text-decoration: none;
+      border: 2px solid var(--border-strong);
+      box-shadow: 4px 4px 0px var(--border-strong);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn-cta-secondary:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px var(--border-strong);
+    }
+
+    /* Footer */
+    footer {
+      padding: 48px 0;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+    }
+
+    footer a {
+      color: var(--red-constructivist);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    /* Responsive */
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; }
+      .doll-interactive-container { grid-template-columns: 1fr; }
+      .doll-stage { position: relative; top: 0; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .hero-title { font-size: 2.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Ribbon -->
+  <div class="top-strip">
+    <span>★</span> ZERO CODE EXFILTRATION <span>★</span> PURE WEB-ASSEMBLY AST <span>★</span> TOKEN BUDGET GUARD &lt; 200 TOKENS <span>★</span>
+  </div>
+
+  <div class="container">
+    <!-- Navbar -->
+    <nav>
+      <a href="#" class="brand">
+        <span class="brand-icon">🪆</span>
+        <span class="brand-text">МАТРЁШКА</span>
+        <span class="brand-badge">baba v0.4.0</span>
+      </a>
+      <div class="nav-links">
+        <a href="#concentric" class="nav-link">Concentric Layers</a>
+        <a href="#anti-slop" class="nav-link">Anti-Slop Manifesto</a>
+        <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-github">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          STAR ON GITHUB
+        </a>
+      </div>
+    </nav>
+
+    <!-- Hero -->
+    <header class="hero">
+      <div>
+        <div class="hero-eyebrow">The Context-Fencing & AST Linter Engine</div>
+        <h1 class="hero-title">
+          STOP THE <br>
+          <span class="highlight-gold">AI-SLOP TAX</span><br>
+          ON REPOSITORIES.
+        </h1>
+        <p class="hero-desc">
+          Monolithic instruction prompts waste tokens and dilute LLM attention. 
+          <strong>Matryoshka</strong> wraps repositories in five tight concentric governance layers, compiling ultra-lean <code>AGENTS.md</code> boundaries and deterministic WebAssembly AST rules.
+        </p>
+
+        <div class="quickstart-box">
+          <code class="quickstart-code"><span>$</span> bunx @maiquelleonel/matryoshka wrap</code>
+          <button class="btn-copy" onclick="copySnippet(this)">COPY</button>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--ink-muted);">
+          Zero-dependency • Polyglot Tree-sitter WASM • Sub-15ms Execution
+        </div>
+      </div>
+
+      <!-- Hero Visual Card -->
+      <div style="background: var(--bg-card); border: 2px solid var(--border-strong); box-shadow: var(--shadow-retro-lg); padding: 32px;">
+        <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--red-constructivist); font-weight: 700; margin-bottom: 12px;">
+          // LIVE AUDIT EVIDENCE — 88% TOKEN SAVINGS
+        </div>
+        <div style="background: var(--terminal-bg); color: var(--terminal-text); font-family: var(--font-mono); font-size: 0.85rem; padding: 20px; border: 1px solid var(--border-strong); line-height: 1.6;">
+          <div style="color: var(--gold-cyrillic); font-weight: 700;">🪆 Matryoshka Adaptive Agents Generator</div>
+          <div>  • Target Stack:    <span style="color: #6ee7b7;">FastAPI / Python (uv)</span></div>
+          <div>  • Archetype:       <span style="color: #6ee7b7;">api_backend</span></div>
+          <div>  • Root AGENTS:     <span style="color: #fca5a5;">176 tokens</span> <span style="color: #86efac;">[PASS &lt; 200]</span></div>
+          <div>  • On-Demand:       <span style="color: #93c5fd;">4 modular skills in .agents/</span></div>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #444; color: var(--gold-cyrillic);">
+            ✓ Token Savings: 1,324 tokens per session turn (88% reduction)
+          </div>
+        </div>
+      </div>
+    </header>
+  </div>
+
+  <!-- Concentric Doll Scroll Interactive Section -->
+  <section class="showcase-section" id="concentric">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">Architectural Metaphor</div>
+        <h2 class="section-title">A Harness Inside a Harness Inside a Harness</h2>
+        <p style="color: var(--ink-muted); max-width: 600px; margin: 12px auto 0;">
+          Like a traditional Russian Matryoshka doll, each governance layer tightly encapsulates the next. Scroll down to open the concentric shells:
+        </p>
+      </div>
+
+      <div class="doll-interactive-container">
+        <!-- Sticky Doll Stage -->
+        <div class="doll-stage">
+          <div class="doll-stage-label">Current Active Layer</div>
+          <div class="doll-svg-wrapper" id="dollStage">
+            <!-- Doll 5 (Outer Shell: MCP Server) -->
+            <svg class="doll-layer doll-5" viewBox="0 0 100 150" fill="none" id="dollSvg5">
+              <path d="M50 5 C25 5 15 30 15 65 C15 95 20 145 50 145 C80 145 85 95 85 65 C85 30 75 5 50 5 Z" fill="#c53324" stroke="#191716" stroke-width="3"/>
+              <circle cx="50" cy="45" r="22" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
+              <circle cx="43" cy="42" r="3" fill="#191716"/>
+              <circle cx="57" cy="42" r="3" fill="#191716"/>
+              <path d="M46 54 Q50 58 54 54" stroke="#c53324" stroke-width="2" fill="none"/>
+              <path d="M25 85 Q50 105 75 85" stroke="#f3a615" stroke-width="4" fill="none"/>
+              <text x="50" y="125" font-family="'Russo One'" font-size="9" fill="#f3a615" text-anchor="middle">LAYER 5: MCP</text>
+            </svg>
+
+            <!-- Doll 4 (AST Engine baba wrap) -->
+            <svg class="doll-layer doll-4" viewBox="0 0 100 150" fill="none" id="dollSvg4">
+              <path d="M50 8 C28 8 18 32 18 65 C18 95 22 142 50 142 C78 142 82 95 82 65 C82 32 72 8 50 8 Z" fill="#f3a615" stroke="#191716" stroke-width="3"/>
+              <circle cx="50" cy="46" r="20" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
+              <circle cx="44" cy="44" r="2.5" fill="#191716"/>
+              <circle cx="56" cy="44" r="2.5" fill="#191716"/>
+              <text x="50" y="122" font-family="'Russo One'" font-size="9" fill="#191716" text-anchor="middle">LAYER 4: AST</text>
+            </svg>
+
+            <!-- Doll 3 (Adaptive AGENTS.md) -->
+            <svg class="doll-layer doll-3" viewBox="0 0 100 150" fill="none" id="dollSvg3">
+              <path d="M50 10 C30 10 20 35 20 65 C20 95 24 140 50 140 C76 140 80 95 80 65 C80 35 70 10 50 10 Z" fill="#962217" stroke="#191716" stroke-width="3"/>
+              <circle cx="50" cy="48" r="18" fill="#f3eae0" stroke="#191716" stroke-width="2"/>
+              <text x="50" y="120" font-family="'Russo One'" font-size="8.5" fill="#f3a615" text-anchor="middle">LAYER 3: AGENTS</text>
+            </svg>
+
+            <!-- Doll 2 (Semantic Graph) -->
+            <svg class="doll-layer doll-2" viewBox="0 0 100 150" fill="none" id="dollSvg2">
+              <path d="M50 12 C32 12 22 38 22 65 C22 95 26 138 50 138 C74 138 78 95 78 65 C78 38 68 12 50 12 Z" fill="#e8940c" stroke="#191716" stroke-width="3"/>
+              <text x="50" y="115" font-family="'Russo One'" font-size="8" fill="#191716" text-anchor="middle">LAYER 2: GRAPH</text>
+            </svg>
+
+            <!-- Doll 1 (Core Oracle) -->
+            <svg class="doll-layer doll-1" viewBox="0 0 100 150" fill="none" id="dollSvg1">
+              <path d="M50 15 C35 15 25 40 25 65 C25 95 30 135 50 135 C70 135 75 95 75 65 C75 40 65 15 50 15 Z" fill="#191716" stroke="#f3a615" stroke-width="3"/>
+              <text x="50" y="105" font-family="'Russo One'" font-size="8" fill="#f3a615" text-anchor="middle">ORACLE</text>
+            </svg>
+          </div>
+
+          <div class="stage-status" id="stageStatus">
+            ACTIVE: Layer 5 — Native MCP Server
+          </div>
+        </div>
+
+        <!-- Scroll Narrative Steps -->
+        <div class="doll-steps">
+          <!-- Step 5 -->
+          <div class="step-card active" data-layer="5">
+            <span class="step-badge">Outer Shell • Layer 5</span>
+            <h3 class="step-title">Native MCP Server (baba mcp serve)</h3>
+            <p class="step-desc">
+              Plugs directly into Cursor, Zed, Claude Code, and Gemini CLI over standard <code>stdio</code>. Exposes live tools (<code>detect_stack</code>, <code>wrap_context</code>, <code>generate_agents</code>) and real-time resources without filesystem poll pollution.
+            </p>
+            <pre class="step-code-preview"><code><span class="comment"># Auto-wire all IDEs in one second:</span>
+<span class="keyword">baba</span> mcp wire --targets cursor,gemini,claude</code></pre>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="step-card" data-layer="4">
+            <span class="step-badge">Second Shell • Layer 4</span>
+            <h3 class="step-title">Polyglot AST Engine (baba wrap)</h3>
+            <p class="step-desc">
+              WebAssembly Tree-sitter parser scanning TypeScript, Python, and Go in &lt; 200ms. Eliminates false-green tests without assertions, uncaught dynamic SQL injection, and hardcoded secrets before git push.
+            </p>
+            <pre class="step-code-preview"><code><span class="comment"># Deep AST audit &amp; DIAGNOSTIC.md compiler:</span>
+<span class="keyword">baba</span> wrap --strict --threshold <span class="accent">80</span></code></pre>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="step-card" data-layer="3">
+            <span class="step-badge">Third Shell • Layer 3</span>
+            <h3 class="step-title">Adaptive AGENTS.md &amp; Modular Skills</h3>
+            <p class="step-desc">
+              Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/*.md</code> with strict YAML frontmatter.
+            </p>
+            <pre class="step-code-preview"><code><span class="comment"># Compile lean boundary without touching disk:</span>
+<span class="keyword">baba</span> agents generate --dry-run</code></pre>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="step-card" data-layer="2">
+            <span class="step-badge">Fourth Shell • Layer 2</span>
+            <h3 class="step-title">Semantic Code Graph Integration</h3>
+            <p class="step-desc">
+              Crosses static filesystem paths with the codebase knowledge graph (codebase-memory-mcp). Maps routes, services, and call flows before an agent initiates a surgical change.
+            </p>
+            <pre class="step-code-preview"><code><span class="comment"># Inspect project seams and active skills:</span>
+<span class="keyword">baba</span> agents profile</code></pre>
+          </div>
+
+          <!-- Step 1 -->
+          <div class="step-card" data-layer="1">
+            <span class="step-badge">The Core • Layer 1</span>
+            <h3 class="step-title">Repository Maturity Oracle (L1 - L4)</h3>
+            <p class="step-desc">
+              Measures foundational hygiene (CI gates, licensing, test suites, architecture blueprints) powered by the canonical <code>paladini/harness-score</code> oracle and issues official SVG compliance badges.
+            </p>
+            <pre class="step-code-preview"><code><span class="comment"># Audit structural hygiene and export badge:</span>
+<span class="keyword">baba</span> scan --badge ./harness-badge.svg</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Anti-Slop Manifesto Grid -->
+  <section class="manifesto-section" id="anti-slop">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">Engineering Rigor</div>
+        <h2 class="section-title">The Anti-Slop Safeguards</h2>
+        <p style="color: var(--ink-muted); max-width: 600px; margin: 12px auto 0;">
+          Autonomous coding agents fail when context rots. Matryoshka enforces deterministic boundaries:
+        </p>
+      </div>
+
+      <div class="cards-grid">
+        <div class="feature-card">
+          <span class="feature-icon">🛡️</span>
+          <h3 class="feature-title">Zero Token Exfiltration</h3>
+          <p class="feature-text">
+            100% of AST inspection and Tree-sitter grammar parsing executes locally on your machine via WebAssembly. Zero code leaves your workstation.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">⚡</span>
+          <h3 class="feature-title">Sub-15ms Execution</h3>
+          <p class="feature-text">
+            Compiled with Bun into single standalone native executables. Zero Python, Rust, or C++ toolchains required on host environments.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">🚫</span>
+          <h3 class="feature-title">No False-Green Tests</h3>
+          <p class="feature-text">
+            Detects fragile mock-heavy test suites generated by LLMs that pass locally while concealing zero behavioral assertions.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-eyebrow">★ JOIN THE ANTI-SLOP COALITION ★</div>
+      <h2 class="cta-title">UNITE AGAINST AI HALLUCINATION.</h2>
+      <p class="cta-desc">
+        Take back control of your repository context. Run Matryoshka in your CLI, IDE, and CI/CD pipelines today.
+      </p>
+
+      <div class="cta-buttons">
+        <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-cta-primary">
+          EXPLORE ON GITHUB
+        </a>
+        <a href="https://github.com/maiquelleonel/ouroboros-engine" target="_blank" class="btn-cta-secondary">
+          OUROBOROS ENGINE
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>
+        ⚡ Built with mathematical rigor by <a href="https://github.com/maiquelleonel/ouroboros-engine" target="_blank">LeonelLabs Ouroboros Engine</a>.
+      </p>
+      <p style="margin-top: 8px; font-size: 0.75rem;">
+        Distributed under the <strong>MIT License</strong>. Maintained by <a href="https://github.com/maiquelleonel" target="_blank">Maiquel Leonel</a>.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Copy snippet helper
+    function copySnippet(btn) {
+      const code = "bunx @maiquelleonel/matryoshka wrap";
+      navigator.clipboard.writeText(code).then(() => {
+        btn.innerText = "COPIED!";
+        setTimeout(() => { btn.innerText = "COPY"; }, 2000);
+      });
+    }
+
+    // Scroll Observer for Concentric Doll Layers
+    const steps = document.querySelectorAll('.step-card');
+    const stageStatus = document.getElementById('stageStatus');
+    const dollLayers = {
+      5: document.getElementById('dollSvg5'),
+      4: document.getElementById('dollSvg4'),
+      3: document.getElementById('dollSvg3'),
+      2: document.getElementById('dollSvg2'),
+      1: document.getElementById('dollSvg1'),
+    };
+
+    const layerLabels = {
+      5: "Layer 5: Native MCP Server (baba mcp serve)",
+      4: "Layer 4: Polyglot AST Engine (baba wrap)",
+      3: "Layer 3: Adaptive AGENTS.md (< 200 tokens)",
+      2: "Layer 2: Semantic Code Graph",
+      1: "Layer 1: Core Maturity Oracle (L1-L4)"
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const layer = entry.target.getAttribute('data-layer');
+          
+          // Update active step UI
+          steps.forEach(s => s.classList.remove('active'));
+          entry.target.classList.add('active');
+
+          // Update Status
+          stageStatus.innerText = "ACTIVE: " + layerLabels[layer];
+
+          // Animate Dolls: open outer shells as you scroll down
+          const numLayer = parseInt(layer, 10);
+          for (let i = 5; i >= 1; i--) {
+            const svg = dollLayers[i];
+            if (!svg) continue;
+            
+            if (i > numLayer) {
+              // Outer shells are opened/lifted
+              svg.classList.add('open-top');
+              svg.classList.add('dimmed');
+            } else if (i === numLayer) {
+              // Current active shell
+              svg.classList.remove('open-top');
+              svg.classList.remove('dimmed');
+            } else {
+              // Inner shells waiting inside
+              svg.classList.remove('open-top');
+              svg.classList.remove('dimmed');
+            }
+          }
+        }
+      });
+    }, {
+      rootMargin: '-30% 0px -40% 0px',
+      threshold: 0.1
+    });
+
+    steps.forEach(step => observer.observe(step));
+  </script>
+</body>
+</html>
