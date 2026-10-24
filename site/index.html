@@ -409,7 +409,21 @@
     .doll-shell-4 { width: 156px; height: 288px; z-index: 8; }
     .doll-shell-3 { width: 126px; height: 232px; z-index: 6; }
     .doll-shell-2 { width: 98px;  height: 180px; z-index: 4; }
-    .doll-shell-1 { width: 72px;  height: 132px; z-index: 2; }
+    .doll-shell-1 {
+      width: 76px;
+      height: 140px;
+      z-index: 2;
+      opacity: 0; /* Invisível nas camadas 5, 4, 3 e 2 */
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0.85);
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    }
+
+    .doll-shell-1.active-core {
+      opacity: 1; /* Revelado exclusivamente no Layer 1 */
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
 
     /* Metades Superior e Inferior com recorte simétrico */
     .doll-half {
@@ -481,14 +495,22 @@
 
     .core-solid-badge {
       position: absolute;
-      bottom: -18px;
+      bottom: -24px;
       background: var(--terminal-bg);
       color: var(--gold-cyrillic);
       font-family: var(--font-display);
-      font-size: 0.6rem;
-      padding: 2px 6px;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      padding: 3px 8px;
       border: 1px solid var(--gold-cyrillic);
+      box-shadow: 2px 2px 0px var(--border-strong);
       white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .doll-shell-1.active-core .core-solid-badge {
+      opacity: 1; /* Só visível no Layer 1 */
     }
 
     /* Floating Card que acompanha a camada ativa */
@@ -1062,12 +1084,17 @@
             if (!shell) continue;
 
             if (i > currentLayer) {
-              // As cascas externas abrem pra cima e pra baixo e somem suavemente
               shell.classList.add("opened");
             } else {
-              // A casca atual e as interiores ficam fechadas, aninhadas
               shell.classList.remove("opened");
             }
+          }
+
+          // A boneca nuclear (Layer 1) e o badge L1 ORACLE só aparecem no último card!
+          if (currentLayer === 1) {
+            shells[1].classList.add("active-core");
+          } else {
+            shells[1].classList.remove("active-core");
           }
         }
       });
