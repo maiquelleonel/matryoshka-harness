@@ -1,7 +1,7 @@
 # 📐 SPEC-14: docs(branding): launch-grade README, actionable CLI help & Ouroboros heritage
 
 **Módulo:** Developer Experience / Branding / Documentation  
-**Status:** in-progress  
+**Status:** completed  
 **Gatilho:** Issue #14 (PR #19)  
 **Target:** Bun + TypeScript + Markdown + HTML  
 
