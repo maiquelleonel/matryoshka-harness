@@ -1,7 +1,7 @@
 # 📐 SPEC-16: feat(release): standalone bun binaries compilation & npm distribution (Phase 5.2)
 
 **Módulo:** Release Engineering / Multi-Platform Distribution  
-**Status:** completed (Subtask 3: Implement forwarding wrappers for typosquatting protective shells)  
+**Status:** in progress (Subtask 4: Update `.github/workflows/release.yml` with NPM publishing and asset attachments)  
 **Gatilho:** Issue #16  
 **Target:** Bun + TypeScript + Standalone Native Executables  
 
@@ -123,6 +123,24 @@ export interface BuildSummary {
 - **Compilação Completa de Build:** O script `bun run build` deve produzir atomicamente `dist/index.js` (biblioteca), `dist/cli.js` (CLI e bin dispatcher), e `dist/index.d.ts` (definições de tipos).
 - **SemVer Parity:** O CLI deve responder à flag `--version` reportando a versão exata do manifesto (`0.4.0`).
 - **Whitelisting de Pacote:** O pacote NPM final publicado deve conter apenas artefatos de distribuição (`dist`), metadados e documentação (`README.md`, `LICENSE`), prevenindo vazamento de testes ou arquivos efêmeros.
+
+### 2.5 Contratos de Release Automation & NPM Publishing (Subtask 4)
+
+- **Triggers do Workflow (`.github/workflows/release.yml`):**
+  - Push na branch `main`.
+  - Push em tags versionadas (`v*`).
+  - Execução manual (`workflow_dispatch`).
+- **Permissões:**
+  - `contents: write` (criação de releases, tags e upload de assets no GitHub Releases).
+- **Etapas de Pipeline Automatizadas:**
+  1. Verificação contínua e testes (`bun test`).
+  2. Compilação da biblioteca e bundles (`bun run build`).
+  3. Compilação de binários nativos multi-alvo (`bun run build:binaries`) e geração de `dist/bin/checksums.txt`.
+  4. Scaffolding/validação das cascas de typosquatting (`bun run build:shells`).
+  5. Cálculo de SemVer e publicação do release no GitHub (`bun run release`).
+  6. Anexo de assets executáveis (`dist/bin/*`, `dist/bin/checksums.txt`) ao GitHub Release.
+  7. Publicação do pacote canônico `@maiquelleonel/matryoshka` no registro NPM com visibilidade pública (`--access public`) autenticado via `NPM_TOKEN`.
+  8. Publicação das cascas de proteção contra typosquatting (`packages/*`) no registro NPM com visibilidade pública (`--access public`).
 
 ### 2.4 Modelos e Contratos de Cascas de Typosquatting (Subtask 3)
 
@@ -278,6 +296,37 @@ Feature: Protective Typosquatting Forwarding Shells (Subtask 3)
     When verifyAllShells is executed
     Then all 4 shell packages pass verification with zero errors
 ```
+
+### Subtask 4: CI/CD Release Automation & NPM Publishing
+```gherkin
+Feature: CI/CD Release Automation and NPM Distribution (Subtask 4)
+
+  Scenario: Release workflow file structure and triggers
+    Given the release workflow file ".github/workflows/release.yml"
+    Then it should trigger on push to "main" branch
+    And it should trigger on push to version tags "v*"
+    And it should configure "contents: write" permissions for GitHub Releases and tag operations
+
+  Scenario: Multi-target standalone binary compilation and checksum generation in CI
+    Given the steps in ".github/workflows/release.yml"
+    Then it must include a step to execute "bun run build:binaries" or "scripts/build-binaries.ts"
+    And the binary artifacts and "checksums.txt" must be prepared in the distribution directory
+
+  Scenario: Protective shells scaffolding in CI
+    Given the steps in ".github/workflows/release.yml"
+    Then it must include a step to execute "bun run build:shells" or "scripts/build-shells.ts"
+    And all 4 protective shells must be prepared for packaging
+
+  Scenario: GitHub Release asset attachments
+    Given the release execution step in ".github/workflows/release.yml"
+    Then it must attach standalone binary executables and "checksums.txt" to the GitHub Release
+    And it should support GitHub CLI or action asset uploads with GITHUB_TOKEN authentication
+
+  Scenario: NPM scoped registry publishing with NPM_TOKEN
+    Given the publishing steps in ".github/workflows/release.yml"
+    Then it must publish the canonical package "@maiquelleonel/matryoshka" with "--access public"
+    And it must authenticate against the NPM registry using the secret "NPM_TOKEN"
+    And it must publish the protective typosquatting shells ("@maiquelleonel/baba", "@maiquelleonel/bbyg", "@maiquelleonel/matrioska", "@maiquelleonel/matryoska") with "--access public"
 ```
 
 ---
@@ -291,6 +340,9 @@ Feature: Protective Typosquatting Forwarding Shells (Subtask 3)
 ---
 
 ## 📁 5. Arquivos Afetados
+- `.github/workflows/release.yml` (Pipeline de release automatizado com build de binários, anexos e NPM)
+- `src/release.ts` (Resolução de assets executáveis e anexo no GitHub Release via gh CLI)
+- `tests/release_workflow.test.ts` (Suíte de testes BDD de aceitação para Subtask 4)
 - `packages/baba/*` (Casca de encaminhamento para alias baba)
 - `packages/bbyg/*` (Casca de encaminhamento para alias bbyg)
 - `packages/matrioska/*` (Casca de proteção contra typosquatting matrioska)
