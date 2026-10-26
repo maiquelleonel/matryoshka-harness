@@ -839,41 +839,49 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       }
     });
 
-    it("verifies mkdocs build compiles without warnings in strict mode and outputs to site-docs without colliding with site/", () => {
-      // Ensure site/ exists and has interactive hotsite artifacts
-      expect(fs.existsSync(interactiveSiteDir)).toBe(true);
-      expect(fs.existsSync(path.join(interactiveSiteDir, "index.html"))).toBe(true);
-      const hotsiteContentBefore = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
+    it(
+      "verifies mkdocs build compiles without warnings in strict mode and outputs to site-docs without colliding with site/",
+      () => {
+        // Ensure site/ exists and has interactive hotsite artifacts
+        expect(fs.existsSync(interactiveSiteDir)).toBe(true);
+        expect(fs.existsSync(path.join(interactiveSiteDir, "index.html"))).toBe(true);
+        const hotsiteContentBefore = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
 
-      // Execute mkdocs build --strict with UV_CACHE_DIR and warning suppression
-      const buildProc = Bun.spawnSync(
-        ["uvx", "--with", "mkdocs-material", "mkdocs", "build", "--strict"],
-        {
-          cwd: repoRoot,
-          env: {
-            ...process.env,
-            UV_CACHE_DIR: "/tmp/uv-cache",
-            NO_MKDOCS_2_WARNING: "1",
-          },
-          stderr: "pipe",
-          stdout: "pipe",
-        }
-      );
+        // Verify uvx is available in the execution environment
+        const uvxBin = Bun.which("uvx");
+        expect(uvxBin).toBeTruthy();
 
-      expect(buildProc.exitCode).toBe(0);
+        // Execute mkdocs build --strict with UV_CACHE_DIR and warning suppression
+        const buildProc = Bun.spawnSync(
+          [uvxBin || "uvx", "--with", "mkdocs-material", "mkdocs", "build", "--strict"],
+          {
+            cwd: repoRoot,
+            env: {
+              ...process.env,
+              UV_CACHE_DIR: "/tmp/uv-cache",
+              NO_MKDOCS_2_WARNING: "1",
+            },
+            stderr: "pipe",
+            stdout: "pipe",
+          }
+        );
 
-      // Verify site-docs/ was created with expected static HTML artifacts
-      expect(fs.existsSync(siteDocsDir)).toBe(true);
-      expect(fs.existsSync(path.join(siteDocsDir, "index.html"))).toBe(true);
-      expect(fs.existsSync(path.join(siteDocsDir, "search", "search_index.json"))).toBe(true);
+        expect(buildProc.exitCode).toBe(0);
 
-      // Verify interactive site/ was preserved with zero collision
-      const hotsiteContentAfter = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
-      expect(hotsiteContentAfter).toBe(hotsiteContentBefore);
+        // Verify site-docs/ was created with expected static HTML artifacts
+        expect(fs.existsSync(siteDocsDir)).toBe(true);
+        expect(fs.existsSync(path.join(siteDocsDir, "index.html"))).toBe(true);
+        expect(fs.existsSync(path.join(siteDocsDir, "search", "search_index.json"))).toBe(true);
 
-      // Clean up generated site-docs directory
-      fs.rmSync(siteDocsDir, { recursive: true, force: true });
-    });
+        // Verify interactive site/ was preserved with zero collision
+        const hotsiteContentAfter = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
+        expect(hotsiteContentAfter).toBe(hotsiteContentBefore);
+
+        // Clean up generated site-docs directory
+        fs.rmSync(siteDocsDir, { recursive: true, force: true });
+      },
+      30_000
+    );
 
     it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
       const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
