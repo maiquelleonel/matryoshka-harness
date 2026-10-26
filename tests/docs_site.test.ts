@@ -83,4 +83,89 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(expContent).toContain("site_dir: site-docs");
     });
   });
+
+  describe("Subtask 2: Author Getting Started guides in docs/guide/getting-started/ (installation.md, quickstart.md)", () => {
+    const gettingStartedDir = path.join(repoRoot, "docs", "guide", "getting-started");
+    const installationPath = path.join(gettingStartedDir, "installation.md");
+    const quickstartPath = path.join(gettingStartedDir, "quickstart.md");
+
+    it("verifies getting-started directory and guides exist", () => {
+      expect(fs.existsSync(gettingStartedDir)).toBe(true);
+      expect(fs.existsSync(installationPath)).toBe(true);
+      expect(fs.existsSync(quickstartPath)).toBe(true);
+    });
+
+    describe("installation.md content verification", () => {
+      it("contains structured installation guide with zero-install methods", () => {
+        const content = fs.readFileSync(installationPath, "utf-8");
+        expect(content).toMatch(/# .*Installation/i);
+        expect(content).toContain("bunx @maiquelleonel/matryoshka");
+        expect(content).toContain("npx @maiquelleonel/matryoshka");
+      });
+
+      it("documents standalone compiled binary downloads and checksum verification", () => {
+        const content = fs.readFileSync(installationPath, "utf-8");
+        expect(content).toContain("baba-linux-x64");
+        expect(content).toContain("baba-linux-arm64");
+        expect(content).toContain("baba-darwin-arm64");
+        expect(content).toContain("baba-darwin-x64");
+        expect(content).toContain("baba-windows-x64.exe");
+        expect(content).toContain("checksums.txt");
+        expect(content).toContain("sha256sum");
+        expect(content).toContain("chmod +x");
+      });
+
+      it("documents package manager installations and CLI alias parity", () => {
+        const content = fs.readFileSync(installationPath, "utf-8");
+        expect(content).toContain("bun add -g @maiquelleonel/matryoshka");
+        expect(content).toContain("npm install -g @maiquelleonel/matryoshka");
+        expect(content).toContain("baba");
+        expect(content).toContain("bbyg");
+        expect(content).toContain("matryoshka");
+        expect(content).toContain("@maiquelleonel/baba");
+        expect(content).toContain("@maiquelleonel/bbyg");
+      });
+
+      it("documents verification commands and contains no placeholders", () => {
+        const content = fs.readFileSync(installationPath, "utf-8");
+        expect(content).toContain("baba --help");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("quickstart.md content verification", () => {
+      it("contains 5-minute hands-on walkthrough covering all 5 concentric layers", () => {
+        const content = fs.readFileSync(quickstartPath, "utf-8");
+        expect(content).toMatch(/# .*Quickstart/i);
+        // Step 1: Detect stack
+        expect(content).toContain("baba detect");
+        // Step 2: Scan maturity & badge
+        expect(content).toContain("baba scan");
+        expect(content).toContain("--badge");
+        // Step 3: Adaptive agents
+        expect(content).toContain("baba agents generate");
+        expect(content).toContain("AGENTS.md");
+        // Step 4: Polyglot AST wrap
+        expect(content).toContain("baba wrap");
+        expect(content).toContain("DIAGNOSTIC.md");
+        // Step 5: MCP wire & serve
+        expect(content).toContain("baba mcp wire");
+        expect(content).toContain("baba mcp serve");
+      });
+
+      it("contains valid relative links and clean code snippets with zero placeholders", () => {
+        const content = fs.readFileSync(quickstartPath, "utf-8");
+        expect(content).toContain("installation.md");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[getting-started-guides]");
+      expect(expContent).toContain("installation.md");
+      expect(expContent).toContain("quickstart.md");
+    });
+  });
 });
