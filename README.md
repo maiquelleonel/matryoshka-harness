@@ -3,7 +3,7 @@
 # 🪆 Matryoshka-Harness
 ### The Concentric Context-Fencing Engine & L4 Maturity Remediation for Autonomous Coding Agents
 
-[![Version](https://img.shields.io/badge/version-0.4.0-emerald?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@maiquelleonel/matryoshka)
+[![Version](https://img.shields.io/badge/version-0.17.0-crimson?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@maiquelleonel/matryoshka)
 [![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-f472b6?style=for-the-badge&logo=bun)](https://bun.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
@@ -15,7 +15,7 @@
 **Stop the AI-Slop Tax.** Monolithic instruction prompts waste tokens and dilute LLM attention.  
 Matryoshka wraps codebases in **five concentric governance layers**, compiling ultra-lean `AGENTS.md` boundaries (< 200 tokens) and enforcing deterministic Tree-sitter WASM antipattern rules in sub-15ms.
 
-[Live Hotsite](https://ouroboros.leonellabshq.dev) • [Architecture Blueprint](ARCHITECTURE.md) • [Roadmap](ROADMAP.md) • [Documentation Portal](docs/)
+[Documentation](https://matryoshka-harness.leonellabshq.dev/docs/) • [Live Hotsite](https://matryoshka-harness.leonellabshq.dev) • [Contributing](CONTRIBUTING.md) • [Security](SECURITY.md) • [Architecture](docs/guide/concepts/concentric-layers.md)
 
 </div>
 
@@ -282,16 +282,18 @@ Following the theoretical framework pioneered by Google Cloud AI Research & Nort
 Visit the [LeonelLabs Ouroboros Engine Portal](https://ouroboros.leonellabshq.dev) to explore autonomous software factory blueprints and multi-agent systems orchestration.
 
 ---
+---
 
 ## 🔒 Security & Privacy Invariants
 
-* **Zero Code Exfiltration:** 100% of AST analysis and manifest parsing executes locally in WebAssembly. Zero bytes of source code leave your machine.
-* **Non-Destructive Overwrites:** `baba agents generate` guarantees backup preservation (`AGENTS.md.bak`) and refuses destructive overwrites unless `--force` is explicitly provided.
-* **Hermetic Stream Isolation:** The native MCP server strictly enforces standard stream isolation—newline-delimited JSON-RPC messages stay on `stdout`, while diagnostic logs and startup telemetry are routed exclusively to `stderr`.
+* **Zero Code Exfiltration:** 100% of AST analysis, Tree-sitter WASM traversal, and manifest parsing executes locally in-process. Zero bytes of source code or diffs ever leave your machine.
+* **Non-Destructive Overwrites:** `baba agents generate` guarantees backup preservation (`AGENTS.md.bak`) and strictly refuses destructive overwrites without explicit `--force` confirmation.
+* **Hermetic Stream Isolation:** The native MCP server strictly enforces stream hygiene—newline-delimited JSON-RPC 2.0 frames remain strictly on `stdout`, while diagnostic logs and startup telemetry are routed exclusively to `stderr`.
+* **Security Policy & Vulnerability Disclosure:** For supported release lines, responsible disclosure protocols, and cryptographic verification, review [SECURITY.md](SECURITY.md).
 
----
+## 🤝 Contributing
 
-## 📄 License & Credits
+We welcome community contributions, bug reports, and new Tree-sitter AST rules! Please review our [CONTRIBUTING.md](CONTRIBUTING.md) guide before submitting pull requests.
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for complete terms.
 
