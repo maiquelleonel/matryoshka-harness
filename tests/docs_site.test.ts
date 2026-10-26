@@ -656,4 +656,233 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(expContent).toContain("ci-cd-gates.md");
     });
   });
+
+  describe("Subtask 6: CI build verification test in tests/docs_site.test.ts validating mkdocs build and internal link integrity", () => {
+    const docsGuideDir = path.join(repoRoot, "docs", "guide");
+    const indexMdPath = path.join(docsGuideDir, "index.md");
+    const siteDocsDir = path.join(repoRoot, "site-docs");
+    const interactiveSiteDir = path.join(repoRoot, "site");
+
+    it("verifies root documentation overview (docs/guide/index.md) exists and is complete", () => {
+      expect(fs.existsSync(indexMdPath)).toBe(true);
+      const content = fs.readFileSync(indexMdPath, "utf-8");
+      expect(content).toMatch(/# .*Matryoshka-Harness/i);
+      expect(content).toContain("AI-Slop Crisis");
+      expect(content).toContain("Russian Doll Mental Model");
+      expect(content).toContain("Zero-Install Quickstart");
+      expect(content).toContain("bunx");
+      expect(content).toContain("npx");
+      expect(content).toContain("Standalone Binaries");
+      expect(content).toContain("baba");
+      expect(content).toContain("bbyg");
+      expect(content).toContain("matryoshka");
+      expect(content).toContain("Documentation Map");
+      expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+    });
+
+    it("validates that all markdown files declared in mkdocs.yml nav exist within docs/guide", () => {
+      const mkdocsContent = fs.readFileSync(mkdocsConfigPath, "utf-8");
+      const navSection = mkdocsContent.split(/^nav:\s*$/m)[1] || "";
+      const navMatches = navSection.match(/[\w\-./]+\.md/g) || [];
+      expect(navMatches.length).toBeGreaterThanOrEqual(10);
+
+      for (const navFile of navMatches) {
+        const fullPath = path.join(docsGuideDir, navFile);
+        expect(fs.existsSync(fullPath)).toBe(true);
+      }
+    });
+
+    it("scans all public markdown files and verifies that zero dead internal links exist", () => {
+      function getAllMarkdownFiles(dir: string): string[] {
+        let results: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            results = results.concat(getAllMarkdownFiles(fullPath));
+          } else if (entry.isFile() && entry.name.endsWith(".md")) {
+            results.push(fullPath);
+          }
+        }
+        return results;
+      }
+
+      function stripCodeBlocks(content: string): string {
+        return content
+          .replace(/```[\s\S]*?```/g, "")
+          .replace(/`[^`]+`/g, "");
+      }
+
+      const markdownFiles = getAllMarkdownFiles(docsGuideDir);
+      expect(markdownFiles.length).toBeGreaterThanOrEqual(10);
+
+      const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      const deadLinks: { file: string; target: string; resolvedPath: string }[] = [];
+
+      for (const file of markdownFiles) {
+        const rawContent = fs.readFileSync(file, "utf-8");
+        const cleanContent = stripCodeBlocks(rawContent);
+        let match: RegExpExecArray | null;
+
+        while ((match = linkRegex.exec(cleanContent)) !== null) {
+          const rawTarget = match[2]?.trim();
+          if (!rawTarget) continue;
+
+          // Ignore external schemas
+          if (
+            rawTarget.startsWith("http://") ||
+            rawTarget.startsWith("https://") ||
+            rawTarget.startsWith("mailto:")
+          ) {
+            continue;
+          }
+
+          // Strip hash fragments (e.g., file.md#section or #section)
+          const filePart = rawTarget.split("#")[0];
+          if (!filePart) {
+            // Anchor inside current file
+            continue;
+          }
+
+          const resolved = path.resolve(path.dirname(file), filePart);
+          if (!fs.existsSync(resolved)) {
+            deadLinks.push({
+              file: path.relative(repoRoot, file),
+              target: rawTarget,
+              resolvedPath: resolved,
+            });
+          }
+        }
+      }
+
+      expect(deadLinks).toEqual([]);
+    });
+
+    it("validates that documented CLI code snippets only reference valid commands, subcommands, and flags", () => {
+      function getAllMarkdownFiles(dir: string): string[] {
+        let results: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            results = results.concat(getAllMarkdownFiles(fullPath));
+          } else if (entry.isFile() && entry.name.endsWith(".md")) {
+            results.push(fullPath);
+          }
+        }
+        return results;
+      }
+
+      const validSubcommands = new Set([
+        "detect",
+        "scan",
+        "wrap",
+        "agents",
+        "mcp",
+        "--help",
+        "-h",
+        "--version",
+        "-v",
+      ]);
+
+      const validAgentsActions = new Set([
+        "generate",
+        "check",
+        "profile",
+        "skill",
+        "--dry-run",
+        "--force",
+        "-f",
+        "--help",
+        "-h",
+      ]);
+
+      const validMcpActions = new Set([
+        "wire",
+        "serve",
+        "--targets",
+        "--dry-run",
+        "--help",
+        "-h",
+      ]);
+
+      const markdownFiles = getAllMarkdownFiles(docsGuideDir);
+      for (const file of markdownFiles) {
+        const content = fs.readFileSync(file, "utf-8");
+        // Match bash/sh code blocks
+        const codeBlockRegex = /```(?:bash|sh)\n([\s\S]*?)```/g;
+        let blockMatch: RegExpExecArray | null;
+
+        while ((blockMatch = codeBlockRegex.exec(content)) !== null) {
+          const lines = blockMatch[1]?.split("\n") || [];
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("#") || !trimmed) continue;
+
+            const match = trimmed.match(/^(?:bunx\s+@maiquelleonel\/matryoshka|npx\s+@maiquelleonel\/matryoshka|baba|bbyg|matryoshka|\.\/baba-[a-z0-9\-_.]+)\s+([a-z0-9\-_]+)(?:\s+([a-z0-9\-_]+))?/);
+            if (match) {
+              const firstArg = match[1];
+              const secondArg = match[2];
+              if (firstArg) {
+                expect(validSubcommands.has(firstArg)).toBe(true);
+
+                if (firstArg === "agents" && secondArg) {
+                  expect(validAgentsActions.has(secondArg)).toBe(true);
+                }
+                if (firstArg === "mcp" && secondArg) {
+                  expect(validMcpActions.has(secondArg)).toBe(true);
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    it("verifies mkdocs build compiles without warnings in strict mode and outputs to site-docs without colliding with site/", () => {
+      // Ensure site/ exists and has interactive hotsite artifacts
+      expect(fs.existsSync(interactiveSiteDir)).toBe(true);
+      expect(fs.existsSync(path.join(interactiveSiteDir, "index.html"))).toBe(true);
+      const hotsiteContentBefore = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
+
+      // Execute mkdocs build --strict with UV_CACHE_DIR and warning suppression
+      const buildProc = Bun.spawnSync(
+        ["uvx", "--with", "mkdocs-material", "mkdocs", "build", "--strict"],
+        {
+          cwd: repoRoot,
+          env: {
+            ...process.env,
+            UV_CACHE_DIR: "/tmp/uv-cache",
+            NO_MKDOCS_2_WARNING: "1",
+          },
+          stderr: "pipe",
+          stdout: "pipe",
+        }
+      );
+
+      expect(buildProc.exitCode).toBe(0);
+
+      // Verify site-docs/ was created with expected static HTML artifacts
+      expect(fs.existsSync(siteDocsDir)).toBe(true);
+      expect(fs.existsSync(path.join(siteDocsDir, "index.html"))).toBe(true);
+      expect(fs.existsSync(path.join(siteDocsDir, "search", "search_index.json"))).toBe(true);
+
+      // Verify interactive site/ was preserved with zero collision
+      const hotsiteContentAfter = fs.readFileSync(path.join(interactiveSiteDir, "index.html"), "utf-8");
+      expect(hotsiteContentAfter).toBe(hotsiteContentBefore);
+
+      // Clean up generated site-docs directory
+      fs.rmSync(siteDocsDir, { recursive: true, force: true });
+    });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[docs-build-verification]");
+      expect(expContent).toContain("mkdocs build --strict");
+      expect(expContent).toContain("site-docs");
+      expect(expContent).toContain("UV_CACHE_DIR");
+      expect(expContent).toContain("NO_MKDOCS_2_WARNING");
+    });
+  });
 });
