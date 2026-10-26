@@ -308,4 +308,241 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(expContent).toContain("adaptive-agents.md");
     });
   });
+
+  describe("Subtask 4: Author CLI Reference documentation in docs/guide/cli/ (detect.md, scan.md, wrap.md, agents.md, mcp.md)", () => {
+    const cliDir = path.join(repoRoot, "docs", "guide", "cli");
+    const detectPath = path.join(cliDir, "detect.md");
+    const scanPath = path.join(cliDir, "scan.md");
+    const wrapPath = path.join(cliDir, "wrap.md");
+    const agentsPath = path.join(cliDir, "agents.md");
+    const mcpPath = path.join(cliDir, "mcp.md");
+
+    it("verifies cli reference directory and all 5 markdown reference files exist", () => {
+      expect(fs.existsSync(cliDir)).toBe(true);
+      expect(fs.existsSync(detectPath)).toBe(true);
+      expect(fs.existsSync(scanPath)).toBe(true);
+      expect(fs.existsSync(wrapPath)).toBe(true);
+      expect(fs.existsSync(agentsPath)).toBe(true);
+      expect(fs.existsSync(mcpPath)).toBe(true);
+    });
+
+    describe("detect.md content verification", () => {
+      it("contains comprehensive documentation of baba detect syntax, arguments, and options", () => {
+        const content = fs.readFileSync(detectPath, "utf-8");
+        expect(content).toMatch(/# .*detect/i);
+        expect(content).toContain("baba detect");
+        expect(content).toContain("bbyg detect");
+        expect(content).toContain("matryoshka detect");
+        expect(content).toContain("--json");
+      });
+
+      it("documents polyglot stack detection capabilities across languages, frameworks, and test runners", () => {
+        const content = fs.readFileSync(detectPath, "utf-8");
+        // Languages
+        expect(content).toContain("TypeScript");
+        expect(content).toContain("Python");
+        expect(content).toContain("Go");
+        expect(content).toContain("Rust");
+        // Frameworks
+        expect(content).toContain("Next.js");
+        expect(content).toContain("FastAPI");
+        expect(content).toContain("Gin");
+        // Test runners
+        expect(content).toContain("bun test");
+        expect(content).toContain("pytest");
+      });
+
+      it("documents repository archetype classification and JSON output schema", () => {
+        const content = fs.readFileSync(detectPath, "utf-8");
+        expect(content).toContain("api_backend");
+        expect(content).toContain("opinionated_monolith");
+        expect(content).toContain("reactive_frontend");
+        expect(content).toContain("systems_microservice");
+        expect(content).toContain("fullstack_hybrid");
+        expect(content).toContain("```json");
+        expect(content).toContain('"status"');
+        expect(content).toContain('"stack"');
+      });
+
+      it("contains zero placeholders", () => {
+        const content = fs.readFileSync(detectPath, "utf-8");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("scan.md content verification", () => {
+      it("contains comprehensive documentation of baba scan syntax, options, and arguments", () => {
+        const content = fs.readFileSync(scanPath, "utf-8");
+        expect(content).toMatch(/# .*scan/i);
+        expect(content).toContain("baba scan");
+        expect(content).toContain("bbyg scan");
+        expect(content).toContain("matryoshka scan");
+        expect(content).toContain("--badge");
+        expect(content).toContain("--json");
+      });
+
+      it("documents L0-L4 maturity scoring model and 5 governance axes based on harness-score oracle", () => {
+        const content = fs.readFileSync(scanPath, "utf-8");
+        expect(content).toContain("harness-score");
+        expect(content).toContain("105");
+        expect(content).toContain("L0");
+        expect(content).toContain("L4");
+        // 5 axes
+        expect(content).toContain("Context");
+        expect(content).toContain("Skills");
+        expect(content).toContain("Guardrails");
+        expect(content).toContain("Sensors");
+        expect(content).toContain("Hygiene");
+      });
+
+      it("documents dynamic SVG badge generation and color calibration", () => {
+        const content = fs.readFileSync(scanPath, "utf-8");
+        expect(content).toContain("harness-badge.svg");
+        expect(content).toContain("#cf222e");
+        expect(content).toContain("#2ea44f");
+      });
+
+      it("documents human output, structured JSON schema, and contains zero placeholders", () => {
+        const content = fs.readFileSync(scanPath, "utf-8");
+        expect(content).toContain("```json");
+        expect(content).toContain('"oracleScore"');
+        expect(content).toContain('"oracleLevel"');
+        expect(content).toContain('"remediationIssues"');
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("wrap.md content verification", () => {
+      it("contains comprehensive documentation of baba wrap syntax, options, and exit codes", () => {
+        const content = fs.readFileSync(wrapPath, "utf-8");
+        expect(content).toMatch(/# .*wrap/i);
+        expect(content).toContain("baba wrap");
+        expect(content).toContain("bbyg wrap");
+        expect(content).toContain("matryoshka wrap");
+        expect(content).toContain("--output");
+        expect(content).toContain("--strict");
+        expect(content).toContain("--threshold");
+        expect(content).toContain("--max-file-size");
+        expect(content).toContain("--dry-run");
+        expect(content).toContain("--json");
+      });
+
+      it("documents Tree-sitter WASM polyglot AST engine and all 3 core antipattern rules", () => {
+        const content = fs.readFileSync(wrapPath, "utf-8");
+        expect(content).toContain("Tree-sitter");
+        expect(content).toContain("WebAssembly");
+        expect(content).toContain("raw-sql");
+        expect(content).toContain("CWE-89");
+        expect(content).toContain("assertionless-test");
+        expect(content).toContain("hardcoded-credential");
+      });
+
+      it("documents Harness² composite score calculation and DIAGNOSTIC.md report generation", () => {
+        const content = fs.readFileSync(wrapPath, "utf-8");
+        expect(content).toContain("0.4");
+        expect(content).toContain("0.6");
+        expect(content).toContain("DIAGNOSTIC.md");
+        expect(content).toContain("1,500");
+      });
+
+      it("documents CI quality gate integration with strict failure modes and contains zero placeholders", () => {
+        const content = fs.readFileSync(wrapPath, "utf-8");
+        expect(content).toContain("exit code 1");
+        expect(content).toContain("threshold");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("agents.md content verification", () => {
+      it("contains comprehensive documentation of baba agents subcommands and syntax", () => {
+        const content = fs.readFileSync(agentsPath, "utf-8");
+        expect(content).toMatch(/# .*agents/i);
+        expect(content).toContain("baba agents generate");
+        expect(content).toContain("baba agents profile");
+        expect(content).toContain("baba agents check");
+        expect(content).toContain("baba agents skill");
+        expect(content).toContain("bbyg agents");
+        expect(content).toContain("matryoshka agents");
+      });
+
+      it("documents token budgeting invariants and safety backup mechanism", () => {
+        const content = fs.readFileSync(agentsPath, "utf-8");
+        expect(content).toContain("AGENTS.md");
+        expect(content).toContain("200");
+        expect(content).toContain("250");
+        expect(content).toContain("--force");
+        expect(content).toContain("AGENTS.md.bak");
+      });
+
+      it("documents modular on-demand skills with mandatory YAML frontmatter", () => {
+        const content = fs.readFileSync(agentsPath, "utf-8");
+        expect(content).toContain(".agents/skills/");
+        expect(content).toContain("YAML frontmatter");
+        expect(content).toContain("backend");
+        expect(content).toContain("frontend");
+        expect(content).toContain("database");
+        expect(content).toContain("security");
+        expect(content).toContain("testing");
+      });
+
+      it("documents archetype profiling and contains zero placeholders", () => {
+        const content = fs.readFileSync(agentsPath, "utf-8");
+        expect(content).toContain("api_backend");
+        expect(content).toContain("YAGNI");
+        expect(content).toContain("DRY");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("mcp.md content verification", () => {
+      it("contains comprehensive documentation of baba mcp subcommands and syntax", () => {
+        const content = fs.readFileSync(mcpPath, "utf-8");
+        expect(content).toMatch(/# .*mcp/i);
+        expect(content).toContain("baba mcp wire");
+        expect(content).toContain("baba mcp serve");
+        expect(content).toContain("bbyg mcp");
+        expect(content).toContain("matryoshka mcp");
+      });
+
+      it("documents auto-wiring across Cursor, Gemini CLI, and Claude Code with deep non-destructive merge", () => {
+        const content = fs.readFileSync(mcpPath, "utf-8");
+        expect(content).toContain("codebase-memory-mcp");
+        expect(content).toContain(".cursor/mcp.json");
+        expect(content).toContain(".gemini/settings.json");
+        expect(content).toContain(".claude/mcp.json");
+        expect(content).toContain("--targets");
+        expect(content).toContain("--dry-run");
+      });
+
+      it("documents native stdio MCP server tools, resources, and prompts", () => {
+        const content = fs.readFileSync(mcpPath, "utf-8");
+        expect(content).toContain("stdio");
+        expect(content).toContain("detect_stack");
+        expect(content).toContain("scan_harness");
+        expect(content).toContain("generate_agents");
+        expect(content).toContain("wrap_context");
+        expect(content).toContain("matryoshka://agents");
+        expect(content).toContain("matryoshka://diagnostic");
+        expect(content).toContain("audit_repository");
+      });
+
+      it("documents stdio isolation, stderr logging guards, and contains zero placeholders", () => {
+        const content = fs.readFileSync(mcpPath, "utf-8");
+        expect(content).toContain("stderr");
+        expect(content).toContain("JSON-RPC 2.0");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[cli-reference-docs]");
+      expect(expContent).toContain("detect.md");
+      expect(expContent).toContain("scan.md");
+      expect(expContent).toContain("wrap.md");
+      expect(expContent).toContain("agents.md");
+      expect(expContent).toContain("mcp.md");
+    });
+  });
 });
