@@ -61,34 +61,31 @@ matryoshka scan --json
 Like a traditional Russian Matryoshka doll, each governance layer tightly encapsulates and shields the next, progressively fencing context from the outermost IDE tool surface down to foundational repository hygiene:
 
 ```text
-+-----------------------------------------------------------------+
-| LAYER 5: Native MCP Server (baba mcp serve / wire)              |
-| - stdio JSON-RPC 2.0 protocol for Cursor, Claude Code,          | 
-|   Zed & GeminiCLI                                               |
-| +-------------------------------------------------------------+ |
-| | LAYER 4: Polyglot AST Engine (baba wrap)                    | |
-| | - In-memory Tree-sitter WASM inspection in < 200ms          | |
-| | - Raw SQL injection, assertionless false-greens,            | |
-| |   hardcoded secrets                                         | |
-| | +---------------------------------------------------------+ | |
-| | | LAYER 3: Adaptive AGENTS.md & Modular Skills            | | |
-| | | - Root AGENTS.md strictly under 200 tokens              | | |
-| | | - On-demand .agents/skills/*.md with strict             | | |
-| | |   YAML frontmatter                                      | | |
-| | | +-----------------------------------------------------+ | | |
-| | | | LAYER 2: Semantic Code Graph Integration            | | | |
-| | | | - Cross-references static file paths                | | | |
-| | | | - Reconciles missing governance against             | | | | 
-| | | |   actual entities                                   | | | |
-| | | | +-------------------------------------------------+ | | | |
-| | | | | LAYER 1: Repository Maturity Oracle             | | | | |
-| | | | | - Powered by canonical paladini/harness-score   | | | | |
-| | | | | - L0 to L4 hygiene scoring & dynamic SVG badges | | | | |
-| | | | +--------------------------------------------- ---+ | | | |
-| | | +-----------------------------------------------------+ | | |
-| | +---------------------------------------------------------+ | |
-| +-------------------------------------------------------------+ |
-+-----------------------------------------------------------------+
++-----------------------------------------------------------------------------+
+| LAYER 5: Native MCP Server (baba mcp serve / wire)                          |
+| - stdio JSON-RPC 2.0 protocol for Cursor, Claude Code, Zed and              |
+|   Gemini CLI                                                                |
+| +-------------------------------------------------------------------------+ |
+| | LAYER 4: Polyglot AST Engine (baba wrap)                                | |
+| | - In-memory Tree-sitter WASM inspection in < 200ms                      | |
+| | - Raw SQL injection, assertionless false-greens, hardcoded secrets      | |
+| | +---------------------------------------------------------------------+ | |
+| | | LAYER 3: Adaptive AGENTS.md & Modular Skills                        | | |
+| | | - Root AGENTS.md strictly under 200 tokens                          | | |
+| | | - On-demand .agents/skills/*.md with strict YAML frontmatter        | | |
+| | | +-----------------------------------------------------------------+ | | |
+| | | | LAYER 2: Semantic Code Graph Integration                        | | | |
+| | | | - Cross-references static file paths                            | | | |
+| | | | - Reconciles missing governance against actual entities         | | | |
+| | | | +-------------------------------------------------------------+ | | | |
+| | | | | LAYER 1: Repository Maturity Oracle                         | | | | |
+| | | | | - Powered by canonical paladini/harness-score               | | | | |
+| | | | | - L0 to L4 hygiene scoring & dynamic SVG badges             | | | | |
+| | | | +-------------------------------------------------------------+ | | | |
+| | | +-----------------------------------------------------------------+ | | |
+| | +---------------------------------------------------------------------+ | |
+| +-------------------------------------------------------------------------+ |
++-----------------------------------------------------------------------------+
 ```
 
 ### Concentric Governance Flow
