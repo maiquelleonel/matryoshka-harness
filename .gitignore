@@ -47,3 +47,6 @@ ouroboros_usage.json
 
 __pycache__/
 .venv/
+
+dist-pages
+*.zip

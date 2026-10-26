@@ -24,11 +24,11 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(content).toContain("maiquelleonel/matryoshka-harness");
     });
 
-    it("configures Material theme with dark slate/emerald palette", () => {
+    it("configures Material theme with dark slate/red palette", () => {
       const content = fs.readFileSync(mkdocsConfigPath, "utf-8");
       expect(content).toMatch(/theme:\s*\n\s+name:\s*['"]?material['"]?/);
       expect(content).toContain("slate");
-      expect(content).toContain("emerald");
+      expect(content).toContain("red");
     });
 
     it("configures essential Material UI features (instant nav, code copy, search highlight)", () => {
