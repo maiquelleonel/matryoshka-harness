@@ -168,4 +168,144 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(expContent).toContain("quickstart.md");
     });
   });
+
+  describe("Subtask 3: Author Core Concepts in docs/guide/concepts/ (concentric-layers.md, ast-engine.md, adaptive-agents.md)", () => {
+    const conceptsDir = path.join(repoRoot, "docs", "guide", "concepts");
+    const concentricLayersPath = path.join(conceptsDir, "concentric-layers.md");
+    const astEnginePath = path.join(conceptsDir, "ast-engine.md");
+    const adaptiveAgentsPath = path.join(conceptsDir, "adaptive-agents.md");
+
+    it("verifies concepts directory and core concept pages exist", () => {
+      expect(fs.existsSync(conceptsDir)).toBe(true);
+      expect(fs.existsSync(concentricLayersPath)).toBe(true);
+      expect(fs.existsSync(astEnginePath)).toBe(true);
+      expect(fs.existsSync(adaptiveAgentsPath)).toBe(true);
+    });
+
+    describe("concentric-layers.md content verification", () => {
+      it("contains comprehensive explanation of the Russian Doll mental model and all 5 layers", () => {
+        const content = fs.readFileSync(concentricLayersPath, "utf-8");
+        expect(content).toMatch(/# .*Concentric Layers/i);
+        // Layer 1
+        expect(content).toContain("Layer 1");
+        expect(content).toContain("baba scan");
+        expect(content).toContain("harness-score");
+        // Layer 2
+        expect(content).toContain("Layer 2");
+        expect(content).toContain("codebase-memory");
+        // Layer 3
+        expect(content).toContain("Layer 3");
+        expect(content).toContain("baba agents");
+        expect(content).toContain("AGENTS.md");
+        // Layer 4
+        expect(content).toContain("Layer 4");
+        expect(content).toContain("baba wrap");
+        expect(content).toContain("Tree-sitter WASM");
+        // Layer 5
+        expect(content).toContain("Layer 5");
+        expect(content).toContain("baba mcp");
+        expect(content).toContain("stdio");
+      });
+
+      it("contains Mermaid diagram visualising concentric governance architecture", () => {
+        const content = fs.readFileSync(concentricLayersPath, "utf-8");
+        expect(content).toContain("```mermaid");
+        expect(content).toMatch(/flowchart|graph/);
+      });
+
+      it("contains valid cross-references and zero placeholders", () => {
+        const content = fs.readFileSync(concentricLayersPath, "utf-8");
+        expect(content).toContain("ast-engine.md");
+        expect(content).toContain("adaptive-agents.md");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("ast-engine.md content verification", () => {
+      it("contains detailed documentation of the Polyglot AST Engine architecture", () => {
+        const content = fs.readFileSync(astEnginePath, "utf-8");
+        expect(content).toMatch(/# .*Polyglot AST Engine/i);
+        expect(content).toContain("Tree-sitter");
+        expect(content).toContain("WebAssembly");
+        expect(content).toContain("baba wrap");
+      });
+
+      it("documents all 3 core AST antipattern rules in detail", () => {
+        const content = fs.readFileSync(astEnginePath, "utf-8");
+        // Rule 1: raw-sql / SQL injection
+        expect(content).toContain("raw-sql");
+        expect(content).toContain("CWE-89");
+        // Rule 2: assertionless-test
+        expect(content).toContain("assertionless-test");
+        // Rule 3: hardcoded-credential
+        expect(content).toContain("hardcoded-credential");
+        expect(content).toContain("entropy");
+      });
+
+      it("documents composite scoring formula and DIAGNOSTIC.md compiler", () => {
+        const content = fs.readFileSync(astEnginePath, "utf-8");
+        expect(content).toContain("0.4");
+        expect(content).toContain("0.6");
+        expect(content).toContain("DIAGNOSTIC.md");
+        expect(content).toContain("1,500");
+      });
+
+      it("documents CLI flags and contains zero placeholders", () => {
+        const content = fs.readFileSync(astEnginePath, "utf-8");
+        expect(content).toContain("--strict");
+        expect(content).toContain("--threshold");
+        expect(content).toContain("--output");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("adaptive-agents.md content verification", () => {
+      it("contains detailed documentation of Adaptive Context-Fencing and prompt bloat problem", () => {
+        const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
+        expect(content).toMatch(/# .*Adaptive Agents/i);
+        expect(content).toContain("AGENTS.md");
+        expect(content).toContain("200");
+        expect(content).toContain("250");
+      });
+
+      it("documents modular skills architecture and mandatory YAML frontmatter guardrail", () => {
+        const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
+        expect(content).toContain(".agents/skills/");
+        expect(content).toContain("YAML frontmatter");
+        expect(content).toContain("skill-backend.md");
+        expect(content).toContain("skill-frontend.md");
+        expect(content).toContain("skill-database.md");
+        expect(content).toContain("skill-security.md");
+        expect(content).toContain("skill-testing.md");
+      });
+
+      it("documents archetype classification taxonomy and CLI commands", () => {
+        const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
+        expect(content).toContain("api_backend");
+        expect(content).toContain("opinionated_monolith");
+        expect(content).toContain("reactive_frontend");
+        expect(content).toContain("systems_microservice");
+        expect(content).toContain("fullstack_hybrid");
+        expect(content).toContain("baba agents generate");
+        expect(content).toContain("baba agents check");
+        expect(content).toContain("baba agents profile");
+      });
+
+      it("documents non-negotiable anti-slop core invariants and contains zero placeholders", () => {
+        const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
+        expect(content).toContain("YAGNI");
+        expect(content).toContain("DRY");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[core-concepts]");
+      expect(expContent).toContain("concentric-layers.md");
+      expect(expContent).toContain("ast-engine.md");
+      expect(expContent).toContain("adaptive-agents.md");
+    });
+  });
 });
