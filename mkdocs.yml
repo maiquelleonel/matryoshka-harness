@@ -1,0 +1,78 @@
+site_name: Matryoshka-Harness
+site_description: "Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for Coding Agents"
+site_author: "Maiquel Leonel"
+repo_name: maiquelleonel/matryoshka-harness
+repo_url: https://github.com/maiquelleonel/matryoshka-harness
+docs_dir: docs/guide
+site_dir: site-docs
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: emerald
+      accent: emerald
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: emerald
+      accent: emerald
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Overview: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Core Concepts:
+      - Concentric Layers: concepts/concentric-layers.md
+      - Polyglot AST Engine: concepts/ast-engine.md
+      - Adaptive Agents: concepts/adaptive-agents.md
+  - CLI Reference:
+      - baba detect: cli/detect.md
+      - baba scan: cli/scan.md
+      - baba wrap: cli/wrap.md
+      - baba agents: cli/agents.md
+      - baba mcp: cli/mcp.md
+  - Integrations:
+      - MCP Server: integrations/mcp-server.md
+      - CI/CD Quality Gates: integrations/ci-cd-gates.md

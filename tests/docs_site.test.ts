@@ -73,5 +73,14 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(content).toContain("integrations/mcp-server.md");
       expect(content).toContain("integrations/ci-cd-gates.md");
     });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      expect(fs.existsSync(experiencePath)).toBe(true);
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[docs-site]");
+      expect(expContent).toContain("docs_dir: docs/guide");
+      expect(expContent).toContain("site_dir: site-docs");
+    });
   });
 });
