@@ -545,4 +545,115 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       expect(expContent).toContain("mcp.md");
     });
   });
+
+  describe("Subtask 5: Author Integrations guide in docs/guide/integrations/ (mcp-server.md, ci-cd-gates.md)", () => {
+    const integrationsDir = path.join(repoRoot, "docs", "guide", "integrations");
+    const mcpServerPath = path.join(integrationsDir, "mcp-server.md");
+    const ciCdGatesPath = path.join(integrationsDir, "ci-cd-gates.md");
+
+    it("verifies integrations directory and all markdown reference files exist", () => {
+      expect(fs.existsSync(integrationsDir)).toBe(true);
+      expect(fs.existsSync(mcpServerPath)).toBe(true);
+      expect(fs.existsSync(ciCdGatesPath)).toBe(true);
+    });
+
+    describe("mcp-server.md content verification", () => {
+      it("contains comprehensive documentation of Model Context Protocol (MCP) server architecture", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toMatch(/# .*MCP Server/i);
+        expect(content).toContain("Model Context Protocol");
+        expect(content).toContain("JSON-RPC 2.0");
+        expect(content).toContain("stdio");
+      });
+
+      it("documents stdio stream isolation and stderr logging guards", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toContain("stdout");
+        expect(content).toContain("stderr");
+        expect(content).toContain("installStderrLoggingGuard");
+        expect(content).toContain("[matryoshka-mcp]");
+      });
+
+      it("documents all 4 native MCP tools in detail", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toContain("detect_stack");
+        expect(content).toContain("scan_harness");
+        expect(content).toContain("generate_agents");
+        expect(content).toContain("wrap_context");
+      });
+
+      it("documents native MCP resources and prompts", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toContain("matryoshka://agents");
+        expect(content).toContain("matryoshka://diagnostic");
+        expect(content).toContain("audit_repository");
+      });
+
+      it("documents IDE client configuration for Cursor, Claude Code, Gemini CLI, and Zed", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toContain(".cursor/mcp.json");
+        expect(content).toContain(".claude/mcp.json");
+        expect(content).toContain(".gemini/settings.json");
+        expect(content).toContain("baba mcp wire");
+        expect(content).toContain("baba mcp serve");
+      });
+
+      it("contains Mermaid architectural diagram and contains zero placeholders", () => {
+        const content = fs.readFileSync(mcpServerPath, "utf-8");
+        expect(content).toContain("```mermaid");
+        expect(content).toMatch(/sequenceDiagram|flowchart|graph/);
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    describe("ci-cd-gates.md content verification", () => {
+      it("contains comprehensive documentation of CI/CD Quality Gates pipeline", () => {
+        const content = fs.readFileSync(ciCdGatesPath, "utf-8");
+        expect(content).toMatch(/# .*CI\/CD/i);
+        expect(content).toContain("baba wrap");
+        expect(content).toContain("--strict");
+        expect(content).toContain("--threshold");
+      });
+
+      it("documents exit codes, strict failure modes, and critical AST violation blocking", () => {
+        const content = fs.readFileSync(ciCdGatesPath, "utf-8");
+        expect(content).toContain("exit code 1");
+        expect(content).toContain("exit code 0");
+        expect(content).toContain("raw-sql");
+        expect(content).toContain("hardcoded-credential");
+        expect(content).toContain("assertionless-test");
+      });
+
+      it("documents GitHub Actions workflows and configuration examples", () => {
+        const content = fs.readFileSync(ciCdGatesPath, "utf-8");
+        expect(content).toContain(".github/workflows/ci.yml");
+        expect(content).toContain(".github/workflows/maintainer-gate.yml");
+        expect(content).toContain(".github/CODEOWNERS");
+        expect(content).toContain("@maiquelleonel");
+      });
+
+      it("documents automated SemVer release pipeline and binary distribution", () => {
+        const content = fs.readFileSync(ciCdGatesPath, "utf-8");
+        expect(content).toContain(".github/workflows/release.yml");
+        expect(content).toContain("Conventional Commits");
+        expect(content).toContain("build:binaries");
+        expect(content).toContain("build:shells");
+      });
+
+      it("documents remediation workflow and contains zero placeholders", () => {
+        const content = fs.readFileSync(ciCdGatesPath, "utf-8");
+        expect(content).toContain("DIAGNOSTIC.md");
+        expect(content).toContain("```mermaid");
+        expect(content).not.toMatch(/\b(TODO|TBD|FIXME)\b/);
+      });
+    });
+
+    it("verifies architectural decision is documented in docs/EXPERIENCE.md", () => {
+      const experiencePath = path.join(repoRoot, "docs", "EXPERIENCE.md");
+      const expContent = fs.readFileSync(experiencePath, "utf-8");
+      expect(expContent).toContain("[integrations-guide]");
+      expect(expContent).toContain("mcp-server.md");
+      expect(expContent).toContain("ci-cd-gates.md");
+    });
+  });
 });
