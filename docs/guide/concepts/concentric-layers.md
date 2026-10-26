@@ -13,30 +13,30 @@ Modern autonomous AI coding agents (Claude Code, Gemini CLI, Cursor, OpenAI Code
 ## 🪆 The 5 Concentric Layers Overview
 
 ```text
-+---------------------------------------------------------------------------------+
-|  LAYER 5: Native MCP Server (baba mcp serve / wire)                             |
-|  - stdio JSON-RPC 2.0 protocol for Cursor, Claude Code, Zed & Gemini CLI        |
-|  +---------------------------------------------------------------------------+  |
-|  |  LAYER 4: Polyglot AST Engine (baba wrap)                                 |  |
-|  |  - In-memory Tree-sitter WASM inspection in < 200ms                       |  |
-|  |  - Raw SQL injection (CWE-89), assertionless tests, hardcoded secrets     |  |
-|  |  +---------------------------------------------------------------------+  |  |
-|  |  |  LAYER 3: Adaptive AGENTS.md & Modular Skills (baba agents)         |  |  |
-|  |  |  - Root AGENTS.md strictly under 200 tokens (Token Guard < 250)     |  |  |
-|  |  |  - On-demand .agents/skills/*.md with strict YAML frontmatter       |  |  |
-|  |  |  +---------------------------------------------------------------+  |  |  |
-|  |  |  |  LAYER 2: Semantic Code Graph Integration (codebase-memory)   |  |  |  |
-|  |  |  |  - Cross-references static file paths with codebase memory    |  |  |  |
-|  |  |  |  - Reconciles missing governance against actual entities     |  |  |  |
-|  |  |  |  +---------------------------------------------------------+ |  |  |  |
-|  |  |  |  |  LAYER 1: Repository Maturity Oracle (baba scan)        | |  |  |  |
-|  |  |  |  |  - Powered by canonical paladini/harness-score          | |  |  |  |
-|  |  |  |  |  - L0 to L4 hygiene scoring & dynamic SVG badges        | |  |  |  |
-|  |  |  |  +---------------------------------------------------------+ |  |  |  |
-|  |  |  +---------------------------------------------------------------+  |  |  |
-|  |  +---------------------------------------------------------------------+  |  |
-|  +---------------------------------------------------------------------------+  |
-+---------------------------------------------------------------------------------+
++-------------------------------------------------------------------------+
+| LAYER 5: Native MCP Server (baba mcp serve / wire)                      |
+| - stdio JSON-RPC 2.0 protocol for Cursor, Claude Code, Zed & Gemini CLI |
+| +---------------------------------------------------------------------+ |
+| | LAYER 4: Polyglot AST Engine (baba wrap)                            | |
+| | - In-memory Tree-sitter WASM inspection in < 200ms                  | |
+| | - Raw SQL injection, assertionless tests, hardcoded secrets         | |
+| | +-----------------------------------------------------------------+ | |
+| | | LAYER 3: Adaptive AGENTS.md & Modular Skills (baba agents)      | | |
+| | | - Root AGENTS.md strictly under 200 tokens (Token Guard < 250)  | | |
+| | | - On-demand .agents/skills/*.md with strict YAML frontmatter    | | |
+| | | +-------------------------------------------------------------+ | | |
+| | | | LAYER 2: Semantic Code Graph Integration (codebase-memory)  | | | |
+| | | | - Cross-references static file paths with codebase memory   | | | |
+| | | | - Reconciles missing governance against actual entities     | | | |
+| | | | +---------------------------------------------------------+ | | | |
+| | | | |  LAYER 1: Repository Maturity Oracle (baba scan)        | | | | |
+| | | | |  - Powered by canonical paladini/harness-score          | | | | |
+| | | | |  - L0 to L4 hygiene scoring & dynamic SVG badges        | | | | |
+| | | | +---------------------------------------------------------+ | | | |
+| | | +-------------------------------------------------------------+ | | |
+| | +-----------------------------------------------------------------+ | |
+| +---------------------------------------------------------------------+ |
++-------------------------------------------------------------------------+
 ```
 
 ---
