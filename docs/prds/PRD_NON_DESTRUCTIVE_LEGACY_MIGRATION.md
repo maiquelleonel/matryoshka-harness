@@ -19,23 +19,25 @@ Currently, generating a new `AGENTS.md` via `baba agents generate` backs up the 
 
 ## 🏛️ 2. Proposed Architecture & Feature Scope
 
-### 2.1. Intelligent Section Slicing & Extraction
-The migration engine parses existing legacy files using Markdown AST heading analysis (`#`, `##`, `###`):
-1. **Header Identification:** Detects domain blocks (e.g., `# Code Conventions`, `# Database Rules`, `# Deployment / Release`, `# Testing Standards`).
-2. **Modular Skill Slicing:** Extracts identified domain sections into dedicated files in `.agents/skills/`:
-   - `custom-instructions.md` (for miscellaneous project rules)
-   - `legacy-conventions.md` (for coding standards)
-   - `domain-knowledge.md` (for business/domain context)
-3. **YAML Frontmatter Preservation:** Every extracted skill is stamped with metadata:
-   ```yaml
-   ---
-   name: legacy-custom-instructions
-   description: Preserved custom instructions migrated from legacy AGENTS.md
-   origin: legacy_migration
-   migrated_at: "2026-10-26T18:00:00Z"
-   ---
-   ```
-4. **Lean Root Assembly:** Compiles a pristine, canonical Matryoshka `AGENTS.md` (< 200 tokens) that preserves the core identity, stack archetype, and automatically registers and links the newly extracted legacy skills.
+### 2.1. Skill Conversion Engine (Zero-Loss Domain Preservation)
+The primary deliverable of `baba agents migrate` is converting unorganized, monolithic legacy instructions into clean, on-demand modular skills so that **no legacy project knowledge is ever lost**:
+
+1. **Intelligent Legacy Skill Creation (`.agents/skills/legacy-knowledge.md`):**
+   - The entire body of custom conventions, business domain rules, architectural quirks, and team preferences from the legacy file is encapsulated into a dedicated skill: `.agents/skills/legacy-knowledge.md` (and, when distinct high-level headings exist, sub-skills like `legacy-conventions.md` or `custom-instructions.md`).
+   - Every migrated skill is stamped with standard Matryoshka YAML Frontmatter so agents know precisely when and why to activate it:
+     ```yaml
+     ---
+     name: legacy-knowledge
+     description: Preserved historical domain knowledge, architecture quirks, and legacy conventions migrated from existing project rules.
+     origin: legacy_migration
+     migrated_at: "2026-10-26T18:00:00Z"
+     ---
+     ```
+2. **Clean Matryoshka Root Generation (`AGENTS.md`):**
+   - In place of the old monolithic file, a lean (< 200 tokens) canonical root `AGENTS.md` is compiled.
+   - It defines the core identity, detected stack archetype, and **explicitly references and registers** `.agents/skills/legacy-knowledge.md` in its modular skills catalog so the agent retains full access to the project's historical context on-demand.
+3. **Safety Fallback (`AGENTS.md.bak`):**
+   - A non-destructive raw copy of the original file is kept alongside as an emergency rollback snapshot, but the operational legacy knowledge lives actively inside the newly minted skill.
 
 ### 2.2. CLI Flags & Safety Guarantees
 - `baba agents migrate` -> Analyzes legacy instructions, creates backups, extracts modular skills, and compiles clean root `AGENTS.md`.
