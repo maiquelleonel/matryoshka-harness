@@ -109,6 +109,7 @@ describe("SPEC-23: feat(agents): non-destructive legacy AGENTS.md migration engi
       expect(content).toContain("baba agents migrate");
       expect(content).toContain("legacy-knowledge");
       expect(content).toContain("legacy-migration");
+      expect(content).toContain("legacy-migration-alias-parity");
     });
   });
 
@@ -2158,5 +2159,456 @@ status: draft
       });
     });
   });
+
+  // =========================================================================
+  // Subtask 8: Strict alias parity across baba, bbyg, and matryoshka
+  // =========================================================================
+  describe("Subtask 8: Strict alias parity across baba, bbyg, and matryoshka", () => {
+    let tempDir: string;
+    const cliScript = path.join(repoRoot, "src", "cli.ts");
+    const indexScript = path.join(repoRoot, "index.ts");
+    const shellBaba = path.join(repoRoot, "packages", "baba", "bin", "baba.js");
+    const shellBbyg = path.join(repoRoot, "packages", "bbyg", "bin", "bbyg.js");
+    const shellMatryoska = path.join(repoRoot, "packages", "matryoska", "bin", "matryoska.js");
+    const shellMatrioska = path.join(repoRoot, "packages", "matrioska", "bin", "matrioska.js");
+
+    const sampleMonolith = `# Legacy Directives for Multi-Alias Parity Test
+
+## Business Invariants & Rules
+* All financial transactions MUST calculate tax using CurrencyEngine.
+* User account status 'SUSPENDED' prevents debit authorizations immediately.
+* Audit ledger is strictly append-only; UPDATE and DELETE queries are blocked.
+
+# Database Guidelines
+* All tables must define an indexed \`tenant_id\` UUID column.
+* Foreign keys must use ON DELETE RESTRICT by default.
+
+# Security Standards
+* Sanitize all raw HTML input using DOMPurify before rendering.
+* API tokens must be rotated every 90 days.
+`;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask8-parity-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("dispatches identical help output across baba, bbyg, and matryoshka for 'agents migrate --help'", () => {
+      const procBaba = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const outBaba = procBaba.stdout.toString().trim();
+      const outBbyg = procBbyg.stdout.toString().trim();
+      const outMatryoshka = procMatryoshka.stdout.toString().trim();
+
+      expect(outBaba).toBe(outBbyg);
+      expect(outBaba).toBe(outMatryoshka);
+      expect(outBaba).toContain("baba agents migrate [path] [options]");
+      expect(outBaba).toContain("--from <file>");
+      expect(outBaba).toContain("--dry-run");
+      expect(outBaba).toContain("--force, -f");
+      expect(outBaba).toContain("--max-tokens <num>");
+      expect(outBaba).toContain("--json");
+    });
+
+    it("ensures identical JSON outputs for 'agents migrate --dry-run --json' across baba, bbyg, and matryoshka", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const jsonBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const jsonBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const jsonMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(jsonBaba.success).toBe(true);
+      expect(jsonBaba.status).toBe("simulated");
+      expect(jsonBaba.dryRun).toBe(true);
+      expect(jsonBaba.backupCreated).toBe(false);
+      expect(jsonBaba.sourceFile).toBe(legacyPath);
+      expect(jsonBaba.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+      expect(jsonBaba.rootAgentsPath).toBe(legacyPath);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonBbyg.rootAgentsTokens);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonMatryoshka.rootAgentsTokens);
+
+      // Token savings metrics parity
+      expect(jsonBaba.tokenSavings.beforeTokens).toBe(jsonBbyg.tokenSavings.beforeTokens);
+      expect(jsonBaba.tokenSavings.beforeTokens).toBe(jsonMatryoshka.tokenSavings.beforeTokens);
+      expect(jsonBaba.tokenSavings.afterTokens).toBe(jsonBbyg.tokenSavings.afterTokens);
+      expect(jsonBaba.tokenSavings.afterTokens).toBe(jsonMatryoshka.tokenSavings.afterTokens);
+      expect(jsonBaba.tokenSavings.savedTokens).toBe(jsonBbyg.tokenSavings.savedTokens);
+      expect(jsonBaba.tokenSavings.savedTokens).toBe(jsonMatryoshka.tokenSavings.savedTokens);
+      expect(jsonBaba.tokenSavings.reductionPercentage).toBe(jsonBbyg.tokenSavings.reductionPercentage);
+      expect(jsonBaba.tokenSavings.reductionPercentage).toBe(jsonMatryoshka.tokenSavings.reductionPercentage);
+
+      // Extracted skills parity
+      expect(jsonBaba.extractedSkills.length).toBe(jsonBbyg.extractedSkills.length);
+      expect(jsonBaba.extractedSkills.length).toBe(jsonMatryoshka.extractedSkills.length);
+      for (let i = 0; i < jsonBaba.extractedSkills.length; i++) {
+        expect(jsonBaba.extractedSkills[i].name).toBe(jsonBbyg.extractedSkills[i].name);
+        expect(jsonBaba.extractedSkills[i].name).toBe(jsonMatryoshka.extractedSkills[i].name);
+        expect(jsonBaba.extractedSkills[i].relativePath).toBe(jsonBbyg.extractedSkills[i].relativePath);
+        expect(jsonBaba.extractedSkills[i].relativePath).toBe(jsonMatryoshka.extractedSkills[i].relativePath);
+        expect(jsonBaba.extractedSkills[i].origin).toBe("legacy_migration");
+        expect(jsonBbyg.extractedSkills[i].origin).toBe("legacy_migration");
+        expect(jsonMatryoshka.extractedSkills[i].origin).toBe("legacy_migration");
+      }
+
+      // Zero disk mutations
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, ".agents"))).toBe(false);
+      expect(fs.readFileSync(legacyPath, "utf-8")).toBe(sampleMonolith);
+    });
+
+    it("ensures human-readable simulation output parity across baba, bbyg, and matryoshka for 'agents migrate --dry-run'", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--dry-run"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const outBaba = procBaba.stdout.toString();
+      const outBbyg = procBbyg.stdout.toString();
+      const outMatryoshka = procMatryoshka.stdout.toString();
+
+      for (const out of [outBaba, outBbyg, outMatryoshka]) {
+        expect(out).toContain("🪆 Matryoshka Legacy AGENTS.md Migration Engine");
+        expect(out).toContain("SIMULATED (--dry-run)");
+        expect(out).toContain("Safety Backup:");
+        expect(out).toContain("AGENTS.md.bak (planned)");
+        expect(out).toContain("Root AGENTS:");
+        expect(out).toContain("Token Savings:");
+        expect(out).toContain("Planned Modular Skills Extraction (diff):");
+        expect(out).toContain("legacy-knowledge");
+      }
+    });
+
+    it("ensures alias parity when invoked via package.json scripts (bun run baba / bbyg / matryoshka)", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", "--silent", "baba", "agents", "migrate", tempDir, "--dry-run", "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", "run", "--silent", "bbyg", "agents", "migrate", tempDir, "--dry-run", "--json"]);
+      const procMatryoshka = Bun.spawnSync(["bun", "run", "--silent", "matryoshka", "agents", "migrate", tempDir, "--dry-run", "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const jsonBaba = JSON.parse(procBaba.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+      const jsonBbyg = JSON.parse(procBbyg.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+      const jsonMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+
+      expect(jsonBaba.success).toBe(true);
+      expect(jsonBbyg.success).toBe(true);
+      expect(jsonMatryoshka.success).toBe(true);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonBbyg.rootAgentsTokens);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonMatryoshka.rootAgentsTokens);
+      expect(jsonBaba.tokenSavings.savedTokens).toBe(jsonBbyg.tokenSavings.savedTokens);
+      expect(jsonBaba.tokenSavings.savedTokens).toBe(jsonMatryoshka.tokenSavings.savedTokens);
+      expect(jsonBaba.extractedSkills.length).toBe(jsonBbyg.extractedSkills.length);
+      expect(jsonBaba.extractedSkills.length).toBe(jsonMatryoshka.extractedSkills.length);
+    });
+
+    it("ensures alias parity through protective shell forwarders (packages/baba, packages/bbyg, packages/matryoska, packages/matrioska)", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", shellBaba, "agents", "migrate", tempDir, "--dry-run", "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", shellBbyg, "agents", "migrate", tempDir, "--dry-run", "--json"]);
+      const procMatryoska = Bun.spawnSync(["bun", shellMatryoska, "agents", "migrate", tempDir, "--dry-run", "--json"]);
+      const procMatrioska = Bun.spawnSync(["bun", shellMatrioska, "agents", "migrate", tempDir, "--dry-run", "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoska.exitCode).toBe(0);
+      expect(procMatrioska.exitCode).toBe(0);
+
+      const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const resMatryoska = JSON.parse(procMatryoska.stdout.toString().trim());
+      const resMatrioska = JSON.parse(procMatrioska.stdout.toString().trim());
+
+      expect(resBaba.success).toBe(true);
+      expect(resBbyg.success).toBe(true);
+      expect(resMatryoska.success).toBe(true);
+      expect(resMatrioska.success).toBe(true);
+
+      expect(resBaba.status).toBe("simulated");
+      expect(resBbyg.status).toBe("simulated");
+      expect(resMatryoska.status).toBe("simulated");
+      expect(resMatrioska.status).toBe("simulated");
+
+      expect(resBaba.rootAgentsTokens).toBe(resBbyg.rootAgentsTokens);
+      expect(resBaba.rootAgentsTokens).toBe(resMatryoska.rootAgentsTokens);
+      expect(resBaba.rootAgentsTokens).toBe(resMatrioska.rootAgentsTokens);
+    });
+
+    it("ensures live migration parity across aliases executing non-destructive skill extraction", () => {
+      const dirBaba = path.join(tempDir, "dir-baba");
+      const dirBbyg = path.join(tempDir, "dir-bbyg");
+      const dirMatryoshka = path.join(tempDir, "dir-matryoshka");
+
+      fs.mkdirSync(dirBaba, { recursive: true });
+      fs.mkdirSync(dirBbyg, { recursive: true });
+      fs.mkdirSync(dirMatryoshka, { recursive: true });
+
+      fs.writeFileSync(path.join(dirBaba, "AGENTS.md"), sampleMonolith, "utf-8");
+      fs.writeFileSync(path.join(dirBbyg, "AGENTS.md"), sampleMonolith, "utf-8");
+      fs.writeFileSync(path.join(dirMatryoshka, "AGENTS.md"), sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirBaba], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirBbyg], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirMatryoshka], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      // Verify backup snapshots byte-for-byte in all 3
+      for (const dir of [dirBaba, dirBbyg, dirMatryoshka]) {
+        const backupPath = path.join(dir, "AGENTS.md.bak");
+        expect(fs.existsSync(backupPath)).toBe(true);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(sampleMonolith);
+
+        const primarySkill = path.join(dir, ".agents", "skills", "legacy-knowledge.md");
+        expect(fs.existsSync(primarySkill)).toBe(true);
+        const skillContent = fs.readFileSync(primarySkill, "utf-8");
+        expect(skillContent).toContain("origin: legacy_migration");
+        expect(skillContent).toContain("All financial transactions MUST calculate tax using CurrencyEngine.");
+
+        const rootAgentsPath = path.join(dir, "AGENTS.md");
+        const rootContent = fs.readFileSync(rootAgentsPath, "utf-8");
+        expect(estimateTokens(rootContent)).toBeLessThan(200);
+        expect(rootContent).toContain(".agents/skills/legacy-knowledge.md");
+      }
+    });
+
+    it("ensures error parity across aliases when source file is missing (--from=.nonexistent)", () => {
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.nonexistent-rules", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.nonexistent-rules", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.nonexistent-rules", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(1);
+      expect(procBbyg.exitCode).toBe(1);
+      expect(procMatryoshka.exitCode).toBe(1);
+
+      const jsonBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const jsonBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const jsonMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(jsonBaba.success).toBe(false);
+      expect(jsonBbyg.success).toBe(false);
+      expect(jsonMatryoshka.success).toBe(false);
+      expect(jsonBaba.status).toBe("error");
+      expect(jsonBbyg.status).toBe("error");
+      expect(jsonMatryoshka.status).toBe("error");
+      expect(jsonBaba.error).toContain("Source instruction file not found");
+      expect(jsonBbyg.error).toContain("Source instruction file not found");
+      expect(jsonMatryoshka.error).toContain("Source instruction file not found");
+    });
+
+    it("ensures backup collision safety guard parity across aliases when backup exists without --force", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      const backupPath = path.join(tempDir, "AGENTS.md.bak");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+      fs.writeFileSync(backupPath, "# Protected Backup", "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(1);
+      expect(procBbyg.exitCode).toBe(1);
+      expect(procMatryoshka.exitCode).toBe(1);
+
+      const jsonBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const jsonBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const jsonMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(jsonBaba.success).toBe(false);
+      expect(jsonBbyg.success).toBe(false);
+      expect(jsonMatryoshka.success).toBe(false);
+      expect(jsonBaba.error).toContain("Backup snapshot already exists");
+      expect(jsonBbyg.error).toContain("Backup snapshot already exists");
+      expect(jsonMatryoshka.error).toContain("Backup snapshot already exists");
+
+      // Verify backup wasn't corrupted
+      expect(fs.readFileSync(backupPath, "utf-8")).toBe("# Protected Backup");
+    });
+
+    it("ensures overwrite parity across aliases when --force / -f is supplied", () => {
+      const dirBaba = path.join(tempDir, "dir-force-baba");
+      const dirBbyg = path.join(tempDir, "dir-force-bbyg");
+      const dirMatryoshka = path.join(tempDir, "dir-force-matryoshka");
+
+      fs.mkdirSync(dirBaba, { recursive: true });
+      fs.mkdirSync(dirBbyg, { recursive: true });
+      fs.mkdirSync(dirMatryoshka, { recursive: true });
+
+      for (const dir of [dirBaba, dirBbyg, dirMatryoshka]) {
+        fs.writeFileSync(path.join(dir, "AGENTS.md"), sampleMonolith, "utf-8");
+        fs.writeFileSync(path.join(dir, "AGENTS.md.bak"), "# Old Outdated Backup", "utf-8");
+      }
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirBaba, "--force"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirBbyg, "-f"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", dirMatryoshka, "--force"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      for (const dir of [dirBaba, dirBbyg, dirMatryoshka]) {
+        expect(fs.readFileSync(path.join(dir, "AGENTS.md.bak"), "utf-8")).toBe(sampleMonolith);
+      }
+    });
+
+    it("ensures index.ts entrypoint parity with src/cli.ts on migration execution", () => {
+      const legacyPath = path.join(tempDir, "AGENTS.md");
+      fs.writeFileSync(legacyPath, sampleMonolith, "utf-8");
+
+      const procIndex = Bun.spawnSync([
+        "bun",
+        "run",
+        indexScript,
+        "agents",
+        "migrate",
+        tempDir,
+        "--dry-run",
+        "--json",
+      ]);
+      const procCli = Bun.spawnSync([
+        "bun",
+        "run",
+        cliScript,
+        "agents",
+        "migrate",
+        tempDir,
+        "--dry-run",
+        "--json",
+      ]);
+
+      expect(procIndex.exitCode).toBe(0);
+      expect(procCli.exitCode).toBe(0);
+
+      const jsonIndex = JSON.parse(procIndex.stdout.toString().trim());
+      const jsonCli = JSON.parse(procCli.stdout.toString().trim());
+
+      expect(jsonIndex.success).toBe(jsonCli.success);
+      expect(jsonIndex.status).toBe(jsonCli.status);
+      expect(jsonIndex.rootAgentsTokens).toBe(jsonCli.rootAgentsTokens);
+      expect(jsonIndex.tokenSavings.savedTokens).toBe(jsonCli.tokenSavings.savedTokens);
+      expect(jsonIndex.extractedSkills.length).toBe(jsonCli.extractedSkills.length);
+    });
+
+    it("ensures option permutation parity (--from, --dry-run, --max-tokens) across aliases", () => {
+      const customPath = path.join(tempDir, ".cursorrules");
+      fs.writeFileSync(customPath, sampleMonolith, "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.cursorrules", "--dry-run", "--max-tokens=180", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.cursorrules", "--dry-run", "--max-tokens=180", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliScript, "agents", "migrate", tempDir, "--from=.cursorrules", "--dry-run", "--max-tokens=180", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const jsonBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const jsonBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const jsonMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(jsonBaba.rootAgentsTokens).toBeLessThanOrEqual(180);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonBbyg.rootAgentsTokens);
+      expect(jsonBaba.rootAgentsTokens).toBe(jsonMatryoshka.rootAgentsTokens);
+      expect(jsonBaba.sourceFile).toBe(customPath);
+      expect(jsonBaba.backupPath).toBe(path.join(tempDir, ".cursorrules.bak"));
+    });
+  });
 });
+
 

@@ -1,7 +1,7 @@
 # 📐 SPEC-23: feat(agents): non-destructive legacy AGENTS.md migration engine (`baba agents migrate`)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** ready4dev (Subtask 1: Detailed PRD & Technical Specification)  
+**Status:** completed (Subtask 8: Strict alias parity across baba, bbyg, and matryoshka)  
 **Gatilho:** Issue #23  
 **Target:** Bun + TypeScript  
 
