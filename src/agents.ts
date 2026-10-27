@@ -2212,6 +2212,66 @@ export function auditCognitiveContext(
     });
   }
 
+  // Rule 2: dead-skills (Broken Reference Detector for .agents/skills/*.md)
+  const baseDir = fs.existsSync(root) && fs.statSync(root).isDirectory()
+    ? root
+    : path.dirname(targetFile);
+  const skillRegex = /(?:(?:\.\/|\.\.\/)?(?:\.agents\/skills\/|skills\/))([a-zA-Z0-9_\-\.]+)\.md/g;
+  const lines = content.split("\n");
+  const seenDeadSkills = new Set<string>();
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const lineContent = lines[lineIndex];
+    if (typeof lineContent !== "string") {
+      continue;
+    }
+    const matches = lineContent.matchAll(skillRegex);
+    for (const match of matches) {
+      const rawRef = match[0];
+      const skillBaseName = match[1];
+      if (!skillBaseName) {
+        continue;
+      }
+      const skillFileName = `${skillBaseName}.md`;
+
+      const candidatePaths = [
+        path.resolve(baseDir, rawRef),
+        path.resolve(baseDir, ".agents", "skills", skillFileName),
+        path.resolve(baseDir, "skills", skillFileName)
+      ];
+
+      const existsOnDisk = candidatePaths.some((cand) => {
+        try {
+          return fs.existsSync(cand) && fs.statSync(cand).isFile();
+        } catch {
+          return false;
+        }
+      });
+
+      if (!existsOnDisk && !seenDeadSkills.has(skillFileName)) {
+        seenDeadSkills.add(skillFileName);
+        const skillSlug = skillBaseName;
+        violations.push({
+          id: `dead-skills-${skillSlug}`,
+          ruleId: "dead-skills",
+          rule_id: "dead-skills",
+          severity: "fail",
+          message: `Referenced skill file does not exist on disk: ${skillFileName} (referenced as '${rawRef}').`,
+          file: targetFile,
+          line: lineIndex + 1,
+          snippet: lineContent.trim(),
+          suggestion: `Create missing skill at '.agents/skills/${skillFileName}' or run 'baba agents generate' to scaffold missing skills.`,
+          metadata: {
+            skill: skillFileName,
+            skillName: skillFileName,
+            reference: rawRef,
+            expectedPath: path.join(".agents", "skills", skillFileName)
+          }
+        });
+      }
+    }
+  }
+
   const failedViolations = violations.filter((v) => v.severity === "fail");
   const warnViolations = violations.filter((v) => v.severity === "warn");
 

@@ -228,4 +228,134 @@ describe("SPEC-22: feat(agents): cognitive context linter & turn-zero prompt sim
       expect(result.duration_ms).toBeDefined();
     });
   });
+
+  describe("Subtask 3: Rule 2 (dead-skills): Dead link detector for missing files in .agents/skills/", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-rule2-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("passes when all referenced skills in .agents/skills/ exist on disk", () => {
+      // Create referenced skill on disk
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      fs.mkdirSync(skillsDir, { recursive: true });
+      fs.writeFileSync(path.join(skillsDir, "git-workflow.md"), "# Git Workflow\nGuidelines", "utf-8");
+
+      const agentsContent = `# AGENTS
+See the [Git Workflow](.agents/skills/git-workflow.md) for commit standards.
+Also refer to \`.agents/skills/git-workflow.md\` when creating pull requests.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(0);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(100);
+    });
+
+    it("emits a fail violation when a referenced skill does not exist on disk", () => {
+      const agentsContent = `# AGENTS
+Read the [Phantom Skill](.agents/skills/phantom-skill.md) before implementing.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(1);
+
+      const violation = deadSkillViolations[0];
+      expect(violation.ruleId).toBe("dead-skills");
+      expect(violation.rule_id).toBe("dead-skills");
+      expect(violation.severity).toBe("fail");
+      expect(violation.message).toContain("phantom-skill.md");
+      expect(violation.suggestion).toContain("baba agents generate");
+      expect(violation.line).toBe(2);
+      expect(violation.snippet).toContain("[Phantom Skill](.agents/skills/phantom-skill.md)");
+
+      expect(result.passed).toBe(false);
+      expect(result.passedStrict).toBe(false);
+      expect(result.summary.failedCount).toBe(1);
+      expect(result.summary.failed_count).toBe(1);
+      expect(result.score).toBe(85); // 100 - 15 penalty
+    });
+
+    it("detects dead skills with different link syntaxes (markdown link, inline backtick, plain text)", () => {
+      const agentsContent = `# AGENTS
+- Markdown: [Testing Guide](.agents/skills/missing-test.md)
+- Backtick: \`skills/missing-build.md\`
+- Plain: See .agents/skills/missing-deploy.md for details.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(3);
+
+      const missingFiles = deadSkillViolations.map((v) => v.metadata?.skill || v.metadata?.skillName);
+      expect(missingFiles).toContain("missing-test.md");
+      expect(missingFiles).toContain("missing-build.md");
+      expect(missingFiles).toContain("missing-deploy.md");
+
+      expect(result.summary.failedCount).toBe(3);
+      expect(result.score).toBe(100 - 3 * 15);
+    });
+
+    it("does not flag existing skills in .agents/skills/ even when another dead skill is present", () => {
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      fs.mkdirSync(skillsDir, { recursive: true });
+      fs.writeFileSync(path.join(skillsDir, "existing-skill.md"), "# Existing", "utf-8");
+
+      const agentsContent = `# AGENTS
+- Existing: [Existing](.agents/skills/existing-skill.md)
+- Missing: [Missing](.agents/skills/missing-skill.md)
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(1);
+      expect(deadSkillViolations[0].message).toContain("missing-skill.md");
+      expect(deadSkillViolations.some((v) => v.message.includes("existing-skill.md"))).toBe(false);
+    });
+
+    it("handles relative path prefixes like ./ correctly", () => {
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      fs.mkdirSync(skillsDir, { recursive: true });
+      fs.writeFileSync(path.join(skillsDir, "valid.md"), "# Valid", "utf-8");
+
+      const agentsContent = `# AGENTS
+Check [Valid](./.agents/skills/valid.md) and [Invalid](./.agents/skills/invalid.md).
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(1);
+      expect(deadSkillViolations[0].message).toContain("invalid.md");
+    });
+
+    it("deduplicates repeated dead references to the same missing skill file", () => {
+      const agentsContent = `# AGENTS
+First mention of [Phantom](.agents/skills/repeated-phantom.md).
+Second mention of \`.agents/skills/repeated-phantom.md\`.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), agentsContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const deadSkillViolations = result.violations.filter((v) => v.ruleId === "dead-skills");
+      expect(deadSkillViolations).toHaveLength(1);
+      expect(deadSkillViolations[0].message).toContain("repeated-phantom.md");
+      expect(result.summary.failedCount).toBe(1);
+    });
+  });
 });
+
