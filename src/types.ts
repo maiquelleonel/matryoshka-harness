@@ -722,6 +722,16 @@ export interface LegacyMigrationResult {
   error?: string;
 }
 
+export interface LegacyRollbackResult {
+  success: boolean;
+  status: "success" | "error";
+  restoredFile: string;
+  backupFile: string;
+  durationMs: number;
+  error?: string;
+}
+
+
 
 
 

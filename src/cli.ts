@@ -528,6 +528,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
                 )}`
               );
             }
+            if (migrationResult.error) {
+              console.log(
+                `  ${pc.dim("•")} ${pc.bold("Error:")}          ${pc.red(
+                  migrationResult.error
+                )}`
+              );
+            }
             console.log(
               `  ${pc.dim("•")} ${pc.bold("Root AGENTS:")}    ${pc.green(
                 migrationResult.rootAgentsPath

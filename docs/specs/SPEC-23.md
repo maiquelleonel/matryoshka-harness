@@ -74,6 +74,15 @@ export interface LegacyMigrationResult {
   durationMs: number;
   error?: string;
 }
+
+export interface LegacyRollbackResult {
+  success: boolean;
+  status: "success" | "error";
+  restoredFile: string;
+  backupFile: string;
+  durationMs: number;
+  error?: string;
+}
 ```
 
 ### 2.5 Assinatura da Função Principal & Utilitários de Frontmatter
@@ -82,6 +91,11 @@ export function migrateLegacyInstructions(
   projectPath?: string,
   options?: LegacyMigrationOptions
 ): LegacyMigrationResult;
+
+export function rollbackLegacyMigration(
+  projectPath?: string,
+  options?: { from?: string }
+): LegacyRollbackResult;
 
 export function stampLegacySkillFrontmatter(
   body: string,

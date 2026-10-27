@@ -10,6 +10,7 @@ import {
   isLegacyMigrationSkill,
   migrateLegacyInstructions,
   parseSkillFrontmatter,
+  rollbackLegacyMigration,
   stampLegacySkillFrontmatter,
   validateSkillFrontmatter,
 } from "../src/agents";
@@ -17,6 +18,7 @@ import type {
   ExtractedSkill,
   LegacyMigrationOptions,
   LegacyMigrationResult,
+  LegacyRollbackResult,
   LegacySkillMetadata,
   MigratedRootAgentsOptions,
   SkillFrontmatter,
@@ -761,4 +763,321 @@ old_tag: discarded
       }
     });
   });
+
+  describe("Subtask 5: Rollback Safety Snapshot: Preserves an exact raw copy in AGENTS.md.bak as a non-destructive safety net", () => {
+    const complexLegacyMonolith = `# FinTech Engine Architecture & Tribal Directives 🪆
+
+> Confidential internal guidelines. Author: @lead-architect
+> Last modified: 2026-01-15T09:30:00Z
+
+## Database & Ledger Invariants
+* Ledger records are strictly append-only. UPDATE / DELETE queries are blocked at proxy level.
+* UUIDv7 primary keys are mandated for time-locality index performance.
+* Reconcile balance table \`account_balances\` with audit journal nightly at 00:00 UTC.
+
+\`\`\`sql
+-- Critical balance invariant check query
+SELECT account_id, SUM(credit) - SUM(debit) AS computed_balance
+FROM journal_entries
+GROUP BY account_id
+HAVING computed_balance <> stored_balance;
+\`\`\`
+
+## Compliance & Security Directives
+| Tier | SLA | Encryption | Multi-Region |
+| :--- | :-- | :--------- | :----------- |
+| Tier-1 (Ledger) | 99.999% | AES-256-GCM | Active-Active |
+| Tier-2 (Auth)   | 99.99%  | ChaCha20   | Primary-Replica |
+
+* Secrets rotated via Vault agent every 30 days.
+* Non-ASCII character test payload: São Paulo / Tokyo 東京 / Brasília / Zürich.
+`;
+
+    it("preserves exact byte-for-byte snapshot in AGENTS.md.bak during migration", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-snapshot-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+        const originalBuffer = fs.readFileSync(legacyAgentsPath);
+
+        const result: LegacyMigrationResult = migrateLegacyInstructions(tempDir);
+
+        expect(result.success).toBe(true);
+        expect(result.status).toBe("success");
+        expect(result.backupCreated).toBe(true);
+        expect(result.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+
+        const backupFile = path.join(tempDir, "AGENTS.md.bak");
+        expect(fs.existsSync(backupFile)).toBe(true);
+
+        const backupBuffer = fs.readFileSync(backupFile);
+        expect(Buffer.compare(backupBuffer, originalBuffer)).toBe(0);
+        expect(backupBuffer.toString("utf-8")).toBe(complexLegacyMonolith);
+
+        // Root AGENTS.md is modified into lean root (< 200 tokens)
+        const newRootContent = fs.readFileSync(legacyAgentsPath, "utf-8");
+        expect(newRootContent).not.toBe(complexLegacyMonolith);
+        expect(estimateTokens(newRootContent)).toBeLessThan(200);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("preserves complex formatting, unicode, markdown tables, and multi-line code blocks identically in backup snapshot", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-formatting-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir);
+        expect(result.success).toBe(true);
+
+        const backupContent = fs.readFileSync(path.join(tempDir, "AGENTS.md.bak"), "utf-8");
+
+        // Verify unicode and emojis
+        expect(backupContent).toContain("🪆");
+        expect(backupContent).toContain("São Paulo / Tokyo 東京 / Brasília / Zürich.");
+
+        // Verify markdown table
+        expect(backupContent).toContain("| Tier-1 (Ledger) | 99.999% | AES-256-GCM | Active-Active |");
+
+        // Verify multi-line code block with comments
+        expect(backupContent).toContain("SELECT account_id, SUM(credit) - SUM(debit) AS computed_balance");
+        expect(backupContent).toContain("-- Critical balance invariant check query");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("allows safe and complete rollback of AGENTS.md from the snapshot with zero loss of domain rules", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-rollback-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        // 1. Run migration
+        const migrationResult = migrateLegacyInstructions(tempDir);
+        expect(migrationResult.success).toBe(true);
+        expect(fs.readFileSync(legacyAgentsPath, "utf-8")).not.toBe(complexLegacyMonolith);
+
+        // 2. Perform rollback using rollbackLegacyMigration utility
+        const rollbackResult: LegacyRollbackResult = rollbackLegacyMigration(tempDir);
+        expect(rollbackResult.success).toBe(true);
+        expect(rollbackResult.status).toBe("success");
+        expect(rollbackResult.restoredFile).toBe(legacyAgentsPath);
+        expect(rollbackResult.backupFile).toBe(path.join(tempDir, "AGENTS.md.bak"));
+
+        // 3. Verify AGENTS.md is 100% restored to original pre-migration content
+        const restoredContent = fs.readFileSync(legacyAgentsPath, "utf-8");
+        expect(restoredContent).toBe(complexLegacyMonolith);
+        expect(restoredContent).toContain("UUIDv7 primary keys are mandated");
+        expect(restoredContent).toContain("São Paulo / Tokyo 東京");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses to overwrite existing backup snapshot without force: true, protecting historical backup", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-guard-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        const historicalOriginalContent = "# Canonical Historical Backup\n* Do not touch.";
+        const secondMigrationAttempt = "# New Content That Shouldn't Overwrite Safety Net\n* Some new rule.";
+
+        fs.writeFileSync(backupPath, historicalOriginalContent, "utf-8");
+        fs.writeFileSync(legacyAgentsPath, secondMigrationAttempt, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe("error");
+        expect(result.backupCreated).toBe(false);
+        expect(result.error).toContain("Backup snapshot already exists");
+        expect(result.error).toContain("--force");
+
+        // Verify existing backup was untouched
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(historicalOriginalContent);
+        // Verify AGENTS.md was untouched
+        expect(fs.readFileSync(legacyAgentsPath, "utf-8")).toBe(secondMigrationAttempt);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("overwrites existing backup snapshot when force: true is provided", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-force-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        const oldBackup = "# Old Backup to be Overwritten";
+        fs.writeFileSync(backupPath, oldBackup, "utf-8");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir, { force: true });
+
+        expect(result.success).toBe(true);
+        expect(result.status).toBe("success");
+        expect(result.backupCreated).toBe(true);
+
+        // Verify backup was refreshed with new legacy snapshot
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(complexLegacyMonolith);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not create backup snapshot in dry-run mode (dryRun: true)", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-dryrun-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir, { dryRun: true });
+
+        expect(result.success).toBe(true);
+        expect(result.status).toBe("simulated");
+        expect(result.dryRun).toBe(true);
+        expect(result.backupCreated).toBe(false);
+        expect(result.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+
+        // No .bak file created on disk
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+        // Original file unmutated
+        expect(fs.readFileSync(legacyAgentsPath, "utf-8")).toBe(complexLegacyMonolith);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("preserves rollback safety snapshot for custom source files (.cursorrules -> .cursorrules.bak)", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-custom-source-"));
+      try {
+        const customRulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(customRulesPath, complexLegacyMonolith, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir, { from: ".cursorrules" });
+
+        expect(result.success).toBe(true);
+        expect(result.backupCreated).toBe(true);
+        expect(result.backupPath).toBe(path.join(tempDir, ".cursorrules.bak"));
+
+        const backupFile = path.join(tempDir, ".cursorrules.bak");
+        expect(fs.existsSync(backupFile)).toBe(true);
+        expect(fs.readFileSync(backupFile, "utf-8")).toBe(complexLegacyMonolith);
+
+        // Rollback custom source file
+        const rollbackResult = rollbackLegacyMigration(tempDir, { from: ".cursorrules" });
+        expect(rollbackResult.success).toBe(true);
+        expect(rollbackResult.restoredFile).toBe(customRulesPath);
+        expect(fs.readFileSync(customRulesPath, "utf-8")).toBe(complexLegacyMonolith);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rollbackLegacyMigration returns error when backup snapshot does not exist", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-rollback-fail-"));
+      try {
+        const result = rollbackLegacyMigration(tempDir);
+        expect(result.success).toBe(false);
+        expect(result.status).toBe("error");
+        expect(result.error).toContain("Backup snapshot not found");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("executes CLI 'baba agents migrate' and creates AGENTS.md.bak on disk with output feedback", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-cli-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir]);
+
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+
+        expect(stdout).toContain("Safety Backup:");
+        expect(stdout).toContain("AGENTS.md.bak");
+
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+        expect(fs.existsSync(backupPath)).toBe(true);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(complexLegacyMonolith);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("executes CLI 'baba agents migrate' failing when backup snapshot already exists without --force", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-cli-guard-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        const originalSafeContent = "# Preserved Safety Content";
+        fs.writeFileSync(backupPath, originalSafeContent, "utf-8");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir]);
+
+        expect(proc.exitCode).toBe(1);
+        const stdout = proc.stdout.toString();
+        const stderr = proc.stderr.toString();
+        const combined = stdout + stderr;
+
+        expect(combined).toContain("Backup snapshot already exists");
+        expect(combined).toContain("--force");
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(originalSafeContent);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("executes CLI 'baba agents migrate --force' (-f) overwriting existing backup successfully", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-cli-force-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        fs.writeFileSync(backupPath, "# Old Outdated Backup", "utf-8");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir, "-f"]);
+
+        expect(proc.exitCode).toBe(0);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(complexLegacyMonolith);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("executes CLI 'baba agents migrate --json' and confirms backupCreated and backupPath in structured output", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask5-cli-json-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, complexLegacyMonolith, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir, "--json"]);
+
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+        const jsonOutput = JSON.parse(stdout);
+
+        expect(jsonOutput.success).toBe(true);
+        expect(jsonOutput.backupCreated).toBe(true);
+        expect(jsonOutput.backupPath).toBe(path.join(tempDir, "AGENTS.md.bak"));
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
+

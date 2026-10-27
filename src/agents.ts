@@ -13,6 +13,7 @@ import type {
   ExtractedSkill,
   LegacyMigrationOptions,
   LegacyMigrationResult,
+  LegacyRollbackResult,
   LegacySkillMetadata,
   MigratedRootAgentsOptions,
   PrimaryStack,
@@ -3143,6 +3144,30 @@ export function migrateLegacyInstructions(
     };
   }
 
+  // Check if backup snapshot already exists and force is not enabled
+  if (!options.dryRun && fs.existsSync(backupPath) && !options.force) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: false,
+      status: "error",
+      sourceFile: sourceFilePath,
+      backupPath,
+      backupCreated: false,
+      rootAgentsPath,
+      rootAgentsTokens: 0,
+      extractedSkills: [],
+      tokenSavings: {
+        beforeTokens,
+        afterTokens: beforeTokens,
+        savedTokens: 0,
+        reductionPercentage: 0,
+      },
+      dryRun: false,
+      durationMs,
+      error: `Backup snapshot already exists at ${backupPath}. Use --force (-f) to overwrite.`,
+    };
+  }
+
   const extractedSkills = extractLegacySkills(rawContent);
 
   // Profile project to compile lean root AGENTS.md
@@ -3223,18 +3248,22 @@ export function migrateLegacyInstructions(
     fs.mkdirSync(skillsDir, { recursive: true });
   }
 
-  // 3. Write each extracted skill to disk
+  // 3. Write each extracted skill to disk atomically
   for (const skill of extractedSkills) {
     const skillPath = path.join(root, skill.relativePath);
     const skillDir = path.dirname(skillPath);
     if (!fs.existsSync(skillDir)) {
       fs.mkdirSync(skillDir, { recursive: true });
     }
-    fs.writeFileSync(skillPath, skill.content, "utf-8");
+    const tmpSkillPath = `${skillPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+    fs.writeFileSync(tmpSkillPath, skill.content, "utf-8");
+    fs.renameSync(tmpSkillPath, skillPath);
   }
 
-  // 4. Write lean root AGENTS.md
-  fs.writeFileSync(rootAgentsPath, rootAgentsContent, "utf-8");
+  // 4. Write lean root AGENTS.md atomically
+  const tmpRootPath = `${rootAgentsPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+  fs.writeFileSync(tmpRootPath, rootAgentsContent, "utf-8");
+  fs.renameSync(tmpRootPath, rootAgentsPath);
 
   return {
     success: true,
@@ -3247,6 +3276,42 @@ export function migrateLegacyInstructions(
     extractedSkills,
     tokenSavings,
     dryRun: false,
+    durationMs,
+  };
+}
+
+export function rollbackLegacyMigration(
+  projectPath: string = process.cwd(),
+  options: { from?: string } = {}
+): LegacyRollbackResult {
+  const startTime = performance.now();
+  const root = path.resolve(projectPath);
+  const sourceFileName = options.from || "AGENTS.md";
+  const sourceFilePath = path.isAbsolute(sourceFileName)
+    ? sourceFileName
+    : path.join(root, sourceFileName);
+  const backupPath = `${sourceFilePath}.bak`;
+
+  if (!fs.existsSync(backupPath)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: false,
+      status: "error",
+      restoredFile: sourceFilePath,
+      backupFile: backupPath,
+      durationMs,
+      error: `Backup snapshot not found at ${backupPath}`,
+    };
+  }
+
+  fs.copyFileSync(backupPath, sourceFilePath);
+  const durationMs = Number((performance.now() - startTime).toFixed(2));
+
+  return {
+    success: true,
+    status: "success",
+    restoredFile: sourceFilePath,
+    backupFile: backupPath,
     durationMs,
   };
 }
