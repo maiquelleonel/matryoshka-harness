@@ -1,8 +1,10 @@
 # 🧠 CodeBase Memory Ignore (.cbmignore) — Matryoshka Harness
-# Impede que o grafo semântico indexe sites estáticos, docs densas, caches e fixtures
+# Hermetic Code Context: Indexa ESTRITAMENTE código-fonte e testes.
+# A documentação técnica vive isolada e é mantida fora do loop do modelo.
 
 site/
-docs/guide/
+docs/
+specs/
 dist/
 build/
 coverage/
@@ -14,3 +16,4 @@ node_modules/
 fixtures/
 storage/
 tmp/
+*.md
