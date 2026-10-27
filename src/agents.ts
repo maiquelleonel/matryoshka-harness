@@ -7,6 +7,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import pc from "picocolors";
 import { detectStack } from "./detector";
 import type { PrimaryStack, ProjectStack } from "./types";
 
@@ -94,6 +95,7 @@ export interface EstimatedTokenSavings {
 
 export const MAX_ROOT_AGENTS_TOKENS = 250;
 export const TARGET_ROOT_AGENTS_TOKENS = 200;
+export const MAX_CODE_BLOCK_LINES = 25;
 
 export interface TokenGuardReport {
   tokenCount: number;
@@ -2042,3 +2044,683 @@ export function generateAgents(
     ...(backupCreated ? { backupPath } : {}),
   };
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Cognitive Context Linter & Turn-Zero Prompt Simulator (SPEC-22)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+export type CognitiveRuleId =
+  | "token-budget"
+  | "dead-skills"
+  | "negative-phrasing-trap"
+  | "permissive-leak"
+  | "greedy-preload";
+
+export type CognitiveViolationSeverity = "fail" | "warn" | "pass";
+
+export interface CognitiveViolation {
+  id: string;
+  ruleId: CognitiveRuleId;
+  rule_id?: CognitiveRuleId;
+  severity: CognitiveViolationSeverity;
+  message: string;
+  file: string;
+  line?: number;
+  snippet?: string;
+  suggestion?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CognitiveAuditSummary {
+  totalRules: number;
+  total_rules?: number;
+  failedCount: number;
+  failed_count?: number;
+  warnCount: number;
+  warn_count?: number;
+  passedCount: number;
+  passed_count?: number;
+  estimatedTokens: number;
+  estimated_tokens?: number;
+  targetPath: string;
+  target_path?: string;
+  scannedFiles: string[];
+  scanned_files?: string[];
+}
+
+export interface CognitiveAuditResult {
+  score: number; // 0..100
+  healthScore?: number;
+  health_score?: number;
+  passed: boolean;
+  passedStrict: boolean;
+  passed_strict?: boolean;
+  violations: CognitiveViolation[];
+  summary: CognitiveAuditSummary;
+  durationMs: number;
+  duration_ms?: number;
+}
+
+export interface CognitiveAuditOptions {
+  strict?: boolean;
+  json?: boolean;
+  projectPath?: string;
+  maxTokens?: number; // default: 250
+  warnTokens?: number; // default: 200
+  maxNegativePhrases?: number; // default: 3
+  maxCodeBlockLines?: number; // default: 25
+  permissivePhrases?: string[];
+}
+
+/**
+ * Audits root AI instruction files and cognitive context against anti-pattern rules.
+ * Rule 1: token-budget (Ceiling: warn > 200 tokens, strict fail > 250 tokens).
+ */
+export function auditCognitiveContext(
+  projectPath?: string,
+  options?: CognitiveAuditOptions
+): CognitiveAuditResult {
+  const startTime = performance.now();
+  const root = path.resolve(projectPath || options?.projectPath || process.cwd());
+  const warnTokens = options?.warnTokens ?? TARGET_ROOT_AGENTS_TOKENS;
+  const maxTokens = options?.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
+  const maxNegativePhrases = options?.maxNegativePhrases ?? 3;
+
+  let targetFile: string | null = null;
+
+  if (fs.existsSync(root)) {
+    try {
+      const stat = fs.statSync(root);
+      if (stat.isFile()) {
+        targetFile = root;
+      } else if (stat.isDirectory()) {
+        const candidateNames = ["AGENTS.md", ".cursorrules", "CLAUDE.md"];
+        for (const candidate of candidateNames) {
+          const candidatePath = path.join(root, candidate);
+          if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+            targetFile = candidatePath;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Graceful failure when root instruction file does not exist
+  if (!targetFile || !fs.existsSync(targetFile)) {
+    const fileChecked = path.join(root, "AGENTS.md");
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const violation: CognitiveViolation = {
+      id: "token-budget-missing",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "fail",
+      message: `Root instruction file (AGENTS.md) not found at ${root}`,
+      file: fileChecked,
+      suggestion: "Run 'baba agents generate' to scaffold an ultra-lean AGENTS.md and modular skills."
+    };
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 1,
+      failed_count: 1,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 4,
+      passed_count: 4,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: []
+    };
+    const score = Math.max(0, 100 - 15);
+    return {
+      score,
+      healthScore: score,
+      health_score: score,
+      passed: false,
+      passedStrict: false,
+      passed_strict: false,
+      violations: [violation],
+      summary,
+      durationMs,
+      duration_ms: durationMs
+    };
+  }
+
+  const content = fs.readFileSync(targetFile, "utf-8");
+  const estimatedTokens = estimateTokens(content);
+  const scannedFiles = [targetFile];
+  const violations: CognitiveViolation[] = [];
+
+  // Rule 1: token-budget
+  if (estimatedTokens > maxTokens) {
+    violations.push({
+      id: "token-budget-fail",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "fail",
+      message: `Root instruction file exceeds strict token budget: ${estimatedTokens} tokens (maximum allowed: ${maxTokens} tokens, exceeded by ${estimatedTokens - maxTokens} tokens).`,
+      file: targetFile,
+      suggestion: "Offload detailed instructions into modular skills in .agents/skills/ using 'baba agents generate'."
+    });
+  } else if (estimatedTokens > warnTokens) {
+    violations.push({
+      id: "token-budget-warn",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "warn",
+      message: `Root instruction file approaches token budget ceiling: ${estimatedTokens} tokens (warning threshold: ${warnTokens} tokens, maximum allowed: ${maxTokens} tokens).`,
+      file: targetFile,
+      suggestion: "Consider offloading secondary instructions into .agents/skills/ to keep turn-zero overhead minimal."
+    });
+  }
+
+  // Rule 2: dead-skills (Broken Reference Detector for .agents/skills/*.md)
+  const baseDir = fs.existsSync(root) && fs.statSync(root).isDirectory()
+    ? root
+    : path.dirname(targetFile);
+  const skillRegex = /(?:(?:\.\/|\.\.\/)?(?:\.agents\/skills\/|skills\/))([a-zA-Z0-9_\-\.]+)\.md/g;
+  const lines = content.split("\n");
+  const seenDeadSkills = new Set<string>();
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const lineContent = lines[lineIndex];
+    if (typeof lineContent !== "string") {
+      continue;
+    }
+    const matches = lineContent.matchAll(skillRegex);
+    for (const match of matches) {
+      const rawRef = match[0];
+      const skillBaseName = match[1];
+      if (!skillBaseName) {
+        continue;
+      }
+      const skillFileName = `${skillBaseName}.md`;
+
+      const candidatePaths = [
+        path.resolve(baseDir, rawRef),
+        path.resolve(baseDir, ".agents", "skills", skillFileName),
+        path.resolve(baseDir, "skills", skillFileName)
+      ];
+
+      const existsOnDisk = candidatePaths.some((cand) => {
+        try {
+          return fs.existsSync(cand) && fs.statSync(cand).isFile();
+        } catch {
+          return false;
+        }
+      });
+
+      if (!existsOnDisk && !seenDeadSkills.has(skillFileName)) {
+        seenDeadSkills.add(skillFileName);
+        const skillSlug = skillBaseName;
+        violations.push({
+          id: `dead-skills-${skillSlug}`,
+          ruleId: "dead-skills",
+          rule_id: "dead-skills",
+          severity: "fail",
+          message: `Referenced skill file does not exist on disk: ${skillFileName} (referenced as '${rawRef}').`,
+          file: targetFile,
+          line: lineIndex + 1,
+          snippet: lineContent.trim(),
+          suggestion: `Create missing skill at '.agents/skills/${skillFileName}' or run 'baba agents generate' to scaffold missing skills.`,
+          metadata: {
+            skill: skillFileName,
+            skillName: skillFileName,
+            reference: rawRef,
+            expectedPath: path.join(".agents", "skills", skillFileName)
+          }
+        });
+      }
+    }
+  }
+
+  // Rule 3: negative-phrasing-trap (Pink Elephant Paradox guard)
+  const prohibitiveRegex =
+    /\b(do\s+not|never|don['’]?t|prohibited|prohibit|must\s+not|cannot|can\s+not|can['’]?t)\b/gi;
+
+  interface SectionInfo {
+    name: string;
+    startLine: number;
+    lines: { lineNumber: number; content: string }[];
+  }
+
+  const sections: SectionInfo[] = [];
+  let currentSection: SectionInfo = {
+    name: "Root Instructions",
+    startLine: 1,
+    lines: []
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (typeof rawLine !== "string") {
+      continue;
+    }
+    const headingMatch = rawLine.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch && headingMatch[1]) {
+      if (currentSection.lines.length > 0 || currentSection.name !== "Root Instructions") {
+        sections.push(currentSection);
+      }
+      currentSection = {
+        name: headingMatch[1].trim(),
+        startLine: i + 1,
+        lines: [{ lineNumber: i + 1, content: rawLine }]
+      };
+    } else {
+      currentSection.lines.push({ lineNumber: i + 1, content: rawLine });
+    }
+  }
+  if (currentSection.lines.length > 0 || sections.length === 0) {
+    sections.push(currentSection);
+  }
+
+  const seenTrapIds = new Set<string>();
+
+  for (let sIndex = 0; sIndex < sections.length; sIndex++) {
+    const sec = sections[sIndex];
+    if (!sec) {
+      continue;
+    }
+    let matchCount = 0;
+    const matchedKeywords: string[] = [];
+    let firstLine: number | undefined;
+    let firstSnippet: string | undefined;
+
+    for (const l of sec.lines) {
+      const lineMatches = Array.from(l.content.matchAll(prohibitiveRegex));
+      if (lineMatches.length > 0) {
+        if (firstLine === undefined) {
+          firstLine = l.lineNumber;
+          firstSnippet = l.content.trim();
+        }
+        for (const m of lineMatches) {
+          const matchedText = m[0];
+          if (matchedText) {
+            matchCount++;
+            matchedKeywords.push(matchedText);
+          }
+        }
+      }
+    }
+
+    if (matchCount > maxNegativePhrases) {
+      const sectionSlug =
+        sec.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "root";
+
+      let trapId = `negative-phrasing-trap-${sectionSlug}`;
+      if (seenTrapIds.has(trapId)) {
+        trapId = `${trapId}-${sIndex + 1}`;
+      }
+      seenTrapIds.add(trapId);
+
+      violations.push({
+        id: trapId,
+        ruleId: "negative-phrasing-trap",
+        rule_id: "negative-phrasing-trap",
+        severity: "warn",
+        message: `Section "${sec.name}" contains ${matchCount} prohibitive phrases (threshold: ${maxNegativePhrases}), triggering the Pink Elephant Paradox.`,
+        file: targetFile,
+        line: firstLine,
+        snippet: firstSnippet,
+        suggestion:
+          "Reformulate negative prohibitions into positive behavioral constraints using anchors such as 'PREFER', 'USE', 'ENFORCE', or 'ALWAYS' to avoid the Pink Elephant Paradox.",
+        metadata: {
+          section: sec.name,
+          count: matchCount,
+          threshold: maxNegativePhrases,
+          keywords: matchedKeywords,
+          prohibitiveKeywords: matchedKeywords,
+          positiveAnchors: ["PREFER", "USE", "ENFORCE", "ALWAYS"],
+          positive_anchors: ["PREFER", "USE", "ENFORCE", "ALWAYS"]
+        }
+      });
+    }
+  }
+
+  // Rule 4: permissive-leak (Detects wishy-washy language in imperative directive contexts)
+  const permissiveRegex =
+    options?.permissivePhrases && options.permissivePhrases.length > 0
+      ? new RegExp(
+          `\\b(${options.permissivePhrases.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+          "gi"
+        )
+      : /\b(try(?:\s+not)?\s+to|if\s+possible|consider|maybe|ideally|(?:we\s+)?usually\s+prefer|if\s+feasible|if\s+you\s+can|might\s+want\s+to|could\s+possibly)\b/gi;
+
+  const seenLeakIds = new Set<string>();
+  let inCodeBlock = false;
+
+  for (let sIndex = 0; sIndex < sections.length; sIndex++) {
+    const sec = sections[sIndex];
+    if (!sec) {
+      continue;
+    }
+
+    for (const l of sec.lines) {
+      const trimmed = l.content.trim();
+      if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      if (inCodeBlock) {
+        continue;
+      }
+
+      const matches = Array.from(l.content.matchAll(permissiveRegex));
+      for (let mIndex = 0; mIndex < matches.length; mIndex++) {
+        const match = matches[mIndex];
+        if (!match) {
+          continue;
+        }
+        const matchedText = match[0];
+        if (!matchedText) {
+          continue;
+        }
+
+        const normalizedPhrase = matchedText.toLowerCase();
+        const leakSlug = normalizedPhrase.replace(/[^a-z0-9]+/g, "-");
+        let leakId = `permissive-leak-${leakSlug}-${l.lineNumber}`;
+        if (seenLeakIds.has(leakId)) {
+          leakId = `${leakId}-${mIndex + 1}`;
+        }
+        seenLeakIds.add(leakId);
+
+        const sectionMsg =
+          sec.name && sec.name !== "Root Instructions"
+            ? ` in section "${sec.name}"`
+            : "";
+
+        violations.push({
+          id: leakId,
+          ruleId: "permissive-leak",
+          rule_id: "permissive-leak",
+          severity: "warn",
+          message: `Permissive language detected${sectionMsg}: "${matchedText}" (${normalizedPhrase}). Directives must use definitive imperatives rather than ambiguous, non-binding suggestions.`,
+          file: targetFile,
+          line: l.lineNumber,
+          snippet: l.content.trim(),
+          suggestion: `Replace permissive phrasing '${matchedText}' (${normalizedPhrase}) with definitive imperatives (e.g., 'ALWAYS', 'MUST', 'ENFORCE', 'REQUIRE') or explicit conditional contracts.`,
+          metadata: {
+            phrase: matchedText,
+            match: matchedText,
+            matchedText: matchedText,
+            matchedPhrase: matchedText,
+            matched_phrase: matchedText,
+            normalizedPhrase,
+            section: sec.name,
+            suggestedImperatives: ["ALWAYS", "MUST", "ENFORCE", "REQUIRE"],
+            suggested_imperatives: ["ALWAYS", "MUST", "ENFORCE", "REQUIRE"]
+          }
+        });
+      }
+    }
+  }
+
+  // Rule 5: greedy-preload (Identifies large raw code/schema dumps > 25 lines)
+  const maxCodeBlockLines = options?.maxCodeBlockLines ?? MAX_CODE_BLOCK_LINES;
+  const isStrict = options?.strict === true;
+  const seenGreedyIds = new Set<string>();
+
+  let inFencedBlock = false;
+  let fenceChars = "";
+  let fenceMinLength = 3;
+  let codeBlockStartLine = 0;
+  let codeBlockLanguage: string | undefined = undefined;
+  let codeBlockLinesCount = 0;
+  let codeBlockSnippet = "";
+
+  let inTableBlock = false;
+  let tableStartLine = 0;
+  let tableLinesCount = 0;
+  let tableSnippet = "";
+
+  const recordGreedyViolation = (
+    type: "code-block" | "table",
+    startLine: number,
+    linesCount: number,
+    snippet: string,
+    language?: string
+  ) => {
+    if (linesCount <= maxCodeBlockLines) {
+      return;
+    }
+    const severity: CognitiveViolationSeverity = isStrict && linesCount > 50 ? "fail" : "warn";
+    const sec = sections.slice().reverse().find((s) => s.startLine <= startLine);
+    const sectionName = sec ? sec.name : "Root Instructions";
+    const sectionMsg = sec && sec.name !== "Root Instructions" ? ` in section "${sec.name}"` : "";
+
+    const typeSlug = type === "table" ? "table" : "code";
+    let greedyId = `greedy-preload-${typeSlug}-line-${startLine}`;
+    if (seenGreedyIds.has(greedyId)) {
+      greedyId = `${greedyId}-${violations.length + 1}`;
+    }
+    seenGreedyIds.add(greedyId);
+
+    const desc =
+      type === "table"
+        ? `Raw markdown table/schema dump starting at line ${startLine}`
+        : `Raw code block (${language ? `${language} ` : ""}starting at line ${startLine})`;
+
+    violations.push({
+      id: greedyId,
+      ruleId: "greedy-preload",
+      rule_id: "greedy-preload",
+      severity,
+      message: `${desc}${sectionMsg} contains ${linesCount} lines, exceeding the ${maxCodeBlockLines}-line threshold (${linesCount} > ${maxCodeBlockLines}). Large raw code or schema preloads trigger cognitive attention dilution.`,
+      file: targetFile,
+      line: startLine,
+      snippet,
+      suggestion:
+        "Move large code blocks, schemas, and extensive table dumps into dedicated modular skill files in '.agents/skills/' and reference them on-demand via markdown links to preserve Turn-Zero token efficiency.",
+      metadata: {
+        linesCount,
+        lines_count: linesCount,
+        lineCount: linesCount,
+        line_count: linesCount,
+        threshold: maxCodeBlockLines,
+        type,
+        language,
+        section: sectionName,
+        startLine,
+        start_line: startLine
+      }
+    });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (typeof rawLine !== "string") {
+      continue;
+    }
+    const lineNumber = i + 1;
+    const trimmed = rawLine.trim();
+
+    // Check fenced code block
+    if (inFencedBlock) {
+      const closeRegex = new RegExp(`^\\s*${fenceChars[0]}{${fenceMinLength},}\\s*$`);
+      if (closeRegex.test(rawLine)) {
+        recordGreedyViolation(
+          "code-block",
+          codeBlockStartLine,
+          codeBlockLinesCount,
+          codeBlockSnippet,
+          codeBlockLanguage
+        );
+        inFencedBlock = false;
+        codeBlockLinesCount = 0;
+      } else {
+        codeBlockLinesCount++;
+      }
+      continue;
+    }
+
+    const fenceMatch = rawLine.match(/^\s*(```+|~~~+)(.*)$/);
+    if (fenceMatch && fenceMatch[1]) {
+      if (inTableBlock) {
+        recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
+        inTableBlock = false;
+        tableLinesCount = 0;
+      }
+
+      inFencedBlock = true;
+      fenceChars = fenceMatch[1];
+      fenceMinLength = fenceMatch[1].length;
+      codeBlockStartLine = lineNumber;
+      codeBlockSnippet = trimmed;
+      const rawLang = fenceMatch[2]?.trim();
+      codeBlockLanguage = rawLang ? rawLang.split(/\s+/)[0] : undefined;
+      codeBlockLinesCount = 0;
+      continue;
+    }
+
+    // Markdown table detection outside fenced blocks
+    const isTableRow = /^\s*\|.*\|\s*$/.test(rawLine);
+    if (isTableRow) {
+      if (!inTableBlock) {
+        inTableBlock = true;
+        tableStartLine = lineNumber;
+        tableSnippet = trimmed;
+        tableLinesCount = 1;
+      } else {
+        tableLinesCount++;
+      }
+    } else {
+      if (inTableBlock) {
+        recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
+        inTableBlock = false;
+        tableLinesCount = 0;
+      }
+    }
+  }
+
+  // Handle unclosed blocks at EOF
+  if (inFencedBlock) {
+    recordGreedyViolation(
+      "code-block",
+      codeBlockStartLine,
+      codeBlockLinesCount,
+      codeBlockSnippet,
+      codeBlockLanguage
+    );
+  }
+  if (inTableBlock) {
+    recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
+  }
+
+  const failedViolations = violations.filter((v) => v.severity === "fail");
+  const warnViolations = violations.filter((v) => v.severity === "warn");
+
+  const failedCount = failedViolations.length;
+  const warnCount = warnViolations.length;
+  const totalRules = 5;
+  const passedCount = Math.max(0, totalRules - failedCount - warnCount);
+
+  // Health score calculation: Base 100, -15 per FAIL, -5 per WARN
+  const totalPenalties = failedCount * 15 + warnCount * 5;
+  const score = Math.max(0, 100 - totalPenalties);
+
+  const passed = failedCount === 0 && score >= 75;
+  const passedStrict = failedCount === 0 && score >= 80;
+
+  const summary: CognitiveAuditSummary = {
+    totalRules,
+    total_rules: totalRules,
+    failedCount,
+    failed_count: failedCount,
+    warnCount,
+    warn_count: warnCount,
+    passedCount,
+    passed_count: passedCount,
+    estimatedTokens,
+    estimated_tokens: estimatedTokens,
+    targetPath: root,
+    target_path: root,
+    scannedFiles,
+    scanned_files: scannedFiles
+  };
+
+  const durationMs = Number((performance.now() - startTime).toFixed(2));
+
+  return {
+    score,
+    healthScore: score,
+    health_score: score,
+    passed,
+    passedStrict,
+    passed_strict: passedStrict,
+    violations,
+    summary,
+    durationMs,
+    duration_ms: durationMs
+  };
+}
+
+/**
+ * Formats cognitive audit result into human-readable terminal output with severity badges and gauges.
+ */
+export function formatCognitiveAuditHumanOutput(
+  result: CognitiveAuditResult,
+  targetDisplayPath?: string
+): string {
+  const lines: string[] = [];
+
+  lines.push(pc.bold(pc.cyan("\n🪆 Matryoshka Cognitive Context Linter (baba agents audit)")));
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Target Path:")}      ${targetDisplayPath || result.summary.targetPath}`);
+
+  let scoreColor = pc.red;
+  let statusBadge = pc.red("FAIL (diluted attention risk)");
+  if (result.score >= 90) {
+    scoreColor = pc.green;
+    statusBadge = pc.green("PASS (optimal)");
+  } else if (result.score >= 75) {
+    scoreColor = pc.yellow;
+    statusBadge = pc.yellow("WARN (acceptable with warnings)");
+  }
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Health Score:")}     ${scoreColor(
+      `${result.score} / 100`
+    )} [${statusBadge}]`
+  );
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Estimated Tokens:")} ${result.summary.estimatedTokens} (budget: 200 warn, 250 fail)`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Rules Audited:")}    ${result.summary.totalRules} (fail: ${result.summary.failedCount}, warn: ${result.summary.warnCount}, pass: ${result.summary.passedCount})`
+  );
+
+  if (result.violations.length > 0) {
+    lines.push(pc.bold(pc.cyan("\n⚠️  Cognitive Antipattern Violations:")));
+    for (const v of result.violations) {
+      const badge =
+        v.severity === "fail"
+          ? pc.bgRed(pc.white(" FAIL "))
+          : pc.bgYellow(pc.black(" WARN "));
+      const loc = v.line ? `:${v.line}` : "";
+      lines.push(`  ${badge} ${pc.bold(v.ruleId)} ${pc.dim(`(${v.file}${loc})`)}`);
+      lines.push(`     ${v.message}`);
+      if (v.snippet) {
+        lines.push(`     ${pc.dim("Snippet:")} ${pc.italic(v.snippet)}`);
+      }
+      if (v.suggestion) {
+        lines.push(`     ${pc.cyan("Suggestion:")} ${v.suggestion}`);
+      }
+    }
+  } else {
+    lines.push(pc.green("\n  ✨ No cognitive antipatterns detected. Prompt context is optimal."));
+  }
+
+  lines.push(`\n  ${pc.dim(`Completed in ${result.durationMs}ms`)}\n`);
+  return lines.join("\n");
+}
+
+
