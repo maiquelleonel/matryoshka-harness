@@ -9,7 +9,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
-import type { PrimaryStack, ProjectStack } from "./types";
+import type {
+  ExtractedSkill,
+  LegacyMigrationOptions,
+  LegacyMigrationResult,
+  LegacyRollbackResult,
+  LegacySkillMetadata,
+  MigratedRootAgentsOptions,
+  PrimaryStack,
+  ProjectStack,
+  TokenSavingsSummary,
+} from "./types";
 
 export type AgentArchetype =
   | "api_backend"
@@ -58,8 +68,10 @@ export interface SkillDefinition {
 }
 
 export interface SkillFrontmatter {
-  name: SkillName;
+  name: SkillName | string;
   description: string;
+  origin?: string;
+  migrated_at?: string;
 }
 
 export interface SkillMetadataItem {
@@ -1724,10 +1736,22 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
     return null;
   }
 
-  return {
+  const originMatch = rawYaml.match(/^origin:\s*(.+)$/m);
+  const migratedAtMatch = rawYaml.match(/^migrated_at:\s*["']?([^"'\r\n]+)["']?$/m);
+
+  const result: SkillFrontmatter = {
     name,
-    description
+    description,
   };
+
+  if (originMatch && originMatch[1]) {
+    result.origin = originMatch[1].trim();
+  }
+  if (migratedAtMatch && migratedAtMatch[1]) {
+    result.migrated_at = migratedAtMatch[1].trim();
+  }
+
+  return result;
 }
 
 /**
@@ -1736,6 +1760,39 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
 export function validateSkillFrontmatter(content: string): boolean {
   const frontmatter = parseSkillFrontmatter(content);
   return frontmatter !== null && Boolean(frontmatter.name && frontmatter.description);
+}
+
+/**
+ * Stamps standardized YAML Frontmatter onto a legacy skill body.
+ * Metadata includes origin: legacy_migration, name, description, and migrated_at.
+ * Strips existing frontmatter blocks if present to prevent nesting.
+ */
+export function stampLegacySkillFrontmatter(
+  body: string,
+  metadata: LegacySkillMetadata
+): string {
+  const origin = metadata.origin || "legacy_migration";
+  const migratedAt = metadata.migratedAt || metadata.migrated_at || new Date().toISOString();
+  const cleanBody = body.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").trim();
+
+  return `---
+name: ${metadata.name}
+description: ${metadata.description}
+origin: ${origin}
+migrated_at: "${migratedAt}"
+---
+
+${cleanBody}
+`;
+}
+
+/**
+ * Checks whether the given skill content represents a migrated legacy skill
+ * by verifying the YAML frontmatter and checking origin === "legacy_migration".
+ */
+export function isLegacyMigrationSkill(content: string): boolean {
+  const parsed = parseSkillFrontmatter(content);
+  return parsed !== null && parsed.origin === "legacy_migration";
 }
 
 /**
@@ -2721,6 +2778,572 @@ export function formatCognitiveAuditHumanOutput(
 
   lines.push(`\n  ${pc.dim(`Completed in ${result.durationMs}ms`)}\n`);
   return lines.join("\n");
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Non-Destructive Legacy AGENTS.md Migration Engine (SPEC-23)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+export interface ExtractLegacySkillsOptions {
+  migratedAt?: string;
+  extractSubSkills?: boolean;
+}
+
+/**
+ * Extracts legacy instruction content into active modular skills.
+ * Enforces Zero-Loss Domain Preservation: 100% of historical rules and conventions
+ * are preserved in the body of '.agents/skills/legacy-knowledge.md'.
+ * When structured headers exist (e.g. Database, Frontend, Security, Testing, Conventions),
+ * granular domain sub-skills are also extracted with YAML frontmatter stamped.
+ */
+export function extractLegacySkills(
+  legacyContent: string,
+  options?: ExtractLegacySkillsOptions
+): ExtractedSkill[] {
+  const migratedAt = options?.migratedAt || new Date().toISOString();
+  let rawBody = legacyContent.trim();
+
+  // Strip existing frontmatter if present to avoid recursive frontmatter nesting
+  const frontmatterMatch = rawBody.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+  if (frontmatterMatch && frontmatterMatch[1]) {
+    rawBody = frontmatterMatch[1].trim();
+  }
+
+  // 1. Primary modular skill (.agents/skills/legacy-knowledge.md)
+  // Zero-Loss Invariant: 100% of the original domain rules and conventions are preserved in the skill body.
+  const primaryBody = `# 📜 Legacy Project Knowledge & Historical Conventions
+
+The following directives were migrated from the previous monolithic instruction file.
+Load and adhere to these guidelines when modifying legacy modules or domain-specific workflows:
+
+${rawBody}`;
+
+  const primaryDescription =
+    "Preserved historical domain knowledge, architecture quirks, and legacy conventions migrated from existing project rules.";
+
+  const primaryContent = stampLegacySkillFrontmatter(primaryBody, {
+    name: "legacy-knowledge",
+    description: primaryDescription,
+    origin: "legacy_migration",
+    migratedAt,
+  });
+
+  const primarySkill: ExtractedSkill = {
+    name: "legacy-knowledge",
+    relativePath: ".agents/skills/legacy-knowledge.md",
+    description: primaryDescription,
+    origin: "legacy_migration",
+    migratedAt,
+    content: primaryContent,
+    estimatedTokens: estimateTokens(primaryContent),
+  };
+
+  const extractedSkills: ExtractedSkill[] = [primarySkill];
+
+  if (options?.extractSubSkills === false) {
+    return extractedSkills;
+  }
+
+  // 2. Structured Domain Sub-Skills Segmentation
+  const lines = rawBody.split(/\r?\n/);
+  interface RawSection {
+    title: string;
+    level: number;
+    lines: string[];
+  }
+
+  const sections: RawSection[] = [];
+  let currentSection: RawSection | null = null;
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      inCodeBlock = !inCodeBlock;
+      if (currentSection) currentSection.lines.push(line);
+      continue;
+    }
+
+    if (!inCodeBlock) {
+      const headerMatch = line.match(/^(#{1,2})\s+(.+)$/);
+      if (headerMatch && headerMatch[1] && headerMatch[2]) {
+        if (currentSection) {
+          sections.push(currentSection);
+        }
+        currentSection = {
+          title: headerMatch[2].trim(),
+          level: headerMatch[1].length,
+          lines: [],
+        };
+        continue;
+      }
+    }
+
+    if (currentSection) {
+      currentSection.lines.push(line);
+    }
+  }
+
+  if (currentSection) {
+    sections.push(currentSection);
+  }
+
+  interface DomainMatcher {
+    key: string;
+    domain: string;
+    title: string;
+    description: string;
+    pattern: RegExp;
+  }
+
+  const domainMatchers: DomainMatcher[] = [
+    {
+      key: "legacy-database",
+      domain: "database",
+      title: "Legacy Database & Schemas",
+      description:
+        "Preserved historical database guidelines, schema rules, and migration conventions migrated from existing project rules.",
+      pattern: /\b(database|db|sql|migration|migrations|schema|schemas|orm|prisma|drizzle|postgres|mysql|sqlite)\b/i,
+    },
+    {
+      key: "legacy-frontend",
+      domain: "frontend",
+      title: "Legacy Frontend & UI",
+      description:
+        "Preserved historical frontend conventions, UI components, and styling rules migrated from existing project rules.",
+      pattern: /\b(frontend|ui|styling|css|tailwind|components|react|vue|svelte|html)\b/i,
+    },
+    {
+      key: "legacy-backend",
+      domain: "backend",
+      title: "Legacy Backend & APIs",
+      description:
+        "Preserved historical backend architecture, API patterns, and routing conventions migrated from existing project rules.",
+      pattern: /\b(backend|api|server|endpoints|controllers|services|routing)\b/i,
+    },
+    {
+      key: "legacy-security",
+      domain: "security",
+      title: "Legacy Security & Authentication",
+      description:
+        "Preserved historical security guidelines, auth patterns, and data protection rules migrated from existing project rules.",
+      pattern: /\b(security|auth|authentication|authorization|dlp|owasp|secrets|permissions)\b/i,
+    },
+    {
+      key: "legacy-testing",
+      domain: "testing",
+      title: "Legacy Testing & Verification",
+      description:
+        "Preserved historical testing guidelines, verification protocols, and fixture conventions migrated from existing project rules.",
+      pattern: /\b(testing|test|tests|tdd|bdd|e2e|fixtures|mocks)\b/i,
+    },
+    {
+      key: "legacy-conventions",
+      domain: "conventions",
+      title: "Legacy Coding Conventions",
+      description:
+        "Preserved historical coding conventions, style rules, and workflow standards migrated from existing project rules.",
+      pattern: /\b(convention|conventions|code style|coding standards|code style guidelines|guidelines|git workflow|commit rules|best practices)\b/i,
+    },
+  ];
+
+  const domainBuckets = new Map<string, { matcher: DomainMatcher; contentLines: string[] }>();
+
+  for (const section of sections) {
+    const titleLower = section.title.toLowerCase();
+    const meaningfulLines = section.lines.filter((l) => l.trim().length > 0);
+    if (meaningfulLines.length === 0) continue;
+
+    for (const matcher of domainMatchers) {
+      if (matcher.pattern.test(titleLower)) {
+        if (!domainBuckets.has(matcher.key)) {
+          domainBuckets.set(matcher.key, {
+            matcher,
+            contentLines: [],
+          });
+        }
+        const bucket = domainBuckets.get(matcher.key)!;
+        bucket.contentLines.push(`## ${section.title}`, ...section.lines, "");
+        break; // Match first specific domain
+      }
+    }
+  }
+
+  for (const [key, bucket] of domainBuckets.entries()) {
+    const bodyContent = bucket.contentLines.join("\n").trim();
+    if (!bodyContent) continue;
+
+    const subBody = `# 📜 ${bucket.matcher.title}
+
+The following directives were extracted from historical project instructions for domain '${bucket.matcher.domain}':
+
+${bodyContent}`;
+
+    const subContent = stampLegacySkillFrontmatter(subBody, {
+      name: key,
+      description: bucket.matcher.description,
+      origin: "legacy_migration",
+      migratedAt,
+    });
+
+    extractedSkills.push({
+      name: key,
+      relativePath: `.agents/skills/${key}.md`,
+      description: bucket.matcher.description,
+      origin: "legacy_migration",
+      migratedAt,
+      content: subContent,
+      estimatedTokens: estimateTokens(subContent),
+    });
+  }
+
+  return extractedSkills;
+}
+
+export const LEGACY_SKILL_TITLES: Record<string, string> = {
+  "legacy-knowledge": "Preserved Legacy Knowledge",
+  "legacy-database": "Legacy Database",
+  "legacy-frontend": "Legacy Frontend",
+  "legacy-backend": "Legacy Backend",
+  "legacy-security": "Legacy Security",
+  "legacy-testing": "Legacy Testing",
+  "legacy-conventions": "Legacy Conventions",
+};
+
+/**
+ * Compiles a pristine, canonical lean root AGENTS.md strictly under 200 tokens
+ * that registers and links to extracted legacy skills in its modular catalog.
+ */
+export function compileMigratedRootAgents(
+  profile: ArchetypeProfile | RootAgentsProfileInput,
+  extractedSkills: ExtractedSkill[] = [],
+  options?: MigratedRootAgentsOptions
+): string {
+  const sanitizeCmd = (cmd?: string): string => {
+    if (!cmd) return "none";
+    const cleaned = cmd.trim().replace(/\s+/g, " ");
+    return cleaned.length > 0 ? cleaned : "none";
+  };
+
+  const runtime = profile.runtime?.trim() || "unknown";
+  const packageManager = profile.packageManager?.trim() || "unknown";
+  const testCommand = sanitizeCmd(profile.testCommand);
+  const buildCommand = sanitizeCmd(profile.buildCommand);
+  const lintCommand = sanitizeCmd(profile.lintCommand);
+
+  const skillsToFormat =
+    extractedSkills.length > 0
+      ? extractedSkills
+      : [
+          {
+            name: "legacy-knowledge",
+            relativePath: ".agents/skills/legacy-knowledge.md",
+          },
+        ];
+
+  const legacySkillsList = skillsToFormat
+    .map((s) => {
+      const title = LEGACY_SKILL_TITLES[s.name] || s.name;
+      return `* ${title}: \`${s.relativePath}\``;
+    })
+    .join("\n");
+
+  const content = `# 🤖 Project Operational Directives
+
+## 🌐 Stack & Identity
+* **Archetype:** ${profile.archetype}
+* **Runtime:** ${runtime} (${packageManager})
+* **Test Runner:** \`${testCommand}\`
+* **Build / Lint:** \`${buildCommand}\` | \`${lintCommand}\`
+
+## 🛡️ Anti-Slop Core Invariants
+* **YAGNI & DRY First:** Prefer simple composable functions over speculative class hierarchies.
+* **No Unprompted Refactoring:** Preserve working patterns; surgical edits only.
+* **Verification First:** Never declare completion without executing test suite evidence.
+
+## 🧭 On-Demand Specialized Skills
+Load specialized guidelines only when touching respective domains:
+${legacySkillsList}
+`;
+
+  const maxTokens = options?.maxTokens ?? 200;
+  if (options?.strictTokenGuard) {
+    assertTokenBudget(content, maxTokens);
+  }
+
+  return content;
+}
+
+/**
+ * Main migration engine to safely parse monolithic legacy instruction files,
+ * encapsulate historical domain context into modular skills (.agents/skills/legacy-knowledge.md),
+ * and assemble a lean root AGENTS.md (< 200 tokens).
+ */
+export function migrateLegacyInstructions(
+  projectPath: string = process.cwd(),
+  options: LegacyMigrationOptions = {}
+): LegacyMigrationResult {
+  const startTime = performance.now();
+  let root = path.resolve(projectPath);
+  let sourceFileName = options.from;
+
+  if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+    if (!sourceFileName) {
+      sourceFileName = path.basename(root);
+    }
+    root = path.dirname(root);
+  }
+
+  sourceFileName = sourceFileName || "AGENTS.md";
+  let sourceFilePath: string;
+  if (path.isAbsolute(sourceFileName)) {
+    sourceFilePath = sourceFileName;
+    if (projectPath === process.cwd()) {
+      root = path.dirname(sourceFilePath);
+    }
+  } else {
+    sourceFilePath = path.join(root, sourceFileName);
+  }
+
+  const rootAgentsPath = path.join(root, "AGENTS.md");
+  const backupPath = `${sourceFilePath}.bak`;
+
+  if (!fs.existsSync(sourceFilePath)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: false,
+      status: "error",
+      sourceFile: sourceFilePath,
+      backupPath,
+      backupCreated: false,
+      rootAgentsPath,
+      rootAgentsTokens: 0,
+      extractedSkills: [],
+      tokenSavings: {
+        beforeTokens: 0,
+        afterTokens: 0,
+        savedTokens: 0,
+        reductionPercentage: 0,
+      },
+      dryRun: Boolean(options.dryRun),
+      durationMs,
+      error: `Source instruction file not found at ${sourceFilePath}`,
+    };
+  }
+
+  const rawContent = fs.readFileSync(sourceFilePath, "utf-8");
+  const beforeTokens = estimateTokens(rawContent);
+
+  // Idempotency check: if origin: legacy_migration is already present and not force
+  if (!options.force && rawContent.includes("origin: legacy_migration")) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: true,
+      status: "unchanged",
+      sourceFile: sourceFilePath,
+      backupPath,
+      backupCreated: false,
+      rootAgentsPath,
+      rootAgentsTokens: beforeTokens,
+      extractedSkills: [],
+      tokenSavings: {
+        beforeTokens,
+        afterTokens: beforeTokens,
+        savedTokens: 0,
+        reductionPercentage: 0,
+      },
+      dryRun: Boolean(options.dryRun),
+      durationMs,
+    };
+  }
+
+  // Check if backup snapshot already exists and force is not enabled
+  if (!options.dryRun && fs.existsSync(backupPath) && !options.force) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: false,
+      status: "error",
+      sourceFile: sourceFilePath,
+      backupPath,
+      backupCreated: false,
+      rootAgentsPath,
+      rootAgentsTokens: 0,
+      extractedSkills: [],
+      tokenSavings: {
+        beforeTokens,
+        afterTokens: beforeTokens,
+        savedTokens: 0,
+        reductionPercentage: 0,
+      },
+      dryRun: false,
+      durationMs,
+      error: `Backup snapshot already exists at ${backupPath}. Use --force (-f) to overwrite.`,
+    };
+  }
+
+  const extractedSkills = extractLegacySkills(rawContent);
+
+  // Profile project to compile lean root AGENTS.md
+  let profile: ArchetypeProfile;
+  try {
+    profile = profileArchetype(root);
+  } catch {
+    profile = {
+      archetype: "api_backend",
+      runtime: "bun",
+      packageManager: "bun",
+      testCommand: "bun test",
+      buildCommand: "bun run build",
+      lintCommand: "none",
+      activeSkills: ["skill-backend", "skill-database", "skill-security", "skill-testing"],
+      seams: {
+        hasBackend: true,
+        hasFrontend: false,
+        hasDatabase: true,
+        hasSecurity: true,
+        hasTesting: true,
+        routes: [],
+        models: [],
+        controllers: [],
+        services: [],
+        views: [],
+        tests: [],
+      },
+    };
+  }
+
+  // Compile lean root AGENTS.md referencing legacy skills (< 200 tokens)
+  const maxRootTokens = options.maxRootTokens ?? 200;
+  const rootAgentsContent = compileMigratedRootAgents(profile, extractedSkills, {
+    maxTokens: maxRootTokens,
+    strictTokenGuard: options.strictTokenGuard,
+  });
+
+  const rootAgentsTokens = estimateTokens(rootAgentsContent);
+  const savedTokens = Math.max(0, beforeTokens - rootAgentsTokens);
+  const reductionPercentage =
+    beforeTokens > 0 ? Math.round((savedTokens / beforeTokens) * 100) : 0;
+
+  const tokenSavings: TokenSavingsSummary = {
+    beforeTokens,
+    afterTokens: rootAgentsTokens,
+    savedTokens,
+    reductionPercentage,
+  };
+
+  const durationMs = Number((performance.now() - startTime).toFixed(2));
+
+  // If dry-run, do not write to disk
+  if (options.dryRun) {
+    return {
+      success: true,
+      status: "simulated",
+      sourceFile: sourceFilePath,
+      backupPath,
+      backupCreated: false,
+      rootAgentsPath,
+      rootAgentsTokens,
+      extractedSkills,
+      tokenSavings,
+      dryRun: true,
+      durationMs,
+    };
+  }
+
+  // Atomic file write & backup
+  // 1. Create byte-for-byte backup of source file
+  fs.copyFileSync(sourceFilePath, backupPath);
+  const backupCreated = true;
+
+  // 2. Ensure .agents/skills exists
+  const skillsDir = path.join(root, ".agents", "skills");
+  if (!fs.existsSync(skillsDir)) {
+    fs.mkdirSync(skillsDir, { recursive: true });
+  }
+
+  // 3. Write each extracted skill to disk atomically
+  for (const skill of extractedSkills) {
+    const skillPath = path.join(root, skill.relativePath);
+    const skillDir = path.dirname(skillPath);
+    if (!fs.existsSync(skillDir)) {
+      fs.mkdirSync(skillDir, { recursive: true });
+    }
+    const tmpSkillPath = `${skillPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+    fs.writeFileSync(tmpSkillPath, skill.content, "utf-8");
+    fs.renameSync(tmpSkillPath, skillPath);
+  }
+
+  // 4. Write lean root AGENTS.md atomically
+  const tmpRootPath = `${rootAgentsPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+  fs.writeFileSync(tmpRootPath, rootAgentsContent, "utf-8");
+  fs.renameSync(tmpRootPath, rootAgentsPath);
+
+  return {
+    success: true,
+    status: "success",
+    sourceFile: sourceFilePath,
+    backupPath,
+    backupCreated,
+    rootAgentsPath,
+    rootAgentsTokens,
+    extractedSkills,
+    tokenSavings,
+    dryRun: false,
+    durationMs,
+  };
+}
+
+export function rollbackLegacyMigration(
+  projectPath: string = process.cwd(),
+  options: { from?: string } = {}
+): LegacyRollbackResult {
+  const startTime = performance.now();
+  let root = path.resolve(projectPath);
+  let sourceFileName = options.from;
+
+  if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+    if (!sourceFileName) {
+      sourceFileName = path.basename(root);
+    }
+    root = path.dirname(root);
+  }
+
+  sourceFileName = sourceFileName || "AGENTS.md";
+  let sourceFilePath: string;
+  if (path.isAbsolute(sourceFileName)) {
+    sourceFilePath = sourceFileName;
+    if (projectPath === process.cwd()) {
+      root = path.dirname(sourceFilePath);
+    }
+  } else {
+    sourceFilePath = path.join(root, sourceFileName);
+  }
+  const backupPath = `${sourceFilePath}.bak`;
+
+  if (!fs.existsSync(backupPath)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    return {
+      success: false,
+      status: "error",
+      restoredFile: sourceFilePath,
+      backupFile: backupPath,
+      durationMs,
+      error: `Backup snapshot not found at ${backupPath}`,
+    };
+  }
+
+  fs.copyFileSync(backupPath, sourceFilePath);
+  const durationMs = Number((performance.now() - startTime).toFixed(2));
+
+  return {
+    success: true,
+    status: "success",
+    restoredFile: sourceFilePath,
+    backupFile: backupPath,
+    durationMs,
+  };
 }
 
 

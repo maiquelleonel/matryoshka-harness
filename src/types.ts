@@ -663,6 +663,75 @@ export interface McpClientOptions {
   timeoutMs?: number;
 }
 
+// ==========================================
+// SPEC-23: Legacy AGENTS.md Migration Engine
+// ==========================================
+
+export interface LegacySkillMetadata {
+  name: string;
+  description: string;
+  origin?: "legacy_migration" | string;
+  migratedAt?: string;
+  migrated_at?: string;
+}
+
+export interface ExtractedSkill {
+  name: string;
+  relativePath: string;
+  description: string;
+  origin: "legacy_migration";
+  migratedAt: string;
+  content: string;
+  estimatedTokens: number;
+}
+
+export interface TokenSavingsSummary {
+  beforeTokens: number;
+  afterTokens: number;
+  savedTokens: number;
+  reductionPercentage: number;
+}
+
+export interface MigratedRootAgentsOptions {
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface LegacyMigrationOptions {
+  projectPath?: string;
+  from?: string;
+  dryRun?: boolean;
+  json?: boolean;
+  force?: boolean;
+  maxRootTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
+export interface LegacyMigrationResult {
+  success: boolean;
+  status: "success" | "simulated" | "error" | "unchanged";
+  sourceFile: string;
+  backupPath?: string;
+  backupCreated: boolean;
+  rootAgentsPath: string;
+  rootAgentsTokens: number;
+  extractedSkills: ExtractedSkill[];
+  tokenSavings: TokenSavingsSummary;
+  dryRun: boolean;
+  durationMs: number;
+  error?: string;
+}
+
+export interface LegacyRollbackResult {
+  success: boolean;
+  status: "success" | "error";
+  restoredFile: string;
+  backupFile: string;
+  durationMs: number;
+  error?: string;
+}
+
+
 
 
 

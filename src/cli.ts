@@ -20,6 +20,7 @@ import {
   generateAgents,
   inspectTokenBudget,
   MAX_ROOT_AGENTS_TOKENS,
+  migrateLegacyInstructions,
   parseSkillFrontmatter,
   profileArchetype,
   SKILL_DEFINITIONS,
@@ -56,6 +57,7 @@ Usage:
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents audit [path] [--strict] [--json]
+  baba agents migrate [path] [--from <file>] [--force] [--dry-run] [--json]
   baba agents skill <name> [path] [--json]
   baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
   baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
@@ -131,12 +133,14 @@ Adaptive Context-Aware AGENTS.md Compiler & Modular Skills Engine.
 
 Commands:
   baba agents generate [path]   Generate ultra-lean root AGENTS.md (< 200 tokens) & on-demand skills
+  baba agents migrate [path]    Non-destructive migration of monolithic instructions into modular skills
   baba agents profile [path]    Inspect architectural seams and profile archetype governance
   baba agents check [path]      Audit AGENTS.md token budget (< 250 tokens hard limit)
   baba agents audit [path]      Static cognitive context linter for root AGENTS.md & modular skills
   baba agents skill <name> [path] Render compiled on-demand skill (backend, frontend, database, security, testing)
 
 Options:
+  --from <file>      Source legacy instruction file (default: AGENTS.md)
   --force, -f        Overwrite existing AGENTS.md (creates .bak backup)
   --dry-run          Simulate execution without modifying files on disk
   --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
@@ -147,11 +151,38 @@ Options:
 Examples:
   $ baba agents generate --dry-run
   $ baba agents generate --force
+  $ baba agents migrate --from=.cursorrules --dry-run
+  $ baba agents migrate --from=CLAUDE.md
   $ baba agents check
   $ baba agents audit
   $ baba agents audit --strict
   $ baba agents audit ./project --json
   $ baba agents skill backend --json
+`.trim();
+
+const MIGRATE_HELP = `
+Usage: baba agents migrate [path] [options]
+
+Non-destructive legacy instructions migration engine into modular skills.
+
+Arguments:
+  [path]             Target directory or source file (default: current working directory)
+
+Options:
+  --from <file>      Source legacy instruction file (e.g. .cursorrules, CLAUDE.md) (default: AGENTS.md)
+  --dry-run          Simulate execution and token metrics without mutating files on disk
+  --force, -f        Overwrite existing backup snapshot and target files
+  --max-tokens <num> Maximum token limit for compiled root AGENTS.md (default: 200)
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba agents migrate
+  $ baba agents migrate --dry-run
+  $ baba agents migrate --from=.cursorrules --dry-run
+  $ baba agents migrate --from=CLAUDE.md
+  $ baba agents migrate ./legacy-project --from=.cursorrules --dry-run
+  $ baba agents migrate --from=.cursorrules --json
 `.trim();
 
 const AUDIT_HELP = `
@@ -416,6 +447,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "agents": {
+      if (rest.includes("migrate") && (rest.includes("--help") || rest.includes("-h") || rest.includes("help"))) {
+        console.log(MIGRATE_HELP);
+        process.exit(0);
+      }
       if (rest.includes("audit") && (rest.includes("--help") || rest.includes("-h") || rest.includes("help"))) {
         console.log(AUDIT_HELP);
         process.exit(0);
@@ -429,6 +464,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
 
       let maxTokens: number | undefined;
+      let fromFile: string | undefined;
       const positional: string[] = [];
       for (let i = 0; i < rest.length; i++) {
         const arg = rest[i];
@@ -441,6 +477,14 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           }
         } else if (arg.startsWith("--max-tokens=")) {
           maxTokens = Number.parseInt(arg.slice("--max-tokens=".length), 10);
+        } else if (arg === "--from") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            fromFile = nextVal;
+            i++;
+          }
+        } else if (arg.startsWith("--from=")) {
+          fromFile = arg.slice("--from=".length);
         } else if (arg.startsWith("-")) {
           // flag, ignore
         } else {
@@ -466,7 +510,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         positional[0] === "check" ||
         positional[0] === "guard" ||
         positional[0] === "audit" ||
-        positional[0] === "lint"
+        positional[0] === "lint" ||
+        positional[0] === "migrate"
       ) {
         subcommand = positional[0];
         targetDir = positional[1] || process.cwd();
@@ -474,7 +519,118 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         targetDir = positional[0] || process.cwd();
       }
 
-      const resolvedPath = path.resolve(targetDir);
+      let resolvedPath = path.resolve(targetDir);
+      if (subcommand === "migrate" && fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
+        if (!fromFile) {
+          fromFile = path.basename(resolvedPath);
+        }
+        resolvedPath = path.dirname(resolvedPath);
+      }
+
+      if (subcommand === "migrate") {
+        try {
+          const migrationResult = migrateLegacyInstructions(resolvedPath, {
+            from: fromFile,
+            dryRun: isDryRun,
+            force: isForce,
+            json: isJson,
+            maxRootTokens: maxTokens,
+          });
+
+          if (isJson) {
+            console.log(JSON.stringify(migrationResult, null, 2));
+          } else {
+            console.log(
+              pc.bold(
+                pc.cyan(
+                  "\n🪆 Matryoshka Legacy AGENTS.md Migration Engine (baba agents migrate)"
+                )
+              )
+            );
+            console.log(`  ${pc.dim("•")} ${pc.bold("Target Path:")}    ${resolvedPath}`);
+            console.log(`  ${pc.dim("•")} ${pc.bold("Source File:")}    ${migrationResult.sourceFile}`);
+            console.log(
+              `  ${pc.dim("•")} ${pc.bold("Status:")}         ${
+                migrationResult.status === "success"
+                  ? pc.green("SUCCESS (migrated)")
+                  : migrationResult.status === "simulated"
+                  ? pc.yellow("SIMULATED (--dry-run)")
+                  : pc.blue(migrationResult.status)
+              }`
+            );
+            if (migrationResult.backupCreated && migrationResult.backupPath) {
+              console.log(
+                `  ${pc.dim("•")} ${pc.bold("Safety Backup:")}  ${pc.yellow(
+                  migrationResult.backupPath
+                )}`
+              );
+            } else if (migrationResult.dryRun && migrationResult.backupPath) {
+              console.log(
+                `  ${pc.dim("•")} ${pc.bold("Safety Backup:")}  ${pc.yellow(
+                  migrationResult.backupPath
+                )} ${pc.dim("(planned)")}`
+              );
+            }
+            if (migrationResult.error) {
+              console.log(
+                `  ${pc.dim("•")} ${pc.bold("Error:")}          ${pc.red(
+                  migrationResult.error
+                )}`
+              );
+            }
+            console.log(
+              `  ${pc.dim("•")} ${pc.bold("Root AGENTS:")}    ${pc.green(
+                migrationResult.rootAgentsPath
+              )} (${pc.yellow(migrationResult.rootAgentsTokens.toString())} tokens)${
+                migrationResult.dryRun ? pc.dim(" (planned)") : ""
+              }`
+            );
+            console.log(
+              `  ${pc.dim("•")} ${pc.bold("Token Savings:")}  ${pc.green(
+                `${migrationResult.tokenSavings.savedTokens} tokens (${migrationResult.tokenSavings.reductionPercentage}% reduction)`
+              )}`
+            );
+            console.log(
+              pc.bold(
+                pc.cyan(
+                  migrationResult.dryRun
+                    ? "  Planned Modular Skills Extraction (diff):"
+                    : "  Extracted Modular Skills:"
+                )
+              )
+            );
+            for (const skill of migrationResult.extractedSkills) {
+              console.log(
+                `    ${pc.dim("•")} ${pc.green(skill.name)} ${pc.dim(
+                  `(${skill.relativePath})`
+                )} - ${pc.yellow(skill.estimatedTokens.toString())} tokens`
+              );
+            }
+            console.log("");
+          }
+
+          process.exit(migrationResult.success ? 0 : 1);
+        } catch (error: any) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  success: false,
+                  status: "error",
+                  command: "agents migrate",
+                  rootPath: resolvedPath,
+                  message: error?.message || "Migration failed",
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(pc.red(`\nMigration failed: ${error?.message || "Unknown error"}\n`));
+          }
+          process.exit(1);
+        }
+      }
 
       if (subcommand === "skill" || subcommand === "skills") {
         if (!skillArg) {
