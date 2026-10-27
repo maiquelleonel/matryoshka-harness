@@ -667,6 +667,14 @@ export interface McpClientOptions {
 // SPEC-23: Legacy AGENTS.md Migration Engine
 // ==========================================
 
+export interface LegacySkillMetadata {
+  name: string;
+  description: string;
+  origin?: "legacy_migration" | string;
+  migratedAt?: string;
+  migrated_at?: string;
+}
+
 export interface ExtractedSkill {
   name: string;
   relativePath: string;

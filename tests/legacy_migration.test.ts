@@ -4,12 +4,18 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   extractLegacySkills,
+  isLegacyMigrationSkill,
   migrateLegacyInstructions,
+  parseSkillFrontmatter,
+  stampLegacySkillFrontmatter,
+  validateSkillFrontmatter,
 } from "../src/agents";
 import type {
   ExtractedSkill,
   LegacyMigrationOptions,
   LegacyMigrationResult,
+  LegacySkillMetadata,
+  SkillFrontmatter,
   TokenSavingsSummary,
 } from "../src/types";
 
@@ -228,6 +234,164 @@ describe("SPEC-23: feat(agents): non-destructive legacy AGENTS.md migration engi
         expect(fs.existsSync(primarySkillPath)).toBe(true);
         const primaryContent = fs.readFileSync(primarySkillPath, "utf-8");
         expect(primaryContent).toContain("All financial transactions MUST calculate tax using the decimal-safe CurrencyEngine.");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("Subtask 3: YAML Frontmatter Stamping: Stamped with metadata (origin: legacy_migration, name: legacy-knowledge, description: ...) so AI coding agents know when to activate it on-demand", () => {
+    const sampleLegacyMonolith = `# Legacy Operational Directives for FinTech App
+
+## Core Business Invariants & Domain Rules
+* All financial transactions MUST calculate tax using the decimal-safe CurrencyEngine.
+* Invariant: User account status 'SUSPENDED' prevents debit authorizations.
+
+# Database Guidelines
+* All tables must define an indexed \`tenant_id\` UUID column.
+* Foreign keys must use ON DELETE RESTRICT.
+
+# Security Guidelines
+* Sanitize all raw HTML input using the strict DOMPurify pipeline before rendering.
+`;
+
+    it("verifies primary skill has valid YAML frontmatter delimiters '---'", () => {
+      const skills = extractLegacySkills(sampleLegacyMonolith);
+      const primary = skills.find((s) => s.name === "legacy-knowledge");
+      expect(primary).toBeDefined();
+
+      expect(primary!.content.startsWith("---\n") || primary!.content.startsWith("---\r\n")).toBe(true);
+      const closingDelimiter = primary!.content.indexOf("\n---\n", 3);
+      expect(closingDelimiter).toBeGreaterThan(0);
+    });
+
+    it("stamps metadata with origin: legacy_migration, name: legacy-knowledge, and descriptive description", () => {
+      const skills = extractLegacySkills(sampleLegacyMonolith);
+      const primary = skills.find((s) => s.name === "legacy-knowledge");
+      expect(primary).toBeDefined();
+
+      const parsed = parseSkillFrontmatter(primary!.content);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.name).toBe("legacy-knowledge");
+      expect(parsed!.origin).toBe("legacy_migration");
+      expect(parsed!.description).toContain("legacy conventions");
+      expect(parsed!.migrated_at).toBeDefined();
+      expect(new Date(parsed!.migrated_at!).getTime()).not.toBeNaN();
+    });
+
+    it("validates that validateSkillFrontmatter passes for all extracted skills", () => {
+      const skills = extractLegacySkills(sampleLegacyMonolith);
+      expect(skills.length).toBeGreaterThan(1);
+
+      for (const skill of skills) {
+        expect(validateSkillFrontmatter(skill.content)).toBe(true);
+      }
+    });
+
+    it("verifies isLegacyMigrationSkill detects legacy-migration skills and rejects standard ones", () => {
+      const skills = extractLegacySkills(sampleLegacyMonolith);
+      const primary = skills.find((s) => s.name === "legacy-knowledge")!;
+      expect(isLegacyMigrationSkill(primary.content)).toBe(true);
+
+      const standardSkill = `---
+name: skill-backend
+description: ORM patterns
+---
+# Content`;
+      expect(isLegacyMigrationSkill(standardSkill)).toBe(false);
+      expect(isLegacyMigrationSkill("invalid-skill")).toBe(false);
+    });
+
+    it("stamps domain sub-skills with unique names, correct descriptions, and origin: legacy_migration", () => {
+      const skills = extractLegacySkills(sampleLegacyMonolith);
+      const subSkills = skills.filter((s) => s.name !== "legacy-knowledge");
+      expect(subSkills.length).toBeGreaterThanOrEqual(2);
+
+      for (const sub of subSkills) {
+        const parsed = parseSkillFrontmatter(sub.content);
+        expect(parsed).not.toBeNull();
+        expect(parsed!.origin).toBe("legacy_migration");
+        expect(parsed!.name).toBe(sub.name);
+        expect(parsed!.description.length).toBeGreaterThan(15);
+        expect(parsed!.migrated_at).toBeDefined();
+      }
+    });
+
+    it("uses stampLegacySkillFrontmatter helper to stamp custom legacy content cleanly without duplicate frontmatter", () => {
+      const rawText = `---
+old_tag: discarded
+---
+# Legacy Rules
+* Do not touch the production billing database directly.`;
+
+      const stamped = stampLegacySkillFrontmatter(rawText, {
+        name: "legacy-knowledge",
+        description: "Preserved historical domain knowledge.",
+        origin: "legacy_migration",
+        migratedAt: "2026-03-30T12:00:00.000Z",
+      });
+
+      expect(stamped).toContain("name: legacy-knowledge");
+      expect(stamped).toContain("origin: legacy_migration");
+      expect(stamped).toContain('migrated_at: "2026-03-30T12:00:00.000Z"');
+      expect(stamped).not.toContain("old_tag: discarded");
+      expect(stamped).toContain("Do not touch the production billing database directly.");
+
+      // Check frontmatter delimiters count
+      const delimiterMatches = stamped.match(/^---$/gm);
+      expect(delimiterMatches?.length).toBe(2);
+
+      const parsed = parseSkillFrontmatter(stamped);
+      expect(parsed?.name).toBe("legacy-knowledge");
+      expect(parsed?.origin).toBe("legacy_migration");
+      expect(parsed?.migrated_at).toBe("2026-03-30T12:00:00.000Z");
+    });
+
+    it("verifies frontmatter stamping persists correctly to disk during migrateLegacyInstructions", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-frontmatter-test-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, sampleLegacyMonolith, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir);
+        expect(result.success).toBe(true);
+
+        const skillPath = path.join(tempDir, ".agents", "skills", "legacy-knowledge.md");
+        expect(fs.existsSync(skillPath)).toBe(true);
+
+        const diskContent = fs.readFileSync(skillPath, "utf-8");
+        expect(diskContent).toMatch(/^---\r?\nname:\s*legacy-knowledge\r?\ndescription:\s*.+\r?\norigin:\s*legacy_migration/);
+
+        const parsed = parseSkillFrontmatter(diskContent);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.name).toBe("legacy-knowledge");
+        expect(parsed?.origin).toBe("legacy_migration");
+        expect(isLegacyMigrationSkill(diskContent)).toBe(true);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("verifies CLI 'baba agents migrate' creates skills with valid frontmatter stamped on disk", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-cli-frontmatter-test-"));
+      try {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, sampleLegacyMonolith, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const skillPath = path.join(tempDir, ".agents", "skills", "legacy-knowledge.md");
+        expect(fs.existsSync(skillPath)).toBe(true);
+
+        const diskContent = fs.readFileSync(skillPath, "utf-8");
+        const parsed = parseSkillFrontmatter(diskContent);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.name).toBe("legacy-knowledge");
+        expect(parsed?.origin).toBe("legacy_migration");
+        expect(parsed?.description).toBeDefined();
+        expect(isLegacyMigrationSkill(diskContent)).toBe(true);
       } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }

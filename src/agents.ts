@@ -13,6 +13,7 @@ import type {
   ExtractedSkill,
   LegacyMigrationOptions,
   LegacyMigrationResult,
+  LegacySkillMetadata,
   PrimaryStack,
   ProjectStack,
   TokenSavingsSummary,
@@ -65,8 +66,10 @@ export interface SkillDefinition {
 }
 
 export interface SkillFrontmatter {
-  name: SkillName;
+  name: SkillName | string;
   description: string;
+  origin?: string;
+  migrated_at?: string;
 }
 
 export interface SkillMetadataItem {
@@ -1731,10 +1734,22 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
     return null;
   }
 
-  return {
+  const originMatch = rawYaml.match(/^origin:\s*(.+)$/m);
+  const migratedAtMatch = rawYaml.match(/^migrated_at:\s*["']?([^"'\r\n]+)["']?$/m);
+
+  const result: SkillFrontmatter = {
     name,
-    description
+    description,
   };
+
+  if (originMatch && originMatch[1]) {
+    result.origin = originMatch[1].trim();
+  }
+  if (migratedAtMatch && migratedAtMatch[1]) {
+    result.migrated_at = migratedAtMatch[1].trim();
+  }
+
+  return result;
 }
 
 /**
@@ -1743,6 +1758,39 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter | null 
 export function validateSkillFrontmatter(content: string): boolean {
   const frontmatter = parseSkillFrontmatter(content);
   return frontmatter !== null && Boolean(frontmatter.name && frontmatter.description);
+}
+
+/**
+ * Stamps standardized YAML Frontmatter onto a legacy skill body.
+ * Metadata includes origin: legacy_migration, name, description, and migrated_at.
+ * Strips existing frontmatter blocks if present to prevent nesting.
+ */
+export function stampLegacySkillFrontmatter(
+  body: string,
+  metadata: LegacySkillMetadata
+): string {
+  const origin = metadata.origin || "legacy_migration";
+  const migratedAt = metadata.migratedAt || metadata.migrated_at || new Date().toISOString();
+  const cleanBody = body.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").trim();
+
+  return `---
+name: ${metadata.name}
+description: ${metadata.description}
+origin: ${origin}
+migrated_at: "${migratedAt}"
+---
+
+${cleanBody}
+`;
+}
+
+/**
+ * Checks whether the given skill content represents a migrated legacy skill
+ * by verifying the YAML frontmatter and checking origin === "legacy_migration".
+ */
+export function isLegacyMigrationSkill(content: string): boolean {
+  const parsed = parseSkillFrontmatter(content);
+  return parsed !== null && parsed.origin === "legacy_migration";
 }
 
 /**
@@ -2763,26 +2811,27 @@ export function extractLegacySkills(
 
   // 1. Primary modular skill (.agents/skills/legacy-knowledge.md)
   // Zero-Loss Invariant: 100% of the original domain rules and conventions are preserved in the skill body.
-  const primaryContent = `---
-name: legacy-knowledge
-description: Preserved historical domain knowledge, architecture quirks, and legacy conventions migrated from existing project rules.
-origin: legacy_migration
-migrated_at: "${migratedAt}"
----
-
-# 📜 Legacy Project Knowledge & Historical Conventions
+  const primaryBody = `# 📜 Legacy Project Knowledge & Historical Conventions
 
 The following directives were migrated from the previous monolithic instruction file.
 Load and adhere to these guidelines when modifying legacy modules or domain-specific workflows:
 
-${rawBody}
-`;
+${rawBody}`;
+
+  const primaryDescription =
+    "Preserved historical domain knowledge, architecture quirks, and legacy conventions migrated from existing project rules.";
+
+  const primaryContent = stampLegacySkillFrontmatter(primaryBody, {
+    name: "legacy-knowledge",
+    description: primaryDescription,
+    origin: "legacy_migration",
+    migratedAt,
+  });
 
   const primarySkill: ExtractedSkill = {
     name: "legacy-knowledge",
     relativePath: ".agents/skills/legacy-knowledge.md",
-    description:
-      "Preserved historical domain knowledge, architecture quirks, and legacy conventions migrated from existing project rules.",
+    description: primaryDescription,
     origin: "legacy_migration",
     migratedAt,
     content: primaryContent,
@@ -2924,19 +2973,18 @@ ${rawBody}
     const bodyContent = bucket.contentLines.join("\n").trim();
     if (!bodyContent) continue;
 
-    const subContent = `---
-name: ${key}
-description: ${bucket.matcher.description}
-origin: legacy_migration
-migrated_at: "${migratedAt}"
----
-
-# 📜 ${bucket.matcher.title}
+    const subBody = `# 📜 ${bucket.matcher.title}
 
 The following directives were extracted from historical project instructions for domain '${bucket.matcher.domain}':
 
-${bodyContent}
-`;
+${bodyContent}`;
+
+    const subContent = stampLegacySkillFrontmatter(subBody, {
+      name: key,
+      description: bucket.matcher.description,
+      origin: "legacy_migration",
+      migratedAt,
+    });
 
     extractedSkills.push({
       name: key,

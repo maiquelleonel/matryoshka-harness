@@ -15,8 +15,16 @@ O objetivo principal é encapsular 100% das convenções históricas, regras de 
 
 ## 📋 2. Contratos de I/O & Interfaces TypeScript
 
-### 2.1 Estrutura de Skill Extraída (`ExtractedSkill`)
+### 2.1 Estrutura de Skill Extraída & Metadados de Frontmatter (`ExtractedSkill`, `LegacySkillMetadata`)
 ```typescript
+export interface LegacySkillMetadata {
+  name: string;
+  description: string;
+  origin?: "legacy_migration" | string;
+  migratedAt?: string;
+  migrated_at?: string;
+}
+
 export interface ExtractedSkill {
   name: string;
   relativePath: string;
@@ -68,12 +76,19 @@ export interface LegacyMigrationResult {
 }
 ```
 
-### 2.5 Assinatura da Função Principal
+### 2.5 Assinatura da Função Principal & Utilitários de Frontmatter
 ```typescript
 export function migrateLegacyInstructions(
   projectPath?: string,
   options?: LegacyMigrationOptions
 ): LegacyMigrationResult;
+
+export function stampLegacySkillFrontmatter(
+  body: string,
+  metadata: LegacySkillMetadata
+): string;
+
+export function isLegacyMigrationSkill(content: string): boolean;
 ```
 
 ### 2.6 Contratos de Linha de Comando (CLI)
