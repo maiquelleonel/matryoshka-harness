@@ -2042,3 +2042,219 @@ export function generateAgents(
     ...(backupCreated ? { backupPath } : {}),
   };
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Cognitive Context Linter & Turn-Zero Prompt Simulator (SPEC-22)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+export type CognitiveRuleId =
+  | "token-budget"
+  | "dead-skills"
+  | "negative-phrasing-trap"
+  | "permissive-leak"
+  | "greedy-preload";
+
+export type CognitiveViolationSeverity = "fail" | "warn" | "pass";
+
+export interface CognitiveViolation {
+  id: string;
+  ruleId: CognitiveRuleId;
+  rule_id?: CognitiveRuleId;
+  severity: CognitiveViolationSeverity;
+  message: string;
+  file: string;
+  line?: number;
+  snippet?: string;
+  suggestion?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CognitiveAuditSummary {
+  totalRules: number;
+  total_rules?: number;
+  failedCount: number;
+  failed_count?: number;
+  warnCount: number;
+  warn_count?: number;
+  passedCount: number;
+  passed_count?: number;
+  estimatedTokens: number;
+  estimated_tokens?: number;
+  targetPath: string;
+  target_path?: string;
+  scannedFiles: string[];
+  scanned_files?: string[];
+}
+
+export interface CognitiveAuditResult {
+  score: number; // 0..100
+  passed: boolean;
+  passedStrict: boolean;
+  passed_strict?: boolean;
+  violations: CognitiveViolation[];
+  summary: CognitiveAuditSummary;
+  durationMs: number;
+  duration_ms?: number;
+}
+
+export interface CognitiveAuditOptions {
+  strict?: boolean;
+  json?: boolean;
+  projectPath?: string;
+  maxTokens?: number; // default: 250
+  warnTokens?: number; // default: 200
+  maxNegativePhrases?: number; // default: 3
+  maxCodeBlockLines?: number; // default: 25
+}
+
+/**
+ * Audits root AI instruction files and cognitive context against anti-pattern rules.
+ * Rule 1: token-budget (Ceiling: warn > 200 tokens, strict fail > 250 tokens).
+ */
+export function auditCognitiveContext(
+  projectPath?: string,
+  options?: CognitiveAuditOptions
+): CognitiveAuditResult {
+  const startTime = performance.now();
+  const root = path.resolve(projectPath || options?.projectPath || process.cwd());
+  const warnTokens = options?.warnTokens ?? TARGET_ROOT_AGENTS_TOKENS;
+  const maxTokens = options?.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
+
+  let targetFile: string | null = null;
+
+  if (fs.existsSync(root)) {
+    try {
+      const stat = fs.statSync(root);
+      if (stat.isFile()) {
+        targetFile = root;
+      } else if (stat.isDirectory()) {
+        const candidateNames = ["AGENTS.md", ".cursorrules", "CLAUDE.md"];
+        for (const candidate of candidateNames) {
+          const candidatePath = path.join(root, candidate);
+          if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+            targetFile = candidatePath;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Graceful failure when root instruction file does not exist
+  if (!targetFile || !fs.existsSync(targetFile)) {
+    const fileChecked = path.join(root, "AGENTS.md");
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const violation: CognitiveViolation = {
+      id: "token-budget-missing",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "fail",
+      message: `Root instruction file (AGENTS.md) not found at ${root}`,
+      file: fileChecked,
+      suggestion: "Run 'baba agents generate' to scaffold an ultra-lean AGENTS.md and modular skills."
+    };
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 1,
+      failed_count: 1,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 4,
+      passed_count: 4,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: []
+    };
+    const score = Math.max(0, 100 - 15);
+    return {
+      score,
+      passed: false,
+      passedStrict: false,
+      passed_strict: false,
+      violations: [violation],
+      summary,
+      durationMs,
+      duration_ms: durationMs
+    };
+  }
+
+  const content = fs.readFileSync(targetFile, "utf-8");
+  const estimatedTokens = estimateTokens(content);
+  const scannedFiles = [targetFile];
+  const violations: CognitiveViolation[] = [];
+
+  // Rule 1: token-budget
+  if (estimatedTokens > maxTokens) {
+    violations.push({
+      id: "token-budget-fail",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "fail",
+      message: `Root instruction file exceeds strict token budget: ${estimatedTokens} tokens (maximum allowed: ${maxTokens} tokens, exceeded by ${estimatedTokens - maxTokens} tokens).`,
+      file: targetFile,
+      suggestion: "Offload detailed instructions into modular skills in .agents/skills/ using 'baba agents generate'."
+    });
+  } else if (estimatedTokens > warnTokens) {
+    violations.push({
+      id: "token-budget-warn",
+      ruleId: "token-budget",
+      rule_id: "token-budget",
+      severity: "warn",
+      message: `Root instruction file approaches token budget ceiling: ${estimatedTokens} tokens (warning threshold: ${warnTokens} tokens, maximum allowed: ${maxTokens} tokens).`,
+      file: targetFile,
+      suggestion: "Consider offloading secondary instructions into .agents/skills/ to keep turn-zero overhead minimal."
+    });
+  }
+
+  const failedViolations = violations.filter((v) => v.severity === "fail");
+  const warnViolations = violations.filter((v) => v.severity === "warn");
+
+  const failedCount = failedViolations.length;
+  const warnCount = warnViolations.length;
+  const totalRules = 5;
+  const passedCount = Math.max(0, totalRules - failedCount - warnCount);
+
+  // Health score calculation: Base 100, -15 per FAIL, -5 per WARN
+  const totalPenalties = failedCount * 15 + warnCount * 5;
+  const score = Math.max(0, 100 - totalPenalties);
+
+  const passed = failedCount === 0 && score >= 75;
+  const passedStrict = failedCount === 0 && score >= 80;
+
+  const summary: CognitiveAuditSummary = {
+    totalRules,
+    total_rules: totalRules,
+    failedCount,
+    failed_count: failedCount,
+    warnCount,
+    warn_count: warnCount,
+    passedCount,
+    passed_count: passedCount,
+    estimatedTokens,
+    estimated_tokens: estimatedTokens,
+    targetPath: root,
+    target_path: root,
+    scannedFiles,
+    scanned_files: scannedFiles
+  };
+
+  const durationMs = Number((performance.now() - startTime).toFixed(2));
+
+  return {
+    score,
+    passed,
+    passedStrict,
+    passed_strict: passedStrict,
+    violations,
+    summary,
+    durationMs,
+    duration_ms: durationMs
+  };
+}
+

@@ -1,6 +1,13 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
+import {
+  auditCognitiveContext,
+  type CognitiveAuditResult,
+  type CognitiveViolation,
+  type CognitiveRuleId
+} from "../src/agents";
 
 describe("SPEC-22: feat(agents): cognitive context linter & turn-zero prompt simulator (baba agents audit)", () => {
   const repoRoot = path.resolve(__dirname, "..");
@@ -107,6 +114,118 @@ describe("SPEC-22: feat(agents): cognitive context linter & turn-zero prompt sim
       const content = fs.readFileSync(experiencePath, "utf-8");
       expect(content).toContain("baba agents audit");
       expect(content).toContain("Pink Elephant");
+    });
+  });
+
+  describe("Subtask 2: Rule 1 (token-budget): Warnings > 200 tokens, strict fail > 250 tokens for root AGENTS.md", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-rule1-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("passes when AGENTS.md is under the warning threshold (<= 200 tokens)", () => {
+      const leanContent = "# AGENTS\n\n" + Array(80).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), leanContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.summary.failedCount).toBe(0);
+      expect(result.summary.warnCount).toBe(0);
+      expect(result.summary.estimatedTokens).toBeLessThanOrEqual(200);
+      expect(result.violations.some((v) => v.ruleId === "token-budget")).toBe(false);
+    });
+
+    it("emits a warn violation when AGENTS.md exceeds 200 tokens but is <= 250 tokens", () => {
+      const warnContent = "# AGENTS\n\n" + Array(220).fill("instruction").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), warnContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(95);
+      expect(result.summary.warnCount).toBe(1);
+      expect(result.summary.failedCount).toBe(0);
+
+      const violation = result.violations.find((v) => v.ruleId === "token-budget");
+      expect(violation).toBeDefined();
+      expect(violation?.severity).toBe("warn");
+      expect(violation?.message).toContain("200");
+      expect(violation?.suggestion).toBeDefined();
+    });
+
+    it("emits a fail violation when AGENTS.md exceeds strict limit (> 250 tokens)", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("instruction").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.passed).toBe(false);
+      expect(result.passedStrict).toBe(false);
+      expect(result.score).toBe(85);
+      expect(result.summary.failedCount).toBe(1);
+
+      const violation = result.violations.find((v) => v.ruleId === "token-budget");
+      expect(violation).toBeDefined();
+      expect(violation?.severity).toBe("fail");
+      expect(violation?.message).toContain("250");
+      expect(violation?.suggestion).toBeDefined();
+    });
+
+    it("respects custom warnTokens and maxTokens options", () => {
+      const content = "# AGENTS\n\n" + Array(120).fill("instruction").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const warnResult = auditCognitiveContext(tempDir, { warnTokens: 100, maxTokens: 150 });
+      expect(warnResult.violations.some((v) => v.ruleId === "token-budget" && v.severity === "warn")).toBe(true);
+
+      const failResult = auditCognitiveContext(tempDir, { warnTokens: 80, maxTokens: 100 });
+      expect(failResult.violations.some((v) => v.ruleId === "token-budget" && v.severity === "fail")).toBe(true);
+    });
+
+    it("gracefully reports failure when AGENTS.md is missing without throwing an exception", () => {
+      const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-empty-"));
+      try {
+        const result = auditCognitiveContext(emptyDir);
+        expect(result.passed).toBe(false);
+        expect(result.summary.failedCount).toBeGreaterThanOrEqual(1);
+        const violation = result.violations.find((v) => v.ruleId === "token-budget");
+        expect(violation).toBeDefined();
+        expect(violation?.severity).toBe("fail");
+        expect(violation?.message).toContain("not found");
+        expect(violation?.suggestion).toContain("baba agents generate");
+      } finally {
+        fs.rmSync(emptyDir, { recursive: true, force: true });
+      }
+    });
+
+    it("completes audit execution sub-25ms", () => {
+      const leanContent = "# AGENTS\n\n" + Array(50).fill("rule").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), leanContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.durationMs).toBeLessThan(25);
+    });
+
+    it("supports double keying for camelCase and snake_case properties", () => {
+      const failContent = "# AGENTS\n\n" + Array(280).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.passedStrict).toBe(false);
+      expect(result.passed_strict).toBe(false);
+      expect(result.summary.failedCount).toBe(1);
+      expect(result.summary.failed_count).toBe(1);
+      expect(result.summary.estimatedTokens).toBeGreaterThan(250);
+      expect(result.summary.estimated_tokens).toBeGreaterThan(250);
+      expect(result.duration_ms).toBeDefined();
     });
   });
 });
