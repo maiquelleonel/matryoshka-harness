@@ -967,5 +967,255 @@ ${codeLines}
       expect(result.durationMs).toBeLessThan(25);
     });
   });
+
+  describe("Subtask 7: CLI flags: --json and --strict (exit code 1 on failures)", () => {
+    let tempDir: string;
+    const cliPath = path.join(repoRoot, "src", "cli.ts");
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-subtask7-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("runs baba agents audit and exits 0 on compliant AGENTS.md", () => {
+      const content = `# AGENTS
+- ALWAYS write explicit types.
+- PREFER immutability.
+- ENFORCE unit tests.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Matryoshka Cognitive Context Linter");
+      expect(stdout).toContain("Health Score:");
+      expect(stdout).toContain("100 / 100");
+    });
+
+    it("outputs structured JSON envelope when --json flag is provided", () => {
+      const content = `# AGENTS
+- ALWAYS write explicit types.
+- PREFER immutability.
+- ENFORCE unit tests.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString().trim();
+      const parsed = JSON.parse(stdout);
+
+      expect(parsed.command).toBe("agents audit");
+      expect(parsed.status).toBe("success");
+      expect(parsed.score).toBe(100);
+      expect(parsed.passed).toBe(true);
+      expect(parsed.passedStrict).toBe(true);
+      expect(parsed.violations).toBeArray();
+      expect(parsed.violations).toHaveLength(0);
+      expect(parsed.summary).toBeDefined();
+      expect(parsed.summary.totalRules).toBe(5);
+      expect(parsed.summary.failedCount).toBe(0);
+      expect(parsed.summary.warnCount).toBe(0);
+      expect(parsed.durationMs).toBeDefined();
+    });
+
+    it("emits violations in JSON output when rules are triggered", () => {
+      const content = `# AGENTS
+## Guidelines
+- Try to run tests if possible.
+- See missing skill at [Nonexistent](.agents/skills/nonexistent.md).
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+      expect(proc.exitCode).toBe(0); // non-strict exits 0
+      const stdout = proc.stdout.toString().trim();
+      const parsed = JSON.parse(stdout);
+
+      expect(parsed.violations.length).toBeGreaterThanOrEqual(2);
+      expect(parsed.violations.some((v: any) => v.ruleId === "dead-skills")).toBe(true);
+      expect(parsed.violations.some((v: any) => v.ruleId === "permissive-leak")).toBe(true);
+    });
+
+    it("exits with code 1 in strict mode (--strict) when FAIL violation is present (bloated AGENTS.md > 250 tokens)", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"]);
+      expect(proc.exitCode).toBe(1);
+      const stderr = proc.stderr.toString();
+      expect(stderr).toContain("Strict mode failed");
+    });
+
+    it("exits with code 1 and outputs valid JSON in strict mode when --strict and --json are combined", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict", "--json"]);
+      expect(proc.exitCode).toBe(1);
+      const stdout = proc.stdout.toString().trim();
+      const parsed = JSON.parse(stdout);
+
+      expect(parsed.command).toBe("agents audit");
+      expect(parsed.passedStrict).toBe(false);
+      expect(parsed.violations.some((v: any) => v.ruleId === "token-budget" && v.severity === "fail")).toBe(true);
+      const stderr = proc.stderr.toString();
+      expect(stderr).toContain("Strict mode failed");
+    });
+
+    it("exits with code 0 in non-strict mode even when violations are present", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("token-budget");
+    });
+
+    it("exits with code 0 in strict mode when only minor warnings are present and health score >= 80", () => {
+      const warnContent = "# AGENTS\n\n" + Array(220).fill("directive").join(" "); // 1 warn -> score 95
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), warnContent, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Health Score:");
+    });
+
+    it("exits with code 1 in strict mode when multiple warnings drop health score below 80", () => {
+      const content = `# AGENTS
+## Negative Section
+- DO NOT do A
+- NEVER do B
+- DON'T do C
+- PROHIBITED to do D
+
+## Section Two
+- DO NOT do E
+- NEVER do F
+- DON'T do G
+- CANNOT do H
+
+## Section Three
+- DO NOT do I
+- NEVER do J
+- DON'T do K
+- CANNOT do L
+
+## Section Four
+- DO NOT do M
+- NEVER do N
+- DON'T do O
+- CANNOT do P
+
+## Section Five
+- DO NOT do Q
+- NEVER do R
+- DON'T do S
+- CANNOT do T
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"]);
+      expect(proc.exitCode).toBe(1);
+      const stderr = proc.stderr.toString();
+      expect(stderr).toContain("Strict mode failed");
+    });
+
+    it("fails gracefully with exit code 1 in strict mode when AGENTS.md is missing", () => {
+      const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-empty-subtask7-"));
+      try {
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--strict"]);
+        expect(proc.exitCode).toBe(1);
+        const stderr = proc.stderr.toString();
+        expect(stderr).toContain("Strict mode failed");
+      } finally {
+        fs.rmSync(emptyDir, { recursive: true, force: true });
+      }
+    });
+
+    it("displays formatted human-readable terminal output with severity badges, health score, and suggestions", () => {
+      const content = `# AGENTS
+## Guidelines
+- Try to run tests.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Matryoshka Cognitive Context Linter");
+      expect(stdout).toContain("WARN");
+      expect(stdout).toContain("permissive-leak");
+      expect(stdout).toContain("Suggestion:");
+    });
+
+    it("supports --help flag for agents audit subcommand", () => {
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Usage: baba agents audit");
+      expect(stdout).toContain("--strict");
+      expect(stdout).toContain("--json");
+      expect(stdout).toContain("token-budget");
+      expect(stdout).toContain("dead-skills");
+    });
+
+    it("ensures alias parity across baba, bbyg, and matryoshka for agents audit --json", () => {
+      const content = `# AGENTS
+- ALWAYS write clean code.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "baba" }
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" }
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" }
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.score).toBe(parsedBbyg.score);
+      expect(parsedBaba.score).toBe(parsedMatryoshka.score);
+      expect(parsedBaba.passed).toBe(parsedBbyg.passed);
+      expect(parsedBaba.passedStrict).toBe(parsedBbyg.passedStrict);
+    });
+
+    it("ensures alias parity across baba, bbyg, and matryoshka for agents audit --strict with violations", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "baba" }
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" }
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" }
+      });
+
+      expect(procBaba.exitCode).toBe(1);
+      expect(procBbyg.exitCode).toBe(1);
+      expect(procMatryoshka.exitCode).toBe(1);
+    });
+  });
 });
 

@@ -15,6 +15,8 @@ import {
   compileFrontendSkill,
   compileSecuritySkill,
   compileTestingSkill,
+  auditCognitiveContext,
+  formatCognitiveAuditHumanOutput,
   generateAgents,
   inspectTokenBudget,
   MAX_ROOT_AGENTS_TOKENS,
@@ -53,6 +55,7 @@ Usage:
   baba agents generate [path] [--force] [--dry-run] [--json]
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
+  baba agents audit [path] [--strict] [--json]
   baba agents skill <name> [path] [--json]
   baba wrap [path] [--output <file>] [--strict] [--threshold <num>] [--dry-run] [--json]
   baba mcp wire [path] [--dry-run] [--targets <targets>] [--json]
@@ -130,12 +133,14 @@ Commands:
   baba agents generate [path]   Generate ultra-lean root AGENTS.md (< 200 tokens) & on-demand skills
   baba agents profile [path]    Inspect architectural seams and profile archetype governance
   baba agents check [path]      Audit AGENTS.md token budget (< 250 tokens hard limit)
+  baba agents audit [path]      Static cognitive context linter for root AGENTS.md & modular skills
   baba agents skill <name> [path] Render compiled on-demand skill (backend, frontend, database, security, testing)
 
 Options:
   --force, -f        Overwrite existing AGENTS.md (creates .bak backup)
   --dry-run          Simulate execution without modifying files on disk
-  --max-tokens <num> Maximum token limit for check audit (default: 250)
+  --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
+  --max-tokens <num> Maximum token limit for check / audit (default: 250)
   --json             Output strictly valid JSON
   -h, --help         Show help information
 
@@ -143,7 +148,37 @@ Examples:
   $ baba agents generate --dry-run
   $ baba agents generate --force
   $ baba agents check
+  $ baba agents audit
+  $ baba agents audit --strict
+  $ baba agents audit ./project --json
   $ baba agents skill backend --json
+`.trim();
+
+const AUDIT_HELP = `
+Usage: baba agents audit [path] [options]
+
+Static cognitive context linter & Turn-Zero prompt simulator for AI coding agents.
+
+Arguments:
+  [path]             Target project directory or file (default: current directory)
+
+Options:
+  --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
+  --json             Output strictly valid JSON
+  --max-tokens <num> Maximum token limit for budget rule (default: 250)
+  -h, --help         Show help information
+
+Cognitive Antipattern Rules Enforced:
+  • token-budget           Turn-Zero budget ceiling (warn > 200, fail > 250)
+  • dead-skills            Dead link detector for missing files in .agents/skills/
+  • negative-phrasing-trap Pink Elephant Paradox guard for excessive negative keywords
+  • permissive-leak        Wishy-washy language detector in imperative directives
+  • greedy-preload         Large raw code/schema dumps detector (> 25 lines)
+
+Examples:
+  $ baba agents audit
+  $ baba agents audit --strict
+  $ baba agents audit ./project --json
 `.trim();
 
 const WRAP_HELP = `
@@ -377,6 +412,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "agents": {
+      if (rest.includes("audit") && (rest.includes("--help") || rest.includes("-h") || rest.includes("help"))) {
+        console.log(AUDIT_HELP);
+        process.exit(0);
+      }
       if (rest.includes("--help") || rest.includes("-h") || rest[0] === "help") {
         console.log(AGENTS_HELP);
         process.exit(0);
@@ -421,7 +460,9 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         positional[0] === "profile" ||
         positional[0] === "seams" ||
         positional[0] === "check" ||
-        positional[0] === "guard"
+        positional[0] === "guard" ||
+        positional[0] === "audit" ||
+        positional[0] === "lint"
       ) {
         subcommand = positional[0];
         targetDir = positional[1] || process.cwd();
@@ -587,6 +628,63 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           );
         }
         process.exit(report.withinBudget ? 0 : 1);
+      }
+
+      if (subcommand === "audit" || subcommand === "lint") {
+        try {
+          const auditResult = auditCognitiveContext(resolvedPath, {
+            strict: isStrict,
+            json: isJson,
+            maxTokens,
+          });
+
+          if (isJson) {
+            let status = "success";
+            if (auditResult.summary.failedCount > 0 || !auditResult.passed) {
+              status = "error";
+            } else if (auditResult.summary.warnCount > 0) {
+              status = "warn";
+            }
+            const jsonOutput = {
+              status,
+              command: "agents audit",
+              ...auditResult,
+            };
+            console.log(JSON.stringify(jsonOutput, null, 2));
+          } else {
+            console.log(formatCognitiveAuditHumanOutput(auditResult, resolvedPath));
+          }
+
+          if (isStrict && !auditResult.passedStrict) {
+            const failureMsg = `Strict mode failed: Cognitive context health score (${auditResult.score}) is below threshold (80) or FAIL violations were detected.`;
+            if (isJson) {
+              console.error(pc.red(failureMsg));
+            } else {
+              console.error(pc.red(`\n❌ ${failureMsg}\n`));
+            }
+            process.exit(1);
+          }
+
+          process.exit(0);
+        } catch (error: any) {
+          if (isJson) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: "error",
+                  command: "agents audit",
+                  rootPath: resolvedPath,
+                  message: error?.message || "Cognitive context audit failed",
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.error(pc.red(`\nAudit failed: ${error?.message || "Unknown error"}\n`));
+          }
+          process.exit(1);
+        }
       }
 
       if (subcommand === "profile" || subcommand === "seams") {

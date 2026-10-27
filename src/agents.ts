@@ -7,6 +7,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import pc from "picocolors";
 import { detectStack } from "./detector";
 import type { PrimaryStack, ProjectStack } from "./types";
 
@@ -2091,6 +2092,8 @@ export interface CognitiveAuditSummary {
 
 export interface CognitiveAuditResult {
   score: number; // 0..100
+  healthScore?: number;
+  health_score?: number;
   passed: boolean;
   passedStrict: boolean;
   passed_strict?: boolean;
@@ -2177,6 +2180,8 @@ export function auditCognitiveContext(
     const score = Math.max(0, 100 - 15);
     return {
       score,
+      healthScore: score,
+      health_score: score,
       passed: false,
       passedStrict: false,
       passed_strict: false,
@@ -2646,6 +2651,8 @@ export function auditCognitiveContext(
 
   return {
     score,
+    healthScore: score,
+    health_score: score,
     passed,
     passedStrict,
     passed_strict: passedStrict,
@@ -2655,4 +2662,65 @@ export function auditCognitiveContext(
     duration_ms: durationMs
   };
 }
+
+/**
+ * Formats cognitive audit result into human-readable terminal output with severity badges and gauges.
+ */
+export function formatCognitiveAuditHumanOutput(
+  result: CognitiveAuditResult,
+  targetDisplayPath?: string
+): string {
+  const lines: string[] = [];
+
+  lines.push(pc.bold(pc.cyan("\n🪆 Matryoshka Cognitive Context Linter (baba agents audit)")));
+  lines.push(`  ${pc.dim("•")} ${pc.bold("Target Path:")}      ${targetDisplayPath || result.summary.targetPath}`);
+
+  let scoreColor = pc.red;
+  let statusBadge = pc.red("FAIL (diluted attention risk)");
+  if (result.score >= 90) {
+    scoreColor = pc.green;
+    statusBadge = pc.green("PASS (optimal)");
+  } else if (result.score >= 75) {
+    scoreColor = pc.yellow;
+    statusBadge = pc.yellow("WARN (acceptable with warnings)");
+  }
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Health Score:")}     ${scoreColor(
+      `${result.score} / 100`
+    )} [${statusBadge}]`
+  );
+
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Estimated Tokens:")} ${result.summary.estimatedTokens} (budget: 200 warn, 250 fail)`
+  );
+  lines.push(
+    `  ${pc.dim("•")} ${pc.bold("Rules Audited:")}    ${result.summary.totalRules} (fail: ${result.summary.failedCount}, warn: ${result.summary.warnCount}, pass: ${result.summary.passedCount})`
+  );
+
+  if (result.violations.length > 0) {
+    lines.push(pc.bold(pc.cyan("\n⚠️  Cognitive Antipattern Violations:")));
+    for (const v of result.violations) {
+      const badge =
+        v.severity === "fail"
+          ? pc.bgRed(pc.white(" FAIL "))
+          : pc.bgYellow(pc.black(" WARN "));
+      const loc = v.line ? `:${v.line}` : "";
+      lines.push(`  ${badge} ${pc.bold(v.ruleId)} ${pc.dim(`(${v.file}${loc})`)}`);
+      lines.push(`     ${v.message}`);
+      if (v.snippet) {
+        lines.push(`     ${pc.dim("Snippet:")} ${pc.italic(v.snippet)}`);
+      }
+      if (v.suggestion) {
+        lines.push(`     ${pc.cyan("Suggestion:")} ${v.suggestion}`);
+      }
+    }
+  } else {
+    lines.push(pc.green("\n  ✨ No cognitive antipatterns detected. Prompt context is optimal."));
+  }
+
+  lines.push(`\n  ${pc.dim(`Completed in ${result.durationMs}ms`)}\n`);
+  return lines.join("\n");
+}
+
 
