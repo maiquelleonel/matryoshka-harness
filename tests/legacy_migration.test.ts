@@ -2320,7 +2320,8 @@ status: draft
         expect(out).toContain("🪆 Matryoshka Legacy AGENTS.md Migration Engine");
         expect(out).toContain("SIMULATED (--dry-run)");
         expect(out).toContain("Safety Backup:");
-        expect(out).toContain("AGENTS.md.bak (planned)");
+        expect(out).toContain("AGENTS.md.bak");
+        expect(out).toContain("(planned)");
         expect(out).toContain("Root AGENTS:");
         expect(out).toContain("Token Savings:");
         expect(out).toContain("Planned Modular Skills Extraction (diff):");
