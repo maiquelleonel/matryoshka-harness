@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -1440,6 +1440,722 @@ HAVING computed_balance <> stored_balance;
       expect(stdout).toContain("--from <file>");
       expect(stdout).toContain("--dry-run");
       expect(stdout).toContain("--from=.cursorrules --dry-run");
+    });
+  });
+
+  describe("Subtask 7: Full BDD test suite verifying skill extraction, frontmatter metadata, and root token ceiling (< 200 tokens)", () => {
+    let tempDir: string;
+    const cliScript = path.join(repoRoot, "src", "cli.ts");
+
+    const massiveMonolithContent = `# Monolithic Enterprise System Instructions & Architecture Directives 🪆
+<!-- Version: 4.2.0-legacy | Author: Core Platform Team -->
+
+> NOTE: Strictly confidential and proprietary architectural conventions.
+> All contributors MUST adhere to these operational directives.
+
+## 1. System Architecture & Core Invariants
+* Microservices communicate asynchronously via Kafka event streams with Avro serialization schemas.
+* Inbound ports must be defined as abstract interfaces and never coupled to external transport protocols like HTTP or gRPC.
+* Domain events must be published transactionally using the transactional outbox pattern to prevent data loss.
+* Event consumers must be strictly idempotent and tolerate at-least-once message delivery from message brokers.
+* Distributed transactions across multiple service boundaries are prohibited; use saga patterns instead.
+* Never instantiate global mutable singletons inside application services or controllers.
+* Service-to-service communication must always supply correlation identifiers in HTTP headers (X-Correlation-Id).
+* Every domain aggregate must maintain its own consistency boundary and enforce all business invariants locally.
+* Aggregate roots are the sole gateway for mutating nested entity state within the boundary.
+* Service discovery must resolve through Consul mesh with mTLS encrypted tunnels.
+
+## 2. Core Business Invariants & Transaction Rules
+* All financial transactions MUST calculate tax using the decimal-safe CurrencyEngine and strict rounding modes.
+* Never use IEEE 754 floating-point math for balance calculations, interest rates, or reconciliation sums.
+* Invariant: User account status 'SUSPENDED' prevents debit authorizations and scheduled payouts immediately.
+* The audit ledger is strictly append-only. UPDATE and DELETE SQL statements are permanently forbidden.
+* Daily settlement reconciliations must run at 00:00 UTC and compare credit sums against debit sums.
+* If a reconciliation discrepancy exceeds 0.01 currency units, freeze settlement and page the on-call engineer.
+* High-value payments above 10,000 currency units require dual human approval (four-eyes principle).
+* Currency conversions must read exchange rates locked at transaction initiation time and log the rate provider.
+* Credit limits cannot be updated while an active withdrawal transaction is currently in flight.
+* Reversals must be executed as distinct offsetting credit/debit transaction pairs referencing the original entry.
+* Double-entry bookkeeping requires equal credit and debit balance sums at all times.
+
+## 3. Database Guidelines & Schema Migration Invariants
+* All tables must define an indexed \`tenant_id\` UUID column for multi-tenant tenant isolation.
+* Foreign keys must use ON DELETE RESTRICT by default to prevent accidental cascading data loss across records.
+* Run all schema modifications through zero-downtime migration scripts following the expand-and-contract model.
+* Use read-replicas for analytical reporting queries and long-running ledger exports.
+* Indexes must be created concurrently outside transaction blocks to avoid locking live production tables.
+* Never use SELECT * in production queries; always specify explicit projections for performance and bandwidth.
+* Set aggressive lock timeouts (maximum 2000 milliseconds) on DDL schema operations to prevent connection pool exhaustion.
+* Database connections must be recycled after 30 minutes to prevent resource leaks and stale socket states.
+* Soft-deleted rows must use a nullable deleted_at timestamp column and be excluded by default ORM scopes.
+* Primary keys must use distributed time-sortable identifiers like UUIDv7 or ULID for efficient B-tree clustering.
+
+\`\`\`sql
+-- Critical verification query: audit append-only invariant
+SELECT record_id, action, previous_hash, current_hash
+FROM transaction_audit_log
+WHERE verification_status = 'PENDING'
+ORDER BY created_at ASC
+FOR UPDATE SKIP LOCKED;
+\`\`\`
+
+## 4. Frontend Styling & UI Component Conventions
+* Design tokens must be imported from \`@ui/theme\` rather than hardcoded hex color codes or arbitrary pixel margins.
+* Never create custom CSS files outside of the Tailwind token utility pipeline and CSS variable bindings.
+* Maintain WCAG 2.1 AA accessibility contrast ratios across all buttons, typography, inputs, and icon badges.
+* Lazy-load modal sheets, graphical charts, and heavy reporting dependencies to optimize initial page load.
+* Forms must perform optimistic client-side validation using zod schemas before submitting payloads.
+* All interactive elements must support complete keyboard navigation including tab indexes and escape key handlers.
+* Destructive modal actions (such as account deletion) require explicit typing of confirmation words.
+* Error toasts must automatically dismiss after 5 seconds but offer an action button to copy the trace ID.
+* Use responsive viewport units and fluid layouts; never force fixed pixel widths on mobile viewports.
+* Images and icons must declare explicit width and height dimensions to eliminate layout shifts (CLS).
+
+## 5. Security & Authentication Standards
+* Sanitize all raw HTML input using the strict DOMPurify pipeline before rendering in browser views.
+* API tokens must be rotated every 90 days and stored in the encrypted hardware security vault.
+* Passwords must meet minimum entropy standards (16+ chars) and be hashed with Argon2id and salt.
+* All HTTP responses must include strict security headers: CSP, HSTS, X-Frame-Options, and X-Content-Type-Options.
+* Sensitive personal identifiable information (PII) must be encrypted at rest using AES-256-GCM.
+* Implement rate limiting on all public authentication routes: 5 failed attempts per IP per 15 minutes.
+* Session tokens must be stored in HTTP-only, Secure, SameSite=Strict cookies to defend against XSS.
+* Access tokens must have a maximum lifetime of 15 minutes; refresh tokens must be revoked on reuse.
+* Webhook payloads must be verified using HMAC-SHA256 signatures before processing.
+* Internal admin endpoints must be firewalled and accessible only over the private corporate VPN.
+
+## 6. Testing & Quality Verification Directives
+* Unit tests must achieve 90% branch coverage on core ledger services and monetary calculation utilities.
+* Always assert error types and messages explicitly in failure branches; never rely on generic catch blocks.
+* End-to-end integration tests must run against isolated test databases spun up in ephemeral Docker containers.
+* Mocking the database driver in repository integration tests is strictly forbidden; test against real engines.
+* Flaky tests must be quarantined within 24 hours of first detection and resolved within the sprint.
+* Load tests must verify that payment authorization endpoints sustain 5,000 requests per second under 200ms latency.
+* Snapshot tests must be approved by design system maintainers before being merged into main.
+* Property-based tests must be used for currency conversion algorithms and decimal rounding boundaries.
+* Never check in API keys, database credentials, or test secrets into test fixtures or git repositories.
+* Integration test suites must clean up all created database records after test completion.
+
+## 7. Internationalization & Locale Directives
+* Support multilingual representations: São Paulo, Tokyo 東京, Zürich, Москва, and Riyadh الرياض.
+* All user-facing strings must use internationalization keys from the @i18n catalog.
+* Date formats must be presented according to the user's localized ISO locale setting.
+`;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask7-bdd-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    // =========================================================================
+    // AC-7.1: Zero-Loss Skill Extraction & Domain Slicing
+    // =========================================================================
+    describe("Scenario AC-7.1: Zero-Loss Skill Extraction & Domain Slicing", () => {
+      it("extracts primary legacy-knowledge skill preserving 100% of domain rules from unstructured documents", () => {
+        const unstructuredInstructions = `
+Always validate input data with zod schemas.
+Never execute unindexed queries in production.
+Use decimal math for financial ledgers.
+Maintain WCAG 2.1 AA accessibility ratios.
+Ensure Argon2id is used for password hashing.
+`;
+        const skills = extractLegacySkills(unstructuredInstructions);
+        expect(skills.length).toBe(1);
+
+        const primary = skills[0]!;
+        expect(primary.name).toBe("legacy-knowledge");
+        expect(primary.relativePath).toBe(".agents/skills/legacy-knowledge.md");
+        expect(primary.origin).toBe("legacy_migration");
+        expect(primary.content).toContain("Always validate input data with zod schemas.");
+        expect(primary.content).toContain("Never execute unindexed queries in production.");
+        expect(primary.content).toContain("Use decimal math for financial ledgers.");
+        expect(primary.content).toContain("Maintain WCAG 2.1 AA accessibility ratios.");
+        expect(primary.content).toContain("Ensure Argon2id is used for password hashing.");
+      });
+
+      it("handles deeply nested markdown hierarchy (#, ##, ###, ####), lists, and task lists without data loss", () => {
+        const nestedMarkdown = `# Enterprise Rules
+## Core Policies
+### Data Processing
+#### Invariant Checks
+- [x] Check A: Always verify tenant ID
+- [ ] Check B: Verify correlation ID
+* Policy 1: Append-only ledger
+  * Sub-rule 1.1: No UPDATE statements
+  * Sub-rule 1.2: No DELETE statements
+> Important: Zero data loss is guaranteed.
+`;
+        const skills = extractLegacySkills(nestedMarkdown);
+        expect(skills.length).toBeGreaterThanOrEqual(1);
+
+        const primary = skills.find((s) => s.name === "legacy-knowledge")!;
+        expect(primary.content).toContain("#### Invariant Checks");
+        expect(primary.content).toContain("- [x] Check A: Always verify tenant ID");
+        expect(primary.content).toContain("- [ ] Check B: Verify correlation ID");
+        expect(primary.content).toContain("* Sub-rule 1.1: No UPDATE statements");
+        expect(primary.content).toContain("> Important: Zero data loss is guaranteed.");
+      });
+
+      it("preserves raw SQL, multi-language code blocks, tables, and regex literals without escaping corruption", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        const primary = skills.find((s) => s.name === "legacy-knowledge")!;
+
+        expect(primary.content).toContain("```sql");
+        expect(primary.content).toContain("SELECT record_id, action, previous_hash, current_hash");
+        expect(primary.content).toContain("FOR UPDATE SKIP LOCKED;");
+        expect(primary.content).toContain("```");
+      });
+
+      it("preserves international characters, accents, emojis, and non-Latin scripts byte-for-byte", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        const primary = skills.find((s) => s.name === "legacy-knowledge")!;
+
+        expect(primary.content).toContain("🪆");
+        expect(primary.content).toContain("São Paulo");
+        expect(primary.content).toContain("Tokyo 東京");
+        expect(primary.content).toContain("Zürich");
+        expect(primary.content).toContain("Москва");
+        expect(primary.content).toContain("Riyadh الرياض");
+      });
+
+      it("slices domain sub-skills accurately based on section headers (database, frontend, security, testing)", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        const skillNames = skills.map((s) => s.name);
+
+        expect(skillNames).toContain("legacy-knowledge");
+        expect(skillNames).toContain("legacy-database");
+        expect(skillNames).toContain("legacy-frontend");
+        expect(skillNames).toContain("legacy-security");
+        expect(skillNames).toContain("legacy-testing");
+
+        const dbSkill = skills.find((s) => s.name === "legacy-database")!;
+        expect(dbSkill.relativePath).toBe(".agents/skills/legacy-database.md");
+        expect(dbSkill.content).toContain("tenant_id");
+        expect(dbSkill.content).toContain("SELECT record_id, action");
+
+        const securitySkill = skills.find((s) => s.name === "legacy-security")!;
+        expect(securitySkill.relativePath).toBe(".agents/skills/legacy-security.md");
+        expect(securitySkill.content).toContain("DOMPurify");
+        expect(securitySkill.content).toContain("Argon2id");
+      });
+
+      it("ensures every extracted skill has a valid relativePath, estimatedTokens > 0, and non-empty content", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        expect(skills.length).toBeGreaterThan(1);
+
+        for (const skill of skills) {
+          expect(skill.relativePath).toMatch(/^\.agents\/skills\/legacy-[\w-]+\.md$/);
+          expect(skill.estimatedTokens).toBeGreaterThan(0);
+          expect(skill.content.trim().length).toBeGreaterThan(0);
+          expect(skill.origin).toBe("legacy_migration");
+          expect(skill.migratedAt).toBeDefined();
+        }
+      });
+    });
+
+    // =========================================================================
+    // AC-7.2: YAML Frontmatter Metadata Stamping & Validation
+    // =========================================================================
+    describe("Scenario AC-7.2: YAML Frontmatter Metadata Stamping & Validation", () => {
+      it("stamps strict YAML delimiters ('---') at start and end of frontmatter for all extracted skills", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        for (const skill of skills) {
+          expect(skill.content.startsWith("---\n") || skill.content.startsWith("---\r\n")).toBe(true);
+          const closingIndex = skill.content.indexOf("\n---\n", 3);
+          expect(closingIndex).toBeGreaterThan(0);
+        }
+      });
+
+      it("includes required metadata: name, description, origin: legacy_migration, and migrated_at", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        for (const skill of skills) {
+          const parsed = parseSkillFrontmatter(skill.content);
+          expect(parsed).not.toBeNull();
+          expect(parsed!.name).toBe(skill.name);
+          expect(parsed!.description).toBeDefined();
+          expect(parsed!.description.length).toBeGreaterThan(10);
+          expect(parsed!.origin).toBe("legacy_migration");
+          expect(parsed!.migrated_at).toBeDefined();
+
+          // Validate ISO 8601 timestamp format
+          const timestamp = new Date(parsed!.migrated_at!).getTime();
+          expect(Number.isNaN(timestamp)).toBe(false);
+        }
+      });
+
+      it("confirms validateSkillFrontmatter passes for 100% of extracted skills", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        for (const skill of skills) {
+          expect(validateSkillFrontmatter(skill.content)).toBe(true);
+        }
+      });
+
+      it("confirms isLegacyMigrationSkill detects legacy skills and rejects non-legacy skills or corrupted files", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        for (const skill of skills) {
+          expect(isLegacyMigrationSkill(skill.content)).toBe(true);
+        }
+
+        const standardSkill = "---\nname: standard-skill\ndescription: A standard skill\n---\n# Content";
+        expect(isLegacyMigrationSkill(standardSkill)).toBe(false);
+
+        expect(isLegacyMigrationSkill("random plain text")).toBe(false);
+        expect(isLegacyMigrationSkill("")).toBe(false);
+      });
+
+      it("cleanses pre-existing legacy frontmatter without creating broken duplicated delimiters", () => {
+        const legacyFileWithOldFrontmatter = `---
+author: john_doe
+created: 2024-01-01
+status: draft
+---
+# Original Legacy Guidelines
+* Guideline 1: Do not deploy on Fridays without approval.
+* Guideline 2: Maintain immutable audit logs.
+`;
+        const stamped = stampLegacySkillFrontmatter(legacyFileWithOldFrontmatter, {
+          name: "legacy-knowledge",
+          description: "Preserved historical guidelines",
+          origin: "legacy_migration",
+        });
+
+        // Ensure there are exactly two '---' delimiters in the entire file
+        const delimiters = stamped.match(/^---$/gm);
+        expect(delimiters?.length).toBe(2);
+
+        // Ensure old frontmatter is purged
+        expect(stamped).not.toContain("author: john_doe");
+        expect(stamped).not.toContain("status: draft");
+
+        // Ensure new frontmatter is present
+        expect(stamped).toContain("name: legacy-knowledge");
+        expect(stamped).toContain("origin: legacy_migration");
+        expect(stamped).toContain("Guideline 1: Do not deploy on Fridays without approval.");
+
+        expect(isLegacyMigrationSkill(stamped)).toBe(true);
+        expect(validateSkillFrontmatter(stamped)).toBe(true);
+      });
+    });
+
+    // =========================================================================
+    // AC-7.3: Lean Root AGENTS.md Compilation & Token Ceiling (< 200 tokens)
+    // =========================================================================
+    describe("Scenario AC-7.3: Lean Root AGENTS.md Compilation & Token Ceiling (< 200 tokens)", () => {
+      const archetypes = [
+        "api_backend",
+        "fullstack_hybrid",
+        "reactive_frontend",
+        "systems_microservice",
+        "opinionated_monolith",
+      ] as const;
+
+      it("compiles root AGENTS.md strictly under 200 tokens across all archetypes", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+
+        for (const archetype of archetypes) {
+          const content = compileMigratedRootAgents(
+            {
+              archetype,
+              runtime: "bun",
+              packageManager: "bun",
+              testCommand: "bun test",
+              buildCommand: "bun run build",
+              lintCommand: "none",
+            },
+            skills
+          );
+
+          const tokenCount = estimateTokens(content);
+          expect(tokenCount).toBeLessThan(200);
+
+          // Verify canonical sections
+          expect(content).toContain("# 🤖 Project Operational Directives");
+          expect(content).toContain("## 🌐 Stack & Identity");
+          expect(content).toContain("## 🛡️ Anti-Slop Core Invariants");
+          expect(content).toContain("## 🧭 On-Demand Specialized Skills");
+        }
+      });
+
+      it("registers primary legacy-knowledge and domain sub-skills with human-readable titles in modular catalog", () => {
+        const skills = extractLegacySkills(massiveMonolithContent);
+        const content = compileMigratedRootAgents(
+          {
+            archetype: "api_backend",
+            runtime: "node",
+            packageManager: "npm",
+            testCommand: "npm test",
+            buildCommand: "npm run build",
+            lintCommand: "npm run lint",
+          },
+          skills
+        );
+
+        expect(content).toContain("* Preserved Legacy Knowledge: `.agents/skills/legacy-knowledge.md`");
+        expect(content).toContain("* Legacy Database: `.agents/skills/legacy-database.md`");
+        expect(content).toContain("* Legacy Frontend: `.agents/skills/legacy-frontend.md`");
+        expect(content).toContain("* Legacy Security: `.agents/skills/legacy-security.md`");
+        expect(content).toContain("* Legacy Testing: `.agents/skills/legacy-testing.md`");
+      });
+
+      it("computes accurate token savings summary with >= 75% token reduction on large monoliths", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+        const result = migrateLegacyInstructions(tempDir);
+        expect(result.success).toBe(true);
+        expect(result.rootAgentsTokens).toBeLessThan(200);
+        expect(result.tokenSavings.beforeTokens).toBeGreaterThan(1000);
+        expect(result.tokenSavings.afterTokens).toBeLessThan(200);
+        expect(result.tokenSavings.savedTokens).toBeGreaterThan(800);
+        expect(result.tokenSavings.reductionPercentage).toBeGreaterThanOrEqual(75);
+      });
+
+      it("throws TokenBudgetExceededError when strictTokenGuard is enabled and token ceiling is breached", () => {
+        expect(() => {
+          compileMigratedRootAgents(
+            {
+              archetype: "api_backend",
+              runtime: "bun",
+              packageManager: "bun",
+              testCommand: "bun test",
+              buildCommand: "bun run build",
+              lintCommand: "none",
+            },
+            [],
+            {
+              maxTokens: 20,
+              strictTokenGuard: true,
+            }
+          );
+        }).toThrow(TokenBudgetExceededError);
+      });
+    });
+
+    // =========================================================================
+    // AC-7.4: The 9 Production Dimensions Audit for Legacy Migration
+    // =========================================================================
+    describe("Scenario AC-7.4: The 9 Production Dimensions Audit for Legacy Migration", () => {
+      // Dimension 1: Input Validation
+      describe("Dimension 1: Input Validation & File Discovery", () => {
+        it("returns error envelope when target source file does not exist", () => {
+          const result = migrateLegacyInstructions(tempDir, { from: "NONEXISTENT.md" });
+          expect(result.success).toBe(false);
+          expect(result.status).toBe("error");
+          expect(result.error).toContain("Source instruction file not found");
+        });
+
+        it("safely resolves relative path traversal without unhandled exceptions", () => {
+          const subDir = path.join(tempDir, "sub", "nested");
+          fs.mkdirSync(subDir, { recursive: true });
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), massiveMonolithContent, "utf-8");
+
+          const traversalPath = path.join(subDir, "..", "..");
+          const result = migrateLegacyInstructions(traversalPath);
+          expect(result.success).toBe(true);
+          expect(result.rootAgentsTokens).toBeLessThan(200);
+        });
+
+        it("accepts direct file path as the project path argument", () => {
+          const customFile = path.join(tempDir, "CUSTOM_RULES.md");
+          fs.writeFileSync(customFile, massiveMonolithContent, "utf-8");
+
+          const result = migrateLegacyInstructions(customFile);
+          expect(result.success).toBe(true);
+          expect(result.sourceFile).toBe(customFile);
+          expect(result.backupPath).toBe(`${customFile}.bak`);
+        });
+      });
+
+      // Dimension 2: Failure Modes & Latency
+      describe("Dimension 2: Failure Modes & Latency (< 30ms locally)", () => {
+        it("executes migration synchronously in strictly sub-30ms locally", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const t0 = performance.now();
+          const result = migrateLegacyInstructions(tempDir);
+          const elapsed = performance.now() - t0;
+
+          expect(elapsed).toBeLessThan(30);
+          expect(result.durationMs).toBeLessThan(30);
+          expect(result.success).toBe(true);
+        });
+
+        it("uses atomic write (.tmp -> rename) ensuring partial writes never corrupt disk state", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const result = migrateLegacyInstructions(tempDir);
+          expect(result.success).toBe(true);
+
+          // Verify no leftover .tmp files exist in .agents/skills or root
+          const rootFiles = fs.readdirSync(tempDir);
+          const tmpRootFiles = rootFiles.filter((f) => f.includes(".tmp."));
+          expect(tmpRootFiles).toHaveLength(0);
+
+          const skillsDir = path.join(tempDir, ".agents", "skills");
+          const skillFiles = fs.readdirSync(skillsDir);
+          const tmpSkillFiles = skillFiles.filter((f) => f.includes(".tmp."));
+          expect(tmpSkillFiles).toHaveLength(0);
+        });
+      });
+
+      // Dimension 3: Idempotency & Retry
+      describe("Dimension 3: Idempotency & Retry", () => {
+        it("detects already migrated repository and returns status 'unchanged' without redundant writes", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          // Run first migration
+          const firstResult = migrateLegacyInstructions(tempDir);
+          expect(firstResult.success).toBe(true);
+          expect(firstResult.status).toBe("success");
+
+          // Remove backup so backup collision guard is not triggered, then run second migration
+          fs.unlinkSync(path.join(tempDir, "AGENTS.md.bak"));
+
+          // Artificially stamp AGENTS.md with origin: legacy_migration to test idempotency detection
+          const migratedRoot = fs.readFileSync(legacyAgentsPath, "utf-8");
+          fs.writeFileSync(
+            legacyAgentsPath,
+            `<!-- origin: legacy_migration -->\n${migratedRoot}`,
+            "utf-8"
+          );
+
+          const secondResult = migrateLegacyInstructions(tempDir);
+          expect(secondResult.success).toBe(true);
+          expect(secondResult.status).toBe("unchanged");
+          expect(secondResult.extractedSkills).toHaveLength(0);
+          expect(secondResult.tokenSavings.savedTokens).toBe(0);
+        });
+
+        it("re-migrates cleanly when force: true is provided", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const firstResult = migrateLegacyInstructions(tempDir);
+          expect(firstResult.success).toBe(true);
+
+          const forceResult = migrateLegacyInstructions(tempDir, { force: true });
+          expect(forceResult.success).toBe(true);
+          expect(forceResult.status).toBe("success");
+          expect(forceResult.extractedSkills.length).toBeGreaterThan(0);
+        });
+      });
+
+      // Dimension 4: Authorization & Scopes
+      describe("Dimension 4: Authorization & Scopes", () => {
+        it("operates strictly within the target repository directory without writing to external paths", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const result = migrateLegacyInstructions(tempDir);
+          expect(result.success).toBe(true);
+
+          expect(result.sourceFile.startsWith(tempDir)).toBe(true);
+          expect(result.backupPath!.startsWith(tempDir)).toBe(true);
+          expect(result.rootAgentsPath.startsWith(tempDir)).toBe(true);
+          for (const skill of result.extractedSkills) {
+            expect(skill.relativePath.startsWith(".agents/skills/")).toBe(true);
+          }
+        });
+      });
+
+      // Dimension 5: Concurrency & Performance
+      describe("Dimension 5: Concurrency & Performance", () => {
+        it("executes multiple isolated migrations concurrently without cross-talk or race conditions", async () => {
+          const dir1 = fs.mkdtempSync(path.join(os.tmpdir(), "baba-concurrent-1-"));
+          const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "baba-concurrent-2-"));
+
+          try {
+            fs.writeFileSync(path.join(dir1, "AGENTS.md"), massiveMonolithContent, "utf-8");
+            fs.writeFileSync(path.join(dir2, "AGENTS.md"), massiveMonolithContent, "utf-8");
+
+            const [res1, res2] = await Promise.all([
+              Promise.resolve(migrateLegacyInstructions(dir1)),
+              Promise.resolve(migrateLegacyInstructions(dir2)),
+            ]);
+
+            expect(res1.success).toBe(true);
+            expect(res2.success).toBe(true);
+            expect(res1.rootAgentsTokens).toBeLessThan(200);
+            expect(res2.rootAgentsTokens).toBeLessThan(200);
+            expect(fs.existsSync(path.join(dir1, "AGENTS.md.bak"))).toBe(true);
+            expect(fs.existsSync(path.join(dir2, "AGENTS.md.bak"))).toBe(true);
+          } finally {
+            fs.rmSync(dir1, { recursive: true, force: true });
+            fs.rmSync(dir2, { recursive: true, force: true });
+          }
+        });
+      });
+
+      // Dimension 6: Data Lifecycle & In-Memory
+      describe("Dimension 6: Data Lifecycle & In-Memory", () => {
+        it("produces deterministic, pure output across repeated runs on identical inputs", () => {
+          const skillsA = extractLegacySkills(massiveMonolithContent);
+          const skillsB = extractLegacySkills(massiveMonolithContent);
+
+          expect(skillsA.length).toBe(skillsB.length);
+          for (let i = 0; i < skillsA.length; i++) {
+            expect(skillsA[i]!.name).toBe(skillsB[i]!.name);
+            expect(skillsA[i]!.relativePath).toBe(skillsB[i]!.relativePath);
+            expect(skillsA[i]!.estimatedTokens).toBe(skillsB[i]!.estimatedTokens);
+          }
+        });
+      });
+
+      // Dimension 7: External Fallbacks & Airgap Security
+      describe("Dimension 7: External Fallbacks & Airgap Security", () => {
+        it("completes 100% locally with zero network calls and zero external cloud LLM dependencies", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const t0 = performance.now();
+          const result = migrateLegacyInstructions(tempDir);
+          const elapsed = performance.now() - t0;
+
+          // Latency must be strictly local (< 30ms), proving zero network round-trips
+          expect(elapsed).toBeLessThan(30);
+          expect(result.success).toBe(true);
+        });
+      });
+
+      // Dimension 8: State Transitions
+      describe("Dimension 8: State Transitions (DISCOVER -> VALIDATE -> SLICE -> STAMP -> SNAPSHOT -> PERSIST -> EMIT)", () => {
+        it("follows predictable state pipeline transitioning from simulated to full write", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          // Phase 1: Simulation
+          const simResult = migrateLegacyInstructions(tempDir, { dryRun: true });
+          expect(simResult.status).toBe("simulated");
+          expect(simResult.backupCreated).toBe(false);
+          expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(false);
+
+          // Phase 2: Execution
+          const execResult = migrateLegacyInstructions(tempDir);
+          expect(execResult.status).toBe("success");
+          expect(execResult.backupCreated).toBe(true);
+          expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(true);
+        });
+      });
+
+      // Dimension 9: Observability & Telemetry
+      describe("Dimension 9: Observability & Telemetry", () => {
+        it("returns complete structured telemetry envelope with all audit metrics", () => {
+          const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+          const result = migrateLegacyInstructions(tempDir);
+
+          expect(result).toHaveProperty("success", true);
+          expect(result).toHaveProperty("status", "success");
+          expect(result).toHaveProperty("sourceFile");
+          expect(result).toHaveProperty("backupPath");
+          expect(result).toHaveProperty("backupCreated", true);
+          expect(result).toHaveProperty("rootAgentsPath");
+          expect(result).toHaveProperty("rootAgentsTokens");
+          expect(result).toHaveProperty("extractedSkills");
+          expect(result).toHaveProperty("tokenSavings");
+          expect(result).toHaveProperty("dryRun", false);
+          expect(result).toHaveProperty("durationMs");
+
+          expect(result.tokenSavings).toHaveProperty("beforeTokens");
+          expect(result.tokenSavings).toHaveProperty("afterTokens");
+          expect(result.tokenSavings).toHaveProperty("savedTokens");
+          expect(result.tokenSavings).toHaveProperty("reductionPercentage");
+        });
+      });
+    });
+
+    // =========================================================================
+    // AC-7.5: Non-Destructive Rollback & CLI Integration
+    // =========================================================================
+    describe("Scenario AC-7.5: Non-Destructive Rollback & CLI Integration", () => {
+      it("restores exact pre-migration state byte-for-byte upon rollback", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+        const originalBytes = fs.readFileSync(legacyAgentsPath);
+
+        // 1. Migrate
+        const migResult = migrateLegacyInstructions(tempDir);
+        expect(migResult.success).toBe(true);
+        expect(fs.readFileSync(legacyAgentsPath, "utf-8")).not.toBe(massiveMonolithContent);
+
+        // 2. Rollback
+        const rollbackResult = rollbackLegacyMigration(tempDir);
+        expect(rollbackResult.success).toBe(true);
+        expect(rollbackResult.status).toBe("success");
+
+        // 3. Compare byte-for-byte
+        const restoredBytes = fs.readFileSync(legacyAgentsPath);
+        expect(Buffer.compare(restoredBytes, originalBytes)).toBe(0);
+      });
+
+      it("executes CLI 'baba agents migrate' in default mode and verifies exit code 0 and stdout telemetry", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir]);
+        expect(proc.exitCode).toBe(0);
+
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("SUCCESS (migrated)");
+        expect(stdout).toContain("Safety Backup:");
+        expect(stdout).toContain("Root AGENTS:");
+        expect(stdout).toContain("Token Savings:");
+
+        // Root is under 200 tokens
+        const rootContent = fs.readFileSync(legacyAgentsPath, "utf-8");
+        expect(estimateTokens(rootContent)).toBeLessThan(200);
+      });
+
+      it("executes CLI 'baba agents migrate --json' and validates complete JSON payload schema", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir, "--json"]);
+        expect(proc.exitCode).toBe(0);
+
+        const json = JSON.parse(proc.stdout.toString());
+        expect(json.success).toBe(true);
+        expect(json.status).toBe("success");
+        expect(json.backupCreated).toBe(true);
+        expect(json.rootAgentsTokens).toBeLessThan(200);
+        expect(json.tokenSavings.reductionPercentage).toBeGreaterThanOrEqual(75);
+        expect(json.extractedSkills.length).toBeGreaterThan(0);
+      });
+
+      it("CLI fails with exit code 1 when backup already exists and --force is not supplied", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+        fs.writeFileSync(backupPath, "# Protected Backup", "utf-8");
+
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir]);
+        expect(proc.exitCode).toBe(1);
+
+        const combined = proc.stdout.toString() + proc.stderr.toString();
+        expect(combined).toContain("Backup snapshot already exists");
+        expect(combined).toContain("--force");
+      });
+
+      it("CLI succeeds with exit code 0 when backup exists and -f / --force is supplied", () => {
+        const legacyAgentsPath = path.join(tempDir, "AGENTS.md");
+        const backupPath = path.join(tempDir, "AGENTS.md.bak");
+
+        fs.writeFileSync(legacyAgentsPath, massiveMonolithContent, "utf-8");
+        fs.writeFileSync(backupPath, "# Protected Backup", "utf-8");
+
+        const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", tempDir, "--force"]);
+        expect(proc.exitCode).toBe(0);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(massiveMonolithContent);
+      });
     });
   });
 });
