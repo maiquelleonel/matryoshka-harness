@@ -1,0 +1,16 @@
+# 🧠 CodeBase Memory Ignore (.cbmignore) — Matryoshka Harness
+# Impede que o grafo semântico indexe sites estáticos, docs densas, caches e fixtures
+
+site/
+docs/guide/
+dist/
+build/
+coverage/
+node_modules/
+.git/
+*.html
+*.min.js
+*.min.css
+fixtures/
+storage/
+tmp/
