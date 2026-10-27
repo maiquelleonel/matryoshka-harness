@@ -34,6 +34,8 @@
     "baba": "bun run src/cli.ts",
     "bbyg": "bun run src/cli.ts",
     "matryoshka": "bun run src/cli.ts",
+    "agents": "bun run src/cli.ts agents",
+    "audit": "bun run src/cli.ts agents audit",
     "detect": "bun run src/cli.ts detect",
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",

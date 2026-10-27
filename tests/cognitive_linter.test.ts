@@ -1845,6 +1845,390 @@ ${Array(180).fill("padding instruction rule").join(" ")}
       });
     });
   });
+
+  // =========================================================================
+  // Subtask 9: Alias parity across baba, bbyg, and matryoshka
+  // =========================================================================
+  describe("Subtask 9: Alias parity across `baba`, `bbyg`, and `matryoshka`", () => {
+    let tempDir: string;
+    const cliPath = path.join(repoRoot, "src", "cli.ts");
+    const shellBaba = path.join(repoRoot, "packages", "baba", "bin", "baba.js");
+    const shellBbyg = path.join(repoRoot, "packages", "bbyg", "bin", "bbyg.js");
+    const shellMatryoska = path.join(repoRoot, "packages", "matryoska", "bin", "matryoska.js");
+    const shellMatrioska = path.join(repoRoot, "packages", "matrioska", "bin", "matrioska.js");
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-subtask9-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("ensures CLI help menu parity across baba, bbyg, and matryoshka for agents audit --help", () => {
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const outBaba = procBaba.stdout.toString().trim();
+      const outBbyg = procBbyg.stdout.toString().trim();
+      const outMatryoshka = procMatryoshka.stdout.toString().trim();
+
+      expect(outBaba).toBe(outBbyg);
+      expect(outBaba).toBe(outMatryoshka);
+      expect(outBaba).toContain("Usage: baba agents audit [path] [options]");
+      expect(outBaba).toContain("--strict");
+      expect(outBaba).toContain("--json");
+      expect(outBaba).toContain("token-budget");
+      expect(outBaba).toContain("dead-skills");
+      expect(outBaba).toContain("negative-phrasing-trap");
+      expect(outBaba).toContain("permissive-leak");
+      expect(outBaba).toContain("greedy-preload");
+    });
+
+    it("ensures human-readable audit parity across baba, bbyg, and matryoshka on compliant repository", () => {
+      const healthyContent = `# AGENTS
+## Guidelines
+- ALWAYS write unit tests for critical code paths.
+- PREFER declarative state transitions.
+- ENFORCE zero compiler warnings in build pipeline.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), healthyContent, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const outBaba = procBaba.stdout.toString();
+      const outBbyg = procBbyg.stdout.toString();
+      const outMatryoshka = procMatryoshka.stdout.toString();
+
+      expect(outBaba).toContain("100 / 100");
+      expect(outBbyg).toContain("100 / 100");
+      expect(outMatryoshka).toContain("100 / 100");
+      expect(outBaba).toContain("PASS (optimal)");
+      expect(outBbyg).toContain("PASS (optimal)");
+      expect(outMatryoshka).toContain("PASS (optimal)");
+    });
+
+    it("ensures structured JSON parity across baba, bbyg, and matryoshka for agents audit --json", () => {
+      const content = `# AGENTS
+## Guidelines
+- DO NOT ignore errors
+- Try to format files.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.status).toBe(parsedBbyg.status);
+      expect(parsedBaba.status).toBe(parsedMatryoshka.status);
+      expect(parsedBaba.score).toBe(parsedBbyg.score);
+      expect(parsedBaba.score).toBe(parsedMatryoshka.score);
+      expect(parsedBaba.healthScore).toBe(parsedBbyg.healthScore);
+      expect(parsedBaba.health_score).toBe(parsedMatryoshka.health_score);
+      expect(parsedBaba.passed).toBe(parsedBbyg.passed);
+      expect(parsedBaba.passedStrict).toBe(parsedBbyg.passedStrict);
+      expect(parsedBaba.passed_strict).toBe(parsedMatryoshka.passed_strict);
+      expect(parsedBaba.summary.totalRules).toBe(parsedBbyg.summary.totalRules);
+      expect(parsedBaba.summary.total_rules).toBe(parsedMatryoshka.summary.total_rules);
+      expect(parsedBaba.summary.warnCount).toBe(parsedBbyg.summary.warnCount);
+      expect(parsedBaba.summary.warn_count).toBe(parsedMatryoshka.summary.warn_count);
+      expect(parsedBaba.summary.failedCount).toBe(parsedBbyg.summary.failedCount);
+      expect(parsedBaba.summary.failed_count).toBe(parsedMatryoshka.summary.failed_count);
+      expect(parsedBaba.summary.passedCount).toBe(parsedBbyg.summary.passedCount);
+      expect(parsedBaba.summary.estimatedTokens).toBe(parsedBbyg.summary.estimatedTokens);
+      expect(parsedBaba.violations.length).toBe(parsedBbyg.violations.length);
+      expect(parsedBaba.violations.length).toBe(parsedMatryoshka.violations.length);
+    });
+
+    it("ensures strict mode parity across baba, bbyg, and matryoshka for failing audit (--strict)", () => {
+      const failContent =
+        "# AGENTS\n\n" +
+        Array(350).fill("directive").join(" ") +
+        "\n- [Broken](.agents/skills/missing.md)\n";
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(1);
+      expect(procBbyg.exitCode).toBe(1);
+      expect(procMatryoshka.exitCode).toBe(1);
+
+      expect(procBaba.stderr.toString()).toContain("Strict mode failed");
+      expect(procBbyg.stderr.toString()).toContain("Strict mode failed");
+      expect(procMatryoshka.stderr.toString()).toContain("Strict mode failed");
+    });
+
+    it("ensures combined strict and json parity across baba, bbyg, and matryoshka (--strict --json)", () => {
+      const failContent = "# AGENTS\n\n" + Array(300).fill("bloat").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), failContent, "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--strict", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--strict", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--strict", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(1);
+      expect(procBbyg.exitCode).toBe(1);
+      expect(procMatryoshka.exitCode).toBe(1);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.status).toBe("error");
+      expect(parsedBbyg.status).toBe("error");
+      expect(parsedMatryoshka.status).toBe("error");
+      expect(parsedBaba.passedStrict).toBe(false);
+      expect(parsedBbyg.passedStrict).toBe(false);
+      expect(parsedMatryoshka.passedStrict).toBe(false);
+      expect(parsedBaba.score).toBe(parsedBbyg.score);
+      expect(parsedBaba.score).toBe(parsedMatryoshka.score);
+    });
+
+    it("ensures alias parity when invoked via package.json scripts (bun run baba / bbyg / matryoshka)", () => {
+      const content = `# AGENTS\n- ALWAYS pass tests.\n`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", "baba", "agents", "audit", tempDir, "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", "run", "bbyg", "agents", "audit", tempDir, "--json"]);
+      const procMatryoshka = Bun.spawnSync(["bun", "run", "matryoshka", "agents", "audit", tempDir, "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim().replace(/^.*?\n(?=\{)/s, ""));
+
+      expect(parsedBaba.score).toBe(100);
+      expect(parsedBbyg.score).toBe(100);
+      expect(parsedMatryoshka.score).toBe(100);
+      expect(parsedBaba.passed).toBe(true);
+      expect(parsedBbyg.passed).toBe(true);
+      expect(parsedMatryoshka.passed).toBe(true);
+    });
+
+    it("ensures alias parity through protective shell forwarders (packages/baba, packages/bbyg, packages/matryoska, packages/matrioska)", () => {
+      const content = `# AGENTS\n- ALWAYS write resilient code.\n`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", shellBaba, "agents", "audit", tempDir, "--json"]);
+      const procBbyg = Bun.spawnSync(["bun", "run", shellBbyg, "agents", "audit", tempDir, "--json"]);
+      const procMatryoska = Bun.spawnSync(["bun", "run", shellMatryoska, "agents", "audit", tempDir, "--json"]);
+      const procMatrioska = Bun.spawnSync(["bun", "run", shellMatrioska, "agents", "audit", tempDir, "--json"]);
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoska.exitCode).toBe(0);
+      expect(procMatrioska.exitCode).toBe(0);
+
+      const resBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const resBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const resMatryoska = JSON.parse(procMatryoska.stdout.toString().trim());
+      const resMatrioska = JSON.parse(procMatrioska.stdout.toString().trim());
+
+      expect(resBaba.score).toBe(100);
+      expect(resBbyg.score).toBe(100);
+      expect(resMatryoska.score).toBe(100);
+      expect(resMatrioska.score).toBe(100);
+      expect(resBaba.status).toBe(resBbyg.status);
+      expect(resBaba.passed).toBe(true);
+    });
+
+    it("ensures error boundary parity across baba, bbyg, and matryoshka when AGENTS.md is missing", () => {
+      const emptyDir = path.join(tempDir, "empty");
+      fs.mkdirSync(emptyDir, { recursive: true });
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.status).toBe("error");
+      expect(parsedBbyg.status).toBe("error");
+      expect(parsedMatryoshka.status).toBe("error");
+      expect(parsedBaba.passed).toBe(false);
+      expect(parsedBbyg.passed).toBe(false);
+      expect(parsedMatryoshka.passed).toBe(false);
+      expect(parsedBaba.violations[0]?.id).toBe("token-budget-missing");
+      expect(parsedBbyg.violations[0]?.id).toBe("token-budget-missing");
+      expect(parsedMatryoshka.violations[0]?.id).toBe("token-budget-missing");
+
+      // In strict mode, all exit with code 1
+      const procBabaStrict = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbygStrict = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", emptyDir, "--strict"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshkaStrict = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", emptyDir, "--strict"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBabaStrict.exitCode).toBe(1);
+      expect(procBbygStrict.exitCode).toBe(1);
+      expect(procMatryoshkaStrict.exitCode).toBe(1);
+    });
+
+    it("ensures custom option parity across baba, bbyg, and matryoshka (--max-tokens)", () => {
+      // 150 words -> exceeds 100 max-tokens
+      const content = "# AGENTS\n\n" + Array(150).fill("directive").join(" ");
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--max-tokens", "100", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "baba" } }
+      );
+      const procBbyg = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--max-tokens", "100", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "bbyg" } }
+      );
+      const procMatryoshka = Bun.spawnSync(
+        ["bun", "run", cliPath, "agents", "audit", tempDir, "--max-tokens", "100", "--json"],
+        { env: { ...process.env, BABA_ALIAS: "matryoshka" } }
+      );
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.passed).toBe(false);
+      expect(parsedBbyg.passed).toBe(false);
+      expect(parsedMatryoshka.passed).toBe(false);
+      expect(parsedBaba.violations.some((v: any) => v.ruleId === "token-budget")).toBe(true);
+      expect(parsedBbyg.violations.some((v: any) => v.ruleId === "token-budget")).toBe(true);
+      expect(parsedMatryoshka.violations.some((v: any) => v.ruleId === "token-budget")).toBe(true);
+    });
+
+    it("ensures sub-25ms execution duration across baba, bbyg, and matryoshka audit runs", () => {
+      const content = `# AGENTS\n- ALWAYS run fast.\n`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.durationMs).toBeLessThan(25);
+      expect(parsedBbyg.durationMs).toBeLessThan(25);
+      expect(parsedMatryoshka.durationMs).toBeLessThan(25);
+    });
+
+    it("ensures top-level shorthand parity across baba audit, bbyg audit, and matryoshka audit", () => {
+      const content = `# AGENTS\n- ALWAYS maintain shorthand parity.\n`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const procBaba = Bun.spawnSync(["bun", "run", cliPath, "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "baba" },
+      });
+      const procBbyg = Bun.spawnSync(["bun", "run", cliPath, "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "bbyg" },
+      });
+      const procMatryoshka = Bun.spawnSync(["bun", "run", cliPath, "audit", tempDir, "--json"], {
+        env: { ...process.env, BABA_ALIAS: "matryoshka" },
+      });
+
+      expect(procBaba.exitCode).toBe(0);
+      expect(procBbyg.exitCode).toBe(0);
+      expect(procMatryoshka.exitCode).toBe(0);
+
+      const parsedBaba = JSON.parse(procBaba.stdout.toString().trim());
+      const parsedBbyg = JSON.parse(procBbyg.stdout.toString().trim());
+      const parsedMatryoshka = JSON.parse(procMatryoshka.stdout.toString().trim());
+
+      expect(parsedBaba.command).toBe("agents audit");
+      expect(parsedBbyg.command).toBe("agents audit");
+      expect(parsedMatryoshka.command).toBe("agents audit");
+      expect(parsedBaba.score).toBe(100);
+      expect(parsedBbyg.score).toBe(100);
+      expect(parsedMatryoshka.score).toBe(100);
+    });
+  });
 });
+
 
 

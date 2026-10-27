@@ -279,6 +279,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
   const [command, ...rest] = args;
 
   switch (command) {
+    case "audit": {
+      return runCli(["agents", "audit", ...rest]);
+    }
+
     case "detect": {
       if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
         console.log(DETECT_HELP);

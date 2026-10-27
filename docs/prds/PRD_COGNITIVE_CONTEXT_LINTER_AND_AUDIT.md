@@ -184,4 +184,9 @@ Feature: baba agents audit command
     Given an AGENTS.md containing a code block of 35 lines
     When the user runs "baba agents audit --json"
     Then the output JSON contains a "greedy-preload" warning
+
+  Scenario: Alias parity across baba, bbyg, and matryoshka
+    Given the three canonical aliases of the ecosystem
+    When invoked with "agents audit [path] [--json] [--strict]"
+    Then they produce identical behaviors, exit codes, and structured JSON outputs
 ```
