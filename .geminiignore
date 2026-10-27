@@ -1,5 +1,12 @@
-# 🛡️ Matryoshka Auto-Ignore Gate — Context-Fencing for Wild Repositories (Issue #26)
+# 🛡️ Matryoshka Auto-Ignore Gate — Context-Fencing for Wild Repositories
 # Bloqueia leitura de arquivos massivos/blobs por ferramentas de IA sem afetar testes ou compilação
+
+# Site estático compilado e documentação densa
+site/
+docs/guide/
+dist/
+build/
+coverage/
 
 # Dumps e bancos de dados
 *.sql
@@ -15,7 +22,7 @@
 vendor/
 
 # Fixtures e dados massivos
-fixtures/**/*.json
+fixtures/
 *.csv
 *.parquet
 *.xlsx
