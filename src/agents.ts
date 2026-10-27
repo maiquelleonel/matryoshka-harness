@@ -94,6 +94,7 @@ export interface EstimatedTokenSavings {
 
 export const MAX_ROOT_AGENTS_TOKENS = 250;
 export const TARGET_ROOT_AGENTS_TOKENS = 200;
+export const MAX_CODE_BLOCK_LINES = 25;
 
 export interface TokenGuardReport {
   tokenCount: number;
@@ -2456,6 +2457,157 @@ export function auditCognitiveContext(
         });
       }
     }
+  }
+
+  // Rule 5: greedy-preload (Identifies large raw code/schema dumps > 25 lines)
+  const maxCodeBlockLines = options?.maxCodeBlockLines ?? MAX_CODE_BLOCK_LINES;
+  const isStrict = options?.strict === true;
+  const seenGreedyIds = new Set<string>();
+
+  let inFencedBlock = false;
+  let fenceChars = "";
+  let fenceMinLength = 3;
+  let codeBlockStartLine = 0;
+  let codeBlockLanguage: string | undefined = undefined;
+  let codeBlockLinesCount = 0;
+  let codeBlockSnippet = "";
+
+  let inTableBlock = false;
+  let tableStartLine = 0;
+  let tableLinesCount = 0;
+  let tableSnippet = "";
+
+  const recordGreedyViolation = (
+    type: "code-block" | "table",
+    startLine: number,
+    linesCount: number,
+    snippet: string,
+    language?: string
+  ) => {
+    if (linesCount <= maxCodeBlockLines) {
+      return;
+    }
+    const severity: CognitiveViolationSeverity = isStrict && linesCount > 50 ? "fail" : "warn";
+    const sec = sections.slice().reverse().find((s) => s.startLine <= startLine);
+    const sectionName = sec ? sec.name : "Root Instructions";
+    const sectionMsg = sec && sec.name !== "Root Instructions" ? ` in section "${sec.name}"` : "";
+
+    const typeSlug = type === "table" ? "table" : "code";
+    let greedyId = `greedy-preload-${typeSlug}-line-${startLine}`;
+    if (seenGreedyIds.has(greedyId)) {
+      greedyId = `${greedyId}-${violations.length + 1}`;
+    }
+    seenGreedyIds.add(greedyId);
+
+    const desc =
+      type === "table"
+        ? `Raw markdown table/schema dump starting at line ${startLine}`
+        : `Raw code block (${language ? `${language} ` : ""}starting at line ${startLine})`;
+
+    violations.push({
+      id: greedyId,
+      ruleId: "greedy-preload",
+      rule_id: "greedy-preload",
+      severity,
+      message: `${desc}${sectionMsg} contains ${linesCount} lines, exceeding the ${maxCodeBlockLines}-line threshold (${linesCount} > ${maxCodeBlockLines}). Large raw code or schema preloads trigger cognitive attention dilution.`,
+      file: targetFile,
+      line: startLine,
+      snippet,
+      suggestion:
+        "Move large code blocks, schemas, and extensive table dumps into dedicated modular skill files in '.agents/skills/' and reference them on-demand via markdown links to preserve Turn-Zero token efficiency.",
+      metadata: {
+        linesCount,
+        lines_count: linesCount,
+        lineCount: linesCount,
+        line_count: linesCount,
+        threshold: maxCodeBlockLines,
+        type,
+        language,
+        section: sectionName,
+        startLine,
+        start_line: startLine
+      }
+    });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (typeof rawLine !== "string") {
+      continue;
+    }
+    const lineNumber = i + 1;
+    const trimmed = rawLine.trim();
+
+    // Check fenced code block
+    if (inFencedBlock) {
+      const closeRegex = new RegExp(`^\\s*${fenceChars[0]}{${fenceMinLength},}\\s*$`);
+      if (closeRegex.test(rawLine)) {
+        recordGreedyViolation(
+          "code-block",
+          codeBlockStartLine,
+          codeBlockLinesCount,
+          codeBlockSnippet,
+          codeBlockLanguage
+        );
+        inFencedBlock = false;
+        codeBlockLinesCount = 0;
+      } else {
+        codeBlockLinesCount++;
+      }
+      continue;
+    }
+
+    const fenceMatch = rawLine.match(/^\s*(```+|~~~+)(.*)$/);
+    if (fenceMatch && fenceMatch[1]) {
+      if (inTableBlock) {
+        recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
+        inTableBlock = false;
+        tableLinesCount = 0;
+      }
+
+      inFencedBlock = true;
+      fenceChars = fenceMatch[1];
+      fenceMinLength = fenceMatch[1].length;
+      codeBlockStartLine = lineNumber;
+      codeBlockSnippet = trimmed;
+      const rawLang = fenceMatch[2]?.trim();
+      codeBlockLanguage = rawLang ? rawLang.split(/\s+/)[0] : undefined;
+      codeBlockLinesCount = 0;
+      continue;
+    }
+
+    // Markdown table detection outside fenced blocks
+    const isTableRow = /^\s*\|.*\|\s*$/.test(rawLine);
+    if (isTableRow) {
+      if (!inTableBlock) {
+        inTableBlock = true;
+        tableStartLine = lineNumber;
+        tableSnippet = trimmed;
+        tableLinesCount = 1;
+      } else {
+        tableLinesCount++;
+      }
+    } else {
+      if (inTableBlock) {
+        recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
+        inTableBlock = false;
+        tableLinesCount = 0;
+      }
+    }
+  }
+
+  // Handle unclosed blocks at EOF
+  if (inFencedBlock) {
+    recordGreedyViolation(
+      "code-block",
+      codeBlockStartLine,
+      codeBlockLinesCount,
+      codeBlockSnippet,
+      codeBlockLanguage
+    );
+  }
+  if (inTableBlock) {
+    recordGreedyViolation("table", tableStartLine, tableLinesCount, tableSnippet);
   }
 
   const failedViolations = violations.filter((v) => v.severity === "fail");

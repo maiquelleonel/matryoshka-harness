@@ -744,5 +744,228 @@ if (possible) {
       expect(result.durationMs).toBeLessThan(25);
     });
   });
+
+  describe("Subtask 6: Rule 5 (greedy-preload): Identifies large raw code/schema dumps (> 25 lines) in the root instruction file", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-rule5-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("passes when code blocks and schema dumps are within the threshold (<= 25 lines)", () => {
+      const shortCode = Array(15).fill("console.log('short code');").join("\n");
+      const content = `# AGENTS
+## Examples
+\`\`\`typescript
+${shortCode}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const greedyViolations = result.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(greedyViolations).toHaveLength(0);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.summary.warnCount).toBe(0);
+    });
+
+    it("flags a code block exceeding 25 lines with a warn violation by default", () => {
+      const codeLines = Array(35).fill("const x = 42;").join("\n");
+      const content = `# AGENTS
+## Implementation Details
+\`\`\`typescript
+${codeLines}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const greedyViolations = result.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(greedyViolations).toHaveLength(1);
+
+      const violation = greedyViolations[0];
+      expect(violation.ruleId).toBe("greedy-preload");
+      expect(violation.rule_id).toBe("greedy-preload");
+      expect(violation.severity).toBe("warn");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("```typescript");
+      expect(violation.message).toContain("35");
+      expect(violation.message).toContain("25");
+      expect(violation.suggestion).toContain(".agents/skills/");
+      expect(violation.metadata?.linesCount).toBe(35);
+      expect(violation.metadata?.lines_count).toBe(35);
+      expect(violation.metadata?.threshold).toBe(25);
+      expect(violation.metadata?.language).toBe("typescript");
+      expect(violation.metadata?.type).toBe("code-block");
+
+      expect(result.score).toBe(95); // 100 - 5
+      expect(result.summary.warnCount).toBe(1);
+      expect(result.summary.failedCount).toBe(0);
+      expect(result.passed).toBe(true);
+    });
+
+    it("flags large raw table / schema dumps exceeding 25 lines", () => {
+      const tableRows = Array(30)
+        .fill(0)
+        .map((_, i) => `| user_${i} | active | developer |`)
+        .join("\n");
+      const content = `# AGENTS
+## Database Schema Table
+| user_id | status | role |
+|---|---|---|
+${tableRows}
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const greedyViolations = result.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(greedyViolations).toHaveLength(1);
+
+      const violation = greedyViolations[0];
+      expect(violation.ruleId).toBe("greedy-preload");
+      expect(violation.severity).toBe("warn");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("| user_id | status | role |");
+      expect(violation.metadata?.type).toBe("table");
+      expect(violation.metadata?.linesCount).toBe(32); // header + separator + 30 rows
+      expect(violation.metadata?.threshold).toBe(25);
+    });
+
+    it("promotes violation to fail in strict mode when code block exceeds 50 lines", () => {
+      const largeCode = Array(60).fill("x;").join("\n");
+      const content = `# AGENTS
+## Huge Monolithic Implementation
+\`\`\`javascript
+${largeCode}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      // Non-strict mode: warns
+      const warnResult = auditCognitiveContext(tempDir, { strict: false });
+      const warnViolations = warnResult.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(warnViolations).toHaveLength(1);
+      expect(warnViolations[0].severity).toBe("warn");
+      expect(warnResult.summary.warnCount).toBe(1);
+      expect(warnResult.summary.failedCount).toBe(0);
+      expect(warnResult.score).toBe(95);
+
+      // Strict mode: fails (> 50 lines)
+      const strictResult = auditCognitiveContext(tempDir, { strict: true });
+      const strictViolations = strictResult.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(strictViolations).toHaveLength(1);
+      expect(strictViolations[0].severity).toBe("fail");
+      expect(strictResult.passed).toBe(false);
+      expect(strictResult.passedStrict).toBe(false);
+      expect(strictResult.summary.failedCount).toBe(1);
+      expect(strictResult.score).toBe(85); // 100 - 15
+    });
+
+    it("keeps violation as warn in strict mode when code block is between 26 and 50 lines", () => {
+      const mediumCode = Array(35).fill("const item = 1;").join("\n");
+      const content = `# AGENTS
+## Medium Code Block
+\`\`\`typescript
+${mediumCode}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const strictResult = auditCognitiveContext(tempDir, { strict: true });
+      const violations = strictResult.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(violations).toHaveLength(1);
+      expect(violations[0].severity).toBe("warn");
+      expect(strictResult.summary.warnCount).toBe(1);
+      expect(strictResult.summary.failedCount).toBe(0);
+    });
+
+    it("flags multiple code blocks independently if each exceeds 25 lines", () => {
+      const block1 = Array(30).fill("a;").join("\n");
+      const block2 = Array(40).fill("b;").join("\n");
+      const content = `# AGENTS
+## Block One
+\`\`\`typescript
+${block1}
+\`\`\`
+
+## Block Two
+\`\`\`python
+${block2}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const greedyViolations = result.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(greedyViolations).toHaveLength(2);
+
+      const languages = greedyViolations.map((v) => v.metadata?.language);
+      expect(languages).toContain("typescript");
+      expect(languages).toContain("python");
+
+      expect(result.summary.warnCount).toBe(2);
+      expect(result.score).toBe(90); // 100 - 2 * 5
+    });
+
+    it("supports tilde code fences (~~~)", () => {
+      const codeLines = Array(30).fill("echo 'test'").join("\n");
+      const content = `# AGENTS
+## Shell Script
+~~~bash
+${codeLines}
+~~~
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const greedyViolations = result.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(greedyViolations).toHaveLength(1);
+      expect(greedyViolations[0].snippet).toContain("~~~bash");
+      expect(greedyViolations[0].metadata?.language).toBe("bash");
+      expect(greedyViolations[0].metadata?.linesCount).toBe(30);
+    });
+
+    it("respects custom maxCodeBlockLines option", () => {
+      const codeLines = Array(15).fill("let y = 10;").join("\n");
+      const content = `# AGENTS
+\`\`\`typescript
+${codeLines}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      // Default threshold is 25 -> 15 lines passes
+      const defaultResult = auditCognitiveContext(tempDir);
+      expect(defaultResult.violations.filter((v) => v.ruleId === "greedy-preload")).toHaveLength(0);
+
+      // Custom threshold of 10 -> 15 lines triggers warning
+      const customResult = auditCognitiveContext(tempDir, { maxCodeBlockLines: 10 });
+      const customViolations = customResult.violations.filter((v) => v.ruleId === "greedy-preload");
+      expect(customViolations).toHaveLength(1);
+      expect(customViolations[0].metadata?.threshold).toBe(10);
+      expect(customViolations[0].metadata?.linesCount).toBe(15);
+    });
+
+    it("executes Rule 5 check deterministically in sub-25ms", () => {
+      const codeLines = Array(40).fill("console.log('perf test');").join("\n");
+      const content = `# AGENTS
+\`\`\`typescript
+${codeLines}
+\`\`\`
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.durationMs).toBeLessThan(25);
+    });
+  });
 });
 

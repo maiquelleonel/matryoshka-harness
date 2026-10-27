@@ -1,7 +1,7 @@
 # 📐 SPEC-22: feat(agents): cognitive context linter & turn-zero prompt simulator (`baba agents audit`)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 5: Rule 4 (permissive-leak))  
+**Status:** in_progress (Subtask 6: Rule 5 (greedy-preload))  
 **Gatilho:** Issue #22  
 **Target:** Bun + TypeScript  
 
