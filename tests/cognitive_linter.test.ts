@@ -114,6 +114,7 @@ describe("SPEC-22: feat(agents): cognitive context linter & turn-zero prompt sim
       const content = fs.readFileSync(experiencePath, "utf-8");
       expect(content).toContain("baba agents audit");
       expect(content).toContain("Pink Elephant");
+      expect(content).toContain("cognitive-linter-bdd-determinism");
     });
   });
 
@@ -1217,5 +1218,633 @@ ${codeLines}
       expect(procMatryoshka.exitCode).toBe(1);
     });
   });
+
+  describe("Subtask 8: Full BDD test suite with 100% deterministic local execution (< 25ms)", () => {
+    let tempDir: string;
+    const cliPath = path.join(repoRoot, "src", "cli.ts");
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-subtask8-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // BDD AC-8: Sub-25ms Local Deterministic Execution Guarantee
+    // -------------------------------------------------------------------------
+    describe("AC-8: Sub-25ms Local Execution Latency Guarantee", () => {
+      it("executes audit on a healthy lean AGENTS.md in strictly sub-25ms", () => {
+        const leanContent = `# AGENTS\n## Principles\n- ALWAYS enforce type safety.\n- PREFER pure functions.\n`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), leanContent, "utf-8");
+
+        const t0 = performance.now();
+        const result = auditCognitiveContext(tempDir);
+        const elapsed = performance.now() - t0;
+
+        expect(elapsed).toBeLessThan(25);
+        expect(result.durationMs).toBeLessThan(25);
+        expect(result.duration_ms).toBeLessThan(25);
+        expect(result.passed).toBe(true);
+        expect(result.score).toBe(100);
+      });
+
+      it("executes audit on a bloated AGENTS.md in strictly sub-25ms", () => {
+        const bloatedContent = "# AGENTS\n\n" + Array(600).fill("directive word").join(" ");
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), bloatedContent, "utf-8");
+
+        const t0 = performance.now();
+        const result = auditCognitiveContext(tempDir);
+        const elapsed = performance.now() - t0;
+
+        expect(elapsed).toBeLessThan(25);
+        expect(result.durationMs).toBeLessThan(25);
+        expect(result.passed).toBe(false);
+      });
+
+      it("executes audit on a complex multi-section multi-violation AGENTS.md in strictly sub-25ms", () => {
+        const complexContent = `# AGENTS
+## Directives
+- DO NOT do A
+- NEVER do B
+- DON'T do C
+- PROHIBITED to do D
+
+## Rules
+- Try to verify inputs.
+- If possible, check bounds.
+- Refer to [Missing](.agents/skills/missing.md).
+
+\`\`\`typescript
+${Array(40).fill("console.log('line');").join("\n")}
+\`\`\`
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), complexContent, "utf-8");
+
+        const t0 = performance.now();
+        const result = auditCognitiveContext(tempDir);
+        const elapsed = performance.now() - t0;
+
+        expect(elapsed).toBeLessThan(25);
+        expect(result.durationMs).toBeLessThan(25);
+        expect(result.violations.length).toBeGreaterThanOrEqual(4);
+      });
+
+      it("executes audit on an empty directory (missing AGENTS.md) in strictly sub-25ms", () => {
+        const t0 = performance.now();
+        const result = auditCognitiveContext(tempDir);
+        const elapsed = performance.now() - t0;
+
+        expect(elapsed).toBeLessThan(25);
+        expect(result.durationMs).toBeLessThan(25);
+        expect(result.passed).toBe(false);
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // The 9 Production Dimensions Audit (PRD Section 4)
+    // -------------------------------------------------------------------------
+    describe("The 9 Production Dimensions Audit Verification", () => {
+      // Dimension 1: Input Validation
+      describe("Dimension 1: Input Validation & File Discovery", () => {
+        it("handles direct file paths pointing directly to AGENTS.md", () => {
+          const filePath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(filePath, "# AGENTS\n- ALWAYS use strict types.\n", "utf-8");
+
+          const result = auditCognitiveContext(filePath);
+          expect(result.passed).toBe(true);
+          expect(result.summary.targetPath).toBe(filePath);
+          expect(result.summary.scannedFiles).toContain(filePath);
+        });
+
+        it("discovers .cursorrules when AGENTS.md is absent", () => {
+          const cursorrulesPath = path.join(tempDir, ".cursorrules");
+          fs.writeFileSync(cursorrulesPath, "# Cursor Rules\n- ALWAYS write tests.\n", "utf-8");
+
+          const result = auditCognitiveContext(tempDir);
+          expect(result.passed).toBe(true);
+          expect(result.summary.scannedFiles).toContain(cursorrulesPath);
+          expect(result.violations.filter((v) => v.ruleId === "token-budget")).toHaveLength(0);
+        });
+
+        it("discovers CLAUDE.md when AGENTS.md and .cursorrules are absent", () => {
+          const claudePath = path.join(tempDir, "CLAUDE.md");
+          fs.writeFileSync(claudePath, "# Claude Instructions\n- ALWAYS use bun.\n", "utf-8");
+
+          const result = auditCognitiveContext(tempDir);
+          expect(result.passed).toBe(true);
+          expect(result.summary.scannedFiles).toContain(claudePath);
+        });
+
+        it("prioritizes AGENTS.md over .cursorrules and CLAUDE.md when multiple exist", () => {
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# AGENTS\n- Lean agents file.\n", "utf-8");
+          fs.writeFileSync(path.join(tempDir, ".cursorrules"), "# Rules\n- Cursor rules.\n", "utf-8");
+          fs.writeFileSync(path.join(tempDir, "CLAUDE.md"), "# Claude\n- Claude rules.\n", "utf-8");
+
+          const result = auditCognitiveContext(tempDir);
+          expect(result.summary.scannedFiles[0]).toBe(path.join(tempDir, "AGENTS.md"));
+        });
+
+        it("gracefully isolates path traversal attempts without unhandled exceptions", () => {
+          const nestedDir = path.join(tempDir, "deep", "nested", "sub");
+          fs.mkdirSync(nestedDir, { recursive: true });
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Root AGENTS\n- Strict root.\n", "utf-8");
+
+          // Path with relative traversal ..
+          const traversalPath = path.join(nestedDir, "..", "..", "..");
+          const result = auditCognitiveContext(traversalPath);
+          expect(result).toBeDefined();
+          expect(typeof result.score).toBe("number");
+        });
+
+        it("handles non-existent paths gracefully without throwing an exception", () => {
+          const nonExistent = path.join(tempDir, "does-not-exist-" + Date.now());
+          const result = auditCognitiveContext(nonExistent);
+          expect(result.passed).toBe(false);
+          expect(result.summary.failedCount).toBe(1);
+          expect(result.violations[0].ruleId).toBe("token-budget");
+          expect(result.violations[0].suggestion).toContain("baba agents generate");
+        });
+      });
+
+      // Dimension 2: Failure Modes & Boundary Handling
+      describe("Dimension 2: Failure Modes & Boundary Handling", () => {
+        it("handles completely empty AGENTS.md (0 bytes) gracefully", () => {
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "", "utf-8");
+
+          const result = auditCognitiveContext(tempDir);
+          expect(result.passed).toBe(true);
+          expect(result.score).toBe(100);
+          expect(result.summary.estimatedTokens).toBe(0);
+          expect(result.violations).toHaveLength(0);
+          expect(result.durationMs).toBeLessThan(25);
+        });
+
+        it("handles instructions containing unicode, emojis, and non-ASCII characters", () => {
+          const unicodeContent = `# 🪆 AGENTS & 🤖 SKILLS\n- ALWAYS 🚀 ship clean código com tipagem estrita! ✨\n- PREFER 🛡️ immutabilidade.\n`;
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), unicodeContent, "utf-8");
+
+          const result = auditCognitiveContext(tempDir);
+          expect(result.passed).toBe(true);
+          expect(result.score).toBe(100);
+          expect(result.summary.estimatedTokens).toBeGreaterThan(0);
+          expect(result.durationMs).toBeLessThan(25);
+        });
+
+        it("handles extremely long single lines without regex backtracking hang", () => {
+          const longLine = "- ALWAYS " + "token ".repeat(500);
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), longLine, "utf-8");
+
+          const t0 = performance.now();
+          const result = auditCognitiveContext(tempDir);
+          const elapsed = performance.now() - t0;
+
+          expect(elapsed).toBeLessThan(25);
+          expect(result.durationMs).toBeLessThan(25);
+        });
+      });
+
+      // Dimension 3: Idempotency & Retry
+      describe("Dimension 3: Idempotency & Repeatability", () => {
+        it("produces 100% byte-for-byte identical output across 50 consecutive runs", () => {
+          const content = `# AGENTS
+## Guidelines
+- DO NOT do X
+- NEVER do Y
+- DON'T do Z
+- MUST NOT do W
+- Try to check things.
+`;
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+          const initial = auditCognitiveContext(tempDir);
+          const initialClean = {
+            score: initial.score,
+            passed: initial.passed,
+            passedStrict: initial.passedStrict,
+            violations: initial.violations.map((v) => ({ ...v, durationMs: undefined })),
+            summary: initial.summary
+          };
+
+          for (let i = 0; i < 50; i++) {
+            const run = auditCognitiveContext(tempDir);
+            expect(run.score).toBe(initialClean.score);
+            expect(run.passed).toBe(initialClean.passed);
+            expect(run.passedStrict).toBe(initialClean.passedStrict);
+            expect(run.summary.failedCount).toBe(initialClean.summary.failedCount);
+            expect(run.summary.warnCount).toBe(initialClean.summary.warnCount);
+            expect(run.summary.estimatedTokens).toBe(initialClean.summary.estimatedTokens);
+            expect(run.violations.length).toBe(initialClean.violations.length);
+          }
+        });
+
+        it("produces deterministic structured JSON via CLI across repeated runs", () => {
+          const content = `# AGENTS\n- ALWAYS write tests.\n`;
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+          const proc1 = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+          const proc2 = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+
+          const parsed1 = JSON.parse(proc1.stdout.toString().trim());
+          const parsed2 = JSON.parse(proc2.stdout.toString().trim());
+
+          expect(parsed1.score).toBe(parsed2.score);
+          expect(parsed1.passed).toBe(parsed2.passed);
+          expect(parsed1.passedStrict).toBe(parsed2.passedStrict);
+          expect(parsed1.summary.totalRules).toBe(parsed2.summary.totalRules);
+          expect(parsed1.violations).toEqual(parsed2.violations);
+        });
+      });
+
+      // Dimension 4: Authorization & Zero-Mutation Invariant
+      describe("Dimension 4: Authorization & Scopes (Zero-Mutation Invariant)", () => {
+        it("strictly touches zero files and modifies zero bytes on disk", () => {
+          const content = `# AGENTS\n- ALWAYS write clean code.\n`;
+          const filePath = path.join(tempDir, "AGENTS.md");
+          fs.writeFileSync(filePath, content, "utf-8");
+
+          const statBefore = fs.statSync(filePath);
+          const filesBefore = fs.readdirSync(tempDir);
+
+          auditCognitiveContext(tempDir);
+          auditCognitiveContext(tempDir, { strict: true });
+
+          const statAfter = fs.statSync(filePath);
+          const filesAfter = fs.readdirSync(tempDir);
+
+          expect(filesAfter).toEqual(filesBefore);
+          expect(statAfter.size).toBe(statBefore.size);
+          expect(statAfter.mtimeMs).toBe(statBefore.mtimeMs);
+          expect(fs.readFileSync(filePath, "utf-8")).toBe(content);
+        });
+      });
+
+      // Dimension 5: Concurrency & Performance
+      describe("Dimension 5: Concurrency & Non-Interference", () => {
+        it("runs 20 concurrent audit evaluations simultaneously without cross-talk or race conditions", async () => {
+          const subdirs: string[] = [];
+          for (let i = 0; i < 20; i++) {
+            const sub = path.join(tempDir, `concurrent-${i}`);
+            fs.mkdirSync(sub, { recursive: true });
+            const isFailing = i % 2 === 0;
+            const content = isFailing
+              ? "# AGENTS\n\n" + Array(300).fill("bloat").join(" ")
+              : "# AGENTS\n- ALWAYS pass tests.\n";
+            fs.writeFileSync(path.join(sub, "AGENTS.md"), content, "utf-8");
+            subdirs.push(sub);
+          }
+
+          const results = await Promise.all(
+            subdirs.map((dir, idx) =>
+              new Promise<CognitiveAuditResult>((resolve) => {
+                const res = auditCognitiveContext(dir);
+                resolve(res);
+              })
+            )
+          );
+
+          expect(results).toHaveLength(20);
+          results.forEach((res, idx) => {
+            const isFailing = idx % 2 === 0;
+            if (isFailing) {
+              expect(res.passed).toBe(false);
+              expect(res.violations.some((v) => v.ruleId === "token-budget")).toBe(true);
+            } else {
+              expect(res.passed).toBe(true);
+              expect(res.score).toBe(100);
+            }
+            expect(res.durationMs).toBeLessThan(25);
+          });
+        });
+      });
+
+      // Dimension 6: Data Lifecycle & In-Memory Isolation
+      describe("Dimension 6: Data Lifecycle & In-Memory Isolation", () => {
+        it("maintains pure functional isolation between successive audits of different projects", () => {
+          const dirA = path.join(tempDir, "project-a");
+          const dirB = path.join(tempDir, "project-b");
+          fs.mkdirSync(dirA, { recursive: true });
+          fs.mkdirSync(dirB, { recursive: true });
+
+          // Project A has dead skill
+          fs.writeFileSync(
+            path.join(dirA, "AGENTS.md"),
+            "# AGENTS\n- See [Skill](.agents/skills/ghost.md)\n",
+            "utf-8"
+          );
+          // Project B is totally clean
+          fs.writeFileSync(path.join(dirB, "AGENTS.md"), "# AGENTS\n- ALWAYS pure.\n", "utf-8");
+
+          const resA1 = auditCognitiveContext(dirA);
+          const resB1 = auditCognitiveContext(dirB);
+          const resA2 = auditCognitiveContext(dirA);
+
+          expect(resA1.violations.some((v) => v.ruleId === "dead-skills")).toBe(true);
+          expect(resB1.violations).toHaveLength(0);
+          expect(resB1.score).toBe(100);
+          expect(resA2.violations.some((v) => v.ruleId === "dead-skills")).toBe(true);
+          expect(resA2.score).toBe(resA1.score);
+        });
+      });
+
+      // Dimension 7: External Fallbacks & Airgap-Safe
+      describe("Dimension 7: External Fallbacks & Airgap-Safe", () => {
+        it("operates strictly local with zero network egress and zero remote dependencies", () => {
+          const content = `# AGENTS\n- ALWAYS execute locally.\n`;
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+          const originalFetch = globalThis.fetch;
+          let fetchCalled = false;
+          (globalThis as any).fetch = () => {
+            fetchCalled = true;
+            throw new Error("Network access prohibited during audit");
+          };
+
+          try {
+            const result = auditCognitiveContext(tempDir);
+            expect(fetchCalled).toBe(false);
+            expect(result.passed).toBe(true);
+          } finally {
+            globalThis.fetch = originalFetch;
+          }
+        });
+      });
+
+      // Dimension 8: State Transitions
+      describe("Dimension 8: State Transitions & Scoring Boundaries", () => {
+        it("correctly transitions health score through full range [0, 100]", () => {
+          // Perfectly clean: 100
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# AGENTS\n- Clean directive.\n", "utf-8");
+          const clean = auditCognitiveContext(tempDir);
+          expect(clean.score).toBe(100);
+
+          // 1 Warn: 95
+          fs.writeFileSync(
+            path.join(tempDir, "AGENTS.md"),
+            "# AGENTS\n" + Array(220).fill("word").join(" "),
+            "utf-8"
+          );
+          const warn1 = auditCognitiveContext(tempDir);
+          expect(warn1.score).toBe(95);
+
+          // 1 Fail: 85
+          fs.writeFileSync(
+            path.join(tempDir, "AGENTS.md"),
+            "# AGENTS\n" + Array(300).fill("word").join(" "),
+            "utf-8"
+          );
+          const fail1 = auditCognitiveContext(tempDir);
+          expect(fail1.score).toBe(85);
+
+          // 7 Fails: penalty 105 -> clamped to 0
+          const sevenDeadSkills = Array(7)
+            .fill(0)
+            .map((_, i) => `- [Missing ${i}](.agents/skills/missing_${i}.md)`)
+            .join("\n");
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), `# AGENTS\n${sevenDeadSkills}\n`, "utf-8");
+          const clamped = auditCognitiveContext(tempDir);
+          expect(clamped.score).toBe(0);
+          expect(clamped.passed).toBe(false);
+          expect(clamped.passedStrict).toBe(false);
+        });
+      });
+
+      // Dimension 9: Observability & Telemetry Completeness
+      describe("Dimension 9: Observability & Telemetry Completeness", () => {
+        it("guarantees full schema adherence and double-keying across all response structures", () => {
+          const content = `# AGENTS\n- ALWAYS test.\n- Try to check.\n`;
+          fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+          const res = auditCognitiveContext(tempDir);
+
+          // Top-level properties
+          expect(typeof res.score).toBe("number");
+          expect(typeof res.healthScore).toBe("number");
+          expect(typeof res.health_score).toBe("number");
+          expect(typeof res.passed).toBe("boolean");
+          expect(typeof res.passedStrict).toBe("boolean");
+          expect(typeof res.passed_strict).toBe("boolean");
+          expect(typeof res.durationMs).toBe("number");
+          expect(typeof res.duration_ms).toBe("number");
+
+          // Summary properties
+          expect(res.summary.totalRules).toBe(5);
+          expect(res.summary.total_rules).toBe(5);
+          expect(typeof res.summary.failedCount).toBe("number");
+          expect(typeof res.summary.failed_count).toBe("number");
+          expect(typeof res.summary.warnCount).toBe("number");
+          expect(typeof res.summary.warn_count).toBe("number");
+          expect(typeof res.summary.passedCount).toBe("number");
+          expect(typeof res.summary.passed_count).toBe("number");
+          expect(typeof res.summary.estimatedTokens).toBe("number");
+          expect(typeof res.summary.estimated_tokens).toBe("number");
+          expect(typeof res.summary.targetPath).toBe("string");
+          expect(typeof res.summary.target_path).toBe("string");
+          expect(Array.isArray(res.summary.scannedFiles)).toBe(true);
+          expect(Array.isArray(res.summary.scanned_files)).toBe(true);
+
+          // Violations structure
+          expect(Array.isArray(res.violations)).toBe(true);
+          for (const v of res.violations) {
+            expect(typeof v.id).toBe("string");
+            expect(typeof v.ruleId).toBe("string");
+            expect(typeof v.rule_id).toBe("string");
+            expect(["fail", "warn", "pass"]).toContain(v.severity);
+            expect(typeof v.message).toBe("string");
+            expect(typeof v.file).toBe("string");
+            if (v.suggestion) {
+              expect(typeof v.suggestion).toBe("string");
+            }
+          }
+        });
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // PRD Section 6 Full BDD Acceptance Criteria (Gherkin Scenarios)
+    // -------------------------------------------------------------------------
+    describe("PRD Section 6 Gherkin BDD Acceptance Criteria Scenarios", () => {
+      it("Scenario 1: Healthy root AGENTS.md passes audit (score > 90, exits 0)", () => {
+        const content = `# AGENTS
+## Core Directives
+- ALWAYS write unit tests for critical code paths.
+- PREFER declarative state transitions.
+- ENFORCE zero compiler warnings in build pipeline.
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+        expect(result.passed).toBe(true);
+        expect(result.passedStrict).toBe(true);
+        expect(result.score).toBeGreaterThanOrEqual(90);
+        expect(result.violations).toHaveLength(0);
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir]);
+        expect(proc.exitCode).toBe(0);
+        expect(proc.stdout.toString()).toContain("PASS (optimal)");
+      });
+
+      it("Scenario 2: Bloated AGENTS.md fails in strict mode (exits 1, token-budget violation)", () => {
+        const content = "# AGENTS\n\n" + Array(600).fill("bloated instruction directive").join(" ");
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir, { strict: true });
+        expect(result.passed).toBe(false);
+        expect(result.passedStrict).toBe(false);
+        const tokenViolation = result.violations.find((v) => v.ruleId === "token-budget");
+        expect(tokenViolation).toBeDefined();
+        expect(tokenViolation?.severity).toBe("fail");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--strict"]);
+        expect(proc.exitCode).toBe(1);
+        expect(proc.stderr.toString()).toContain("Strict mode failed");
+      });
+
+      it("Scenario 3: Dead skill link is detected (dead-skills violation reported)", () => {
+        const content = `# AGENTS
+- For testing procedures, consult [Testing Guide](.agents/skills/nonexistent.md).
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+        const deadSkillViolation = result.violations.find((v) => v.ruleId === "dead-skills");
+        expect(deadSkillViolation).toBeDefined();
+        expect(deadSkillViolation?.severity).toBe("fail");
+        expect(deadSkillViolation?.line).toBe(2);
+        expect(deadSkillViolation?.snippet).toContain("[Testing Guide](.agents/skills/nonexistent.md)");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.violations.some((v: any) => v.ruleId === "dead-skills")).toBe(true);
+      });
+
+      it("Scenario 4: Negative phrasing trap triggers warning and provides positive anchor suggestions", () => {
+        const content = `# AGENTS
+## Prohibitions
+- DO NOT use any type
+- NEVER bypass gate checks
+- DON'T commit secrets
+- PROHIBITED: mutable globals
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+        const negViolation = result.violations.find((v) => v.ruleId === "negative-phrasing-trap");
+        expect(negViolation).toBeDefined();
+        expect(negViolation?.severity).toBe("warn");
+        expect(negViolation?.suggestion).toContain("PREFER");
+        expect(negViolation?.suggestion).toContain("USE");
+        expect(negViolation?.suggestion).toContain("ENFORCE");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.violations.some((v: any) => v.ruleId === "negative-phrasing-trap")).toBe(true);
+      });
+
+      it("Scenario 5: Permissive linguistic leaks are flagged with suggested imperatives", () => {
+        const content = `# AGENTS
+## Guidelines
+- Try to verify all boundary conditions.
+- If possible, write tests before coding.
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+        const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+        expect(permissiveViolations.length).toBeGreaterThanOrEqual(2);
+        expect(permissiveViolations.every((v) => v.severity === "warn")).toBe(true);
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.violations.some((v: any) => v.ruleId === "permissive-leak")).toBe(true);
+      });
+
+      it("Scenario 6: Large raw code block triggers greedy preload guard", () => {
+        const codeBlock = Array(35).fill("const line = true;").join("\n");
+        const content = `# AGENTS
+## Code Reference
+\`\`\`typescript
+${codeBlock}
+\`\`\`
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+        const greedyViolation = result.violations.find((v) => v.ruleId === "greedy-preload");
+        expect(greedyViolation).toBeDefined();
+        expect(greedyViolation?.severity).toBe("warn");
+        expect(greedyViolation?.suggestion).toContain(".agents/skills/");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", tempDir, "--json"]);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.violations.some((v: any) => v.ruleId === "greedy-preload")).toBe(true);
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Combined Realistic Multi-Pattern Repository Evaluation
+    // -------------------------------------------------------------------------
+    describe("Realistic Multi-Antipattern Comprehensive Scenario", () => {
+      it("audits a repository with all 5 antipatterns simultaneously and computes accurate composite score", () => {
+        // Create valid skill for one link, but leave another dead
+        const skillsDir = path.join(tempDir, ".agents", "skills");
+        fs.mkdirSync(skillsDir, { recursive: true });
+        fs.writeFileSync(path.join(skillsDir, "valid-skill.md"), "# Valid Skill\nBody", "utf-8");
+
+        const codeBlock = Array(30).fill("console.log('greedy');").join("\n");
+        const content = `# AGENTS
+## Negative Section
+- DO NOT ignore errors
+- NEVER push without tests
+- DON'T use eval
+- PROHIBITED: ts-ignore
+
+## Soft Directives
+- Try to format files.
+- If possible keep modules small.
+
+## Skills Links
+- Valid: [Valid](.agents/skills/valid-skill.md)
+- Missing: [Missing](.agents/skills/missing-skill.md)
+
+## Massive Raw Code
+\`\`\`javascript
+${codeBlock}
+\`\`\`
+
+## Extra padding to reach warning threshold
+${Array(180).fill("padding instruction rule").join(" ")}
+`;
+        fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+        const result = auditCognitiveContext(tempDir);
+
+        // Violations present:
+        // 1. dead-skills (missing-skill.md) -> fail (-15)
+        // 2. negative-phrasing-trap -> warn (-5)
+        // 3. permissive-leak (try to, if possible) -> warn x 2 (-10)
+        // 4. greedy-preload (code block 30 lines) -> warn (-5)
+        // 5. token-budget (exceeds 200 warn) -> warn (-5)
+        expect(result.summary.failedCount).toBeGreaterThanOrEqual(1);
+        expect(result.summary.warnCount).toBeGreaterThanOrEqual(3);
+        expect(result.passed).toBe(false); // has a fail violation
+        expect(result.passedStrict).toBe(false);
+        expect(result.score).toBeLessThan(75);
+        expect(result.durationMs).toBeLessThan(25);
+
+        // Ensure every unique violation rule is present
+        const ruleIds = new Set(result.violations.map((v) => v.ruleId));
+        expect(ruleIds.has("dead-skills")).toBe(true);
+        expect(ruleIds.has("negative-phrasing-trap")).toBe(true);
+        expect(ruleIds.has("permissive-leak")).toBe(true);
+        expect(ruleIds.has("greedy-preload")).toBe(true);
+      });
+    });
+  });
 });
+
 

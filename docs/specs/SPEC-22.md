@@ -1,7 +1,7 @@
 # 📐 SPEC-22: feat(agents): cognitive context linter & turn-zero prompt simulator (`baba agents audit`)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 7: CLI flags: --json and --strict (exit code 1 on failures))  
+**Status:** in_progress (Subtask 8: Full BDD test suite with 100% deterministic local execution (< 25ms))  
 **Gatilho:** Issue #22  
 **Target:** Bun + TypeScript  
 
