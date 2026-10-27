@@ -151,11 +151,38 @@ Options:
 Examples:
   $ baba agents generate --dry-run
   $ baba agents generate --force
+  $ baba agents migrate --from=.cursorrules --dry-run
+  $ baba agents migrate --from=CLAUDE.md
   $ baba agents check
   $ baba agents audit
   $ baba agents audit --strict
   $ baba agents audit ./project --json
   $ baba agents skill backend --json
+`.trim();
+
+const MIGRATE_HELP = `
+Usage: baba agents migrate [path] [options]
+
+Non-destructive legacy instructions migration engine into modular skills.
+
+Arguments:
+  [path]             Target directory or source file (default: current working directory)
+
+Options:
+  --from <file>      Source legacy instruction file (e.g. .cursorrules, CLAUDE.md) (default: AGENTS.md)
+  --dry-run          Simulate execution and token metrics without mutating files on disk
+  --force, -f        Overwrite existing backup snapshot and target files
+  --max-tokens <num> Maximum token limit for compiled root AGENTS.md (default: 200)
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ baba agents migrate
+  $ baba agents migrate --dry-run
+  $ baba agents migrate --from=.cursorrules --dry-run
+  $ baba agents migrate --from=CLAUDE.md
+  $ baba agents migrate ./legacy-project --from=.cursorrules --dry-run
+  $ baba agents migrate --from=.cursorrules --json
 `.trim();
 
 const AUDIT_HELP = `
@@ -420,6 +447,10 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     }
 
     case "agents": {
+      if (rest.includes("migrate") && (rest.includes("--help") || rest.includes("-h") || rest.includes("help"))) {
+        console.log(MIGRATE_HELP);
+        process.exit(0);
+      }
       if (rest.includes("audit") && (rest.includes("--help") || rest.includes("-h") || rest.includes("help"))) {
         console.log(AUDIT_HELP);
         process.exit(0);
@@ -488,7 +519,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         targetDir = positional[0] || process.cwd();
       }
 
-      const resolvedPath = path.resolve(targetDir);
+      let resolvedPath = path.resolve(targetDir);
+      if (subcommand === "migrate" && fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
+        if (!fromFile) {
+          fromFile = path.basename(resolvedPath);
+        }
+        resolvedPath = path.dirname(resolvedPath);
+      }
 
       if (subcommand === "migrate") {
         try {
@@ -527,6 +564,12 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
                   migrationResult.backupPath
                 )}`
               );
+            } else if (migrationResult.dryRun && migrationResult.backupPath) {
+              console.log(
+                `  ${pc.dim("•")} ${pc.bold("Safety Backup:")}  ${pc.yellow(
+                  migrationResult.backupPath
+                )} ${pc.dim("(planned)")}`
+              );
             }
             if (migrationResult.error) {
               console.log(
@@ -538,14 +581,24 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
             console.log(
               `  ${pc.dim("•")} ${pc.bold("Root AGENTS:")}    ${pc.green(
                 migrationResult.rootAgentsPath
-              )} (${pc.yellow(migrationResult.rootAgentsTokens.toString())} tokens)`
+              )} (${pc.yellow(migrationResult.rootAgentsTokens.toString())} tokens)${
+                migrationResult.dryRun ? pc.dim(" (planned)") : ""
+              }`
             );
             console.log(
               `  ${pc.dim("•")} ${pc.bold("Token Savings:")}  ${pc.green(
                 `${migrationResult.tokenSavings.savedTokens} tokens (${migrationResult.tokenSavings.reductionPercentage}% reduction)`
               )}`
             );
-            console.log(pc.bold(pc.cyan("  Extracted Modular Skills:")));
+            console.log(
+              pc.bold(
+                pc.cyan(
+                  migrationResult.dryRun
+                    ? "  Planned Modular Skills Extraction (diff):"
+                    : "  Extracted Modular Skills:"
+                )
+              )
+            );
             for (const skill of migrationResult.extractedSkills) {
               console.log(
                 `    ${pc.dim("•")} ${pc.green(skill.name)} ${pc.dim(

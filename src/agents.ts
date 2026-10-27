@@ -3086,11 +3086,26 @@ export function migrateLegacyInstructions(
   options: LegacyMigrationOptions = {}
 ): LegacyMigrationResult {
   const startTime = performance.now();
-  const root = path.resolve(projectPath);
-  const sourceFileName = options.from || "AGENTS.md";
-  const sourceFilePath = path.isAbsolute(sourceFileName)
-    ? sourceFileName
-    : path.join(root, sourceFileName);
+  let root = path.resolve(projectPath);
+  let sourceFileName = options.from;
+
+  if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+    if (!sourceFileName) {
+      sourceFileName = path.basename(root);
+    }
+    root = path.dirname(root);
+  }
+
+  sourceFileName = sourceFileName || "AGENTS.md";
+  let sourceFilePath: string;
+  if (path.isAbsolute(sourceFileName)) {
+    sourceFilePath = sourceFileName;
+    if (projectPath === process.cwd()) {
+      root = path.dirname(sourceFilePath);
+    }
+  } else {
+    sourceFilePath = path.join(root, sourceFileName);
+  }
 
   const rootAgentsPath = path.join(root, "AGENTS.md");
   const backupPath = `${sourceFilePath}.bak`;
@@ -3285,11 +3300,26 @@ export function rollbackLegacyMigration(
   options: { from?: string } = {}
 ): LegacyRollbackResult {
   const startTime = performance.now();
-  const root = path.resolve(projectPath);
-  const sourceFileName = options.from || "AGENTS.md";
-  const sourceFilePath = path.isAbsolute(sourceFileName)
-    ? sourceFileName
-    : path.join(root, sourceFileName);
+  let root = path.resolve(projectPath);
+  let sourceFileName = options.from;
+
+  if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+    if (!sourceFileName) {
+      sourceFileName = path.basename(root);
+    }
+    root = path.dirname(root);
+  }
+
+  sourceFileName = sourceFileName || "AGENTS.md";
+  let sourceFilePath: string;
+  if (path.isAbsolute(sourceFileName)) {
+    sourceFilePath = sourceFileName;
+    if (projectPath === process.cwd()) {
+      root = path.dirname(sourceFilePath);
+    }
+  } else {
+    sourceFilePath = path.join(root, sourceFileName);
+  }
   const backupPath = `${sourceFilePath}.bak`;
 
   if (!fs.existsSync(backupPath)) {

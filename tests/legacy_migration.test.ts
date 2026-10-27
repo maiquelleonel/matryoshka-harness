@@ -13,6 +13,7 @@ import {
   rollbackLegacyMigration,
   stampLegacySkillFrontmatter,
   validateSkillFrontmatter,
+  type SkillFrontmatter,
 } from "../src/agents";
 import type {
   ExtractedSkill,
@@ -21,7 +22,6 @@ import type {
   LegacyRollbackResult,
   LegacySkillMetadata,
   MigratedRootAgentsOptions,
-  SkillFrontmatter,
   TokenSavingsSummary,
 } from "../src/types";
 
@@ -1077,6 +1077,369 @@ HAVING computed_balance <> stored_balance;
       } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe("Subtask 6: CLI Options: --dry-run (simulation mode without disk mutation) and --from=<file> (e.g. .cursorrules, CLAUDE.md)", () => {
+    const customCursorrulesContent = `# Cursorrules Directives for Enterprise Microservices
+
+## Core Business Invariants & Domain Rules
+* All financial transactions MUST calculate tax using the decimal-safe CurrencyEngine.
+* Never use IEEE 754 floating-point math for balance calculations and rate valuations.
+* Invariant: User account status 'SUSPENDED' prevents debit authorizations immediately.
+* The audit ledger is strictly append-only. UPDATE and DELETE SQL statements are permanently forbidden.
+* Daily settlement reconciliations must run at 00:00 UTC and verify ledger balances.
+* Reversals must be executed as distinct offsetting credit/debit transaction pairs.
+* Invariant: Double-entry bookkeeping must maintain zero balance sum across all accounts.
+
+# Database Guidelines
+* All tables must define an indexed \`tenant_id\` UUID column for multi-tenant isolation.
+* Foreign keys must use ON DELETE RESTRICT by default to prevent accidental cascading data loss.
+* Run all schema modifications through zero-downtime migration scripts.
+* Use read-replicas for analytical reporting queries and background exports.
+* Indexes must be created concurrently outside transaction blocks to prevent table locks.
+
+# Frontend Styling Conventions
+* Design tokens must be imported from \`@ui/theme\` rather than hardcoded hex codes.
+* Never create custom CSS files outside of the Tailwind token utility pipeline.
+* Maintain WCAG 2.1 AA accessibility contrast ratios across all buttons and inputs.
+* Lazy-load modal sheets and heavy graphical chart dependencies.
+* Interactive forms must validate client-side before sending network requests.
+
+# Security Guidelines
+* Sanitize all raw HTML input using the strict DOMPurify pipeline before rendering.
+* API tokens must be rotated every 90 days and stored in the encrypted vault.
+* Passwords must meet minimum entropy standards and be hashed with Argon2id.
+* All HTTP responses must include strict CSP, HSTS, and X-Frame-Options headers.
+* Session tokens must be stored in HTTP-only, Secure, SameSite=Strict cookies.
+`;
+
+    const claudeMdContent = `# Claude Code Project Guidelines
+
+## Core Business Invariants & Domain Rules
+* All ledger entries must be cryptographically signed with ECDSA keys.
+* Never expose unredacted customer PII in application log streams.
+
+# Database Guidelines
+* Run all schema modifications through zero-downtime migration scripts.
+* Use read-replicas for analytical queries.
+`;
+
+    it("simulates migration with --from=.cursorrules and --dry-run without creating or mutating any disk files", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-dryrun-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=.cursorrules",
+          "--dry-run",
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+
+        // Verifies output contains simulation status, planned diff, and token reduction metrics
+        expect(stdout).toContain("SIMULATED (--dry-run)");
+        expect(stdout).toContain("Source File:");
+        expect(stdout).toContain(".cursorrules");
+        expect(stdout).toContain("Token Savings:");
+        expect(stdout).toContain("Planned Modular Skills Extraction (diff):");
+        expect(stdout).toContain("legacy-knowledge");
+        expect(stdout).toContain("legacy-database");
+        expect(stdout).toContain("legacy-frontend");
+        expect(stdout).toContain("legacy-security");
+
+        // Strict verification: zero files created or modified on disk
+        expect(fs.existsSync(path.join(tempDir, ".cursorrules.bak"))).toBe(false);
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+        expect(fs.existsSync(path.join(tempDir, ".agents"))).toBe(false);
+        expect(fs.readFileSync(cursorrulesPath, "utf-8")).toBe(customCursorrulesContent);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("executes migration with --from=.cursorrules in write mode, extracting skills and creating .cursorrules.bak", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-write-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=.cursorrules",
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+
+        expect(stdout).toContain("SUCCESS (migrated)");
+        expect(stdout).toContain(".cursorrules.bak");
+        expect(stdout).toContain("Token Savings:");
+
+        // Backup exists and is byte-for-byte identical to original
+        const backupPath = path.join(tempDir, ".cursorrules.bak");
+        expect(fs.existsSync(backupPath)).toBe(true);
+        expect(fs.readFileSync(backupPath, "utf-8")).toBe(customCursorrulesContent);
+
+        // Modular skills created with zero-loss content
+        const skillPath = path.join(tempDir, ".agents", "skills", "legacy-knowledge.md");
+        expect(fs.existsSync(skillPath)).toBe(true);
+        const skillContent = fs.readFileSync(skillPath, "utf-8");
+        expect(skillContent).toContain("All financial transactions MUST calculate tax using the decimal-safe CurrencyEngine.");
+
+        // Root AGENTS.md created and is under 200 tokens
+        const rootPath = path.join(tempDir, "AGENTS.md");
+        expect(fs.existsSync(rootPath)).toBe(true);
+        const rootContent = fs.readFileSync(rootPath, "utf-8");
+        expect(estimateTokens(rootContent)).toBeLessThan(200);
+        expect(rootContent).toContain(".agents/skills/legacy-knowledge.md");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("simulates and migrates CLAUDE.md with --from=CLAUDE.md", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-claudemd-"));
+      try {
+        const claudePath = path.join(tempDir, "CLAUDE.md");
+        fs.writeFileSync(claudePath, claudeMdContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+
+        // 1. Dry run
+        const procDry = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=CLAUDE.md",
+          "--dry-run",
+        ]);
+        expect(procDry.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(tempDir, "CLAUDE.md.bak"))).toBe(false);
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+
+        // 2. Real migration
+        const procMigrate = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=CLAUDE.md",
+        ]);
+        expect(procMigrate.exitCode).toBe(0);
+
+        expect(fs.existsSync(path.join(tempDir, "CLAUDE.md.bak"))).toBe(true);
+        expect(fs.readFileSync(path.join(tempDir, "CLAUDE.md.bak"), "utf-8")).toBe(claudeMdContent);
+
+        const skillPath = path.join(tempDir, ".agents", "skills", "legacy-knowledge.md");
+        expect(fs.existsSync(skillPath)).toBe(true);
+        expect(fs.readFileSync(skillPath, "utf-8")).toContain("cryptographically signed with ECDSA keys");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("supports --from as a space-separated flag (--from .cursorrules)", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-space-flag-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from",
+          ".cursorrules",
+          "--dry-run",
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("SIMULATED (--dry-run)");
+        expect(stdout).toContain(".cursorrules");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("supports flag permutations: --dry-run before and after target path", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-permutations-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        // Flags before path
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          "--dry-run",
+          "--from=.cursorrules",
+          tempDir,
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(tempDir, ".cursorrules.bak"))).toBe(false);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("emits structured JSON metrics with --from=.cursorrules, --dry-run, and --json without disk mutations", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-json-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=.cursorrules",
+          "--dry-run",
+          "--json",
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        const jsonOutput = JSON.parse(proc.stdout.toString());
+
+        expect(jsonOutput.success).toBe(true);
+        expect(jsonOutput.status).toBe("simulated");
+        expect(jsonOutput.dryRun).toBe(true);
+        expect(jsonOutput.backupCreated).toBe(false);
+        expect(jsonOutput.sourceFile).toBe(cursorrulesPath);
+        expect(jsonOutput.backupPath).toBe(path.join(tempDir, ".cursorrules.bak"));
+        expect(jsonOutput.tokenSavings.savedTokens).toBeGreaterThan(0);
+        expect(jsonOutput.tokenSavings.reductionPercentage).toBeGreaterThan(0);
+        expect(jsonOutput.extractedSkills.length).toBeGreaterThan(0);
+
+        // Confirm zero disk mutations
+        expect(fs.existsSync(path.join(tempDir, ".cursorrules.bak"))).toBe(false);
+        expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("fails with exit 1 and clean error message when custom --from file is missing", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-missing-"));
+      try {
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=.nonexistent-rules",
+        ]);
+
+        expect(proc.exitCode).toBe(1);
+        const combined = proc.stdout.toString() + proc.stderr.toString();
+        expect(combined).toContain("Source instruction file not found");
+        expect(combined).toContain(".nonexistent-rules");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("fails with exit 1 and structured error JSON when custom --from file is missing with --json", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-missing-json-"));
+      try {
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          tempDir,
+          "--from=.nonexistent-rules",
+          "--json",
+        ]);
+
+        expect(proc.exitCode).toBe(1);
+        const jsonOutput = JSON.parse(proc.stdout.toString());
+        expect(jsonOutput.success).toBe(false);
+        expect(jsonOutput.status).toBe("error");
+        expect(jsonOutput.error).toContain("Source instruction file not found");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("supports passing a legacy file directly as the path argument (baba agents migrate /path/to/.cursorrules --dry-run)", () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-subtask6-direct-file-"));
+      try {
+        const cursorrulesPath = path.join(tempDir, ".cursorrules");
+        fs.writeFileSync(cursorrulesPath, customCursorrulesContent, "utf-8");
+
+        const cliScript = path.join(repoRoot, "src", "cli.ts");
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliScript,
+          "agents",
+          "migrate",
+          cursorrulesPath,
+          "--dry-run",
+          "--json",
+        ]);
+
+        expect(proc.exitCode).toBe(0);
+        const jsonOutput = JSON.parse(proc.stdout.toString());
+        expect(jsonOutput.success).toBe(true);
+        expect(jsonOutput.status).toBe("simulated");
+        expect(jsonOutput.sourceFile).toBe(cursorrulesPath);
+        expect(jsonOutput.backupPath).toBe(path.join(tempDir, ".cursorrules.bak"));
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("displays dedicated help for 'baba agents migrate --help' detailing --from and --dry-run", () => {
+      const cliScript = path.join(repoRoot, "src", "cli.ts");
+      const proc = Bun.spawnSync(["bun", "run", cliScript, "agents", "migrate", "--help"]);
+
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("baba agents migrate [path] [options]");
+      expect(stdout).toContain("--from <file>");
+      expect(stdout).toContain("--dry-run");
+      expect(stdout).toContain("--from=.cursorrules --dry-run");
     });
   });
 });
