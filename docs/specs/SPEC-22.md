@@ -1,7 +1,7 @@
 # 📐 SPEC-22: feat(agents): cognitive context linter & turn-zero prompt simulator (`baba agents audit`)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 4: Rule 3 (negative-phrasing-trap))  
+**Status:** in_progress (Subtask 5: Rule 4 (permissive-leak))  
 **Gatilho:** Issue #22  
 **Target:** Bun + TypeScript  
 
@@ -77,6 +77,7 @@ export interface CognitiveAuditOptions {
   warnTokens?: number;           // default: 200
   maxNegativePhrases?: number;   // default: 3
   maxCodeBlockLines?: number;    // default: 25
+  permissivePhrases?: string[];
 }
 
 export function auditCognitiveContext(

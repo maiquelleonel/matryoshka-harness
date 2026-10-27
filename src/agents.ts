@@ -2107,6 +2107,7 @@ export interface CognitiveAuditOptions {
   warnTokens?: number; // default: 200
   maxNegativePhrases?: number; // default: 3
   maxCodeBlockLines?: number; // default: 25
+  permissivePhrases?: string[];
 }
 
 /**
@@ -2376,6 +2377,84 @@ export function auditCognitiveContext(
           positive_anchors: ["PREFER", "USE", "ENFORCE", "ALWAYS"]
         }
       });
+    }
+  }
+
+  // Rule 4: permissive-leak (Detects wishy-washy language in imperative directive contexts)
+  const permissiveRegex =
+    options?.permissivePhrases && options.permissivePhrases.length > 0
+      ? new RegExp(
+          `\\b(${options.permissivePhrases.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+          "gi"
+        )
+      : /\b(try(?:\s+not)?\s+to|if\s+possible|consider|maybe|ideally|(?:we\s+)?usually\s+prefer|if\s+feasible|if\s+you\s+can|might\s+want\s+to|could\s+possibly)\b/gi;
+
+  const seenLeakIds = new Set<string>();
+  let inCodeBlock = false;
+
+  for (let sIndex = 0; sIndex < sections.length; sIndex++) {
+    const sec = sections[sIndex];
+    if (!sec) {
+      continue;
+    }
+
+    for (const l of sec.lines) {
+      const trimmed = l.content.trim();
+      if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      if (inCodeBlock) {
+        continue;
+      }
+
+      const matches = Array.from(l.content.matchAll(permissiveRegex));
+      for (let mIndex = 0; mIndex < matches.length; mIndex++) {
+        const match = matches[mIndex];
+        if (!match) {
+          continue;
+        }
+        const matchedText = match[0];
+        if (!matchedText) {
+          continue;
+        }
+
+        const normalizedPhrase = matchedText.toLowerCase();
+        const leakSlug = normalizedPhrase.replace(/[^a-z0-9]+/g, "-");
+        let leakId = `permissive-leak-${leakSlug}-${l.lineNumber}`;
+        if (seenLeakIds.has(leakId)) {
+          leakId = `${leakId}-${mIndex + 1}`;
+        }
+        seenLeakIds.add(leakId);
+
+        const sectionMsg =
+          sec.name && sec.name !== "Root Instructions"
+            ? ` in section "${sec.name}"`
+            : "";
+
+        violations.push({
+          id: leakId,
+          ruleId: "permissive-leak",
+          rule_id: "permissive-leak",
+          severity: "warn",
+          message: `Permissive language detected${sectionMsg}: "${matchedText}" (${normalizedPhrase}). Directives must use definitive imperatives rather than ambiguous, non-binding suggestions.`,
+          file: targetFile,
+          line: l.lineNumber,
+          snippet: l.content.trim(),
+          suggestion: `Replace permissive phrasing '${matchedText}' (${normalizedPhrase}) with definitive imperatives (e.g., 'ALWAYS', 'MUST', 'ENFORCE', 'REQUIRE') or explicit conditional contracts.`,
+          metadata: {
+            phrase: matchedText,
+            match: matchedText,
+            matchedText: matchedText,
+            matchedPhrase: matchedText,
+            matched_phrase: matchedText,
+            normalizedPhrase,
+            section: sec.name,
+            suggestedImperatives: ["ALWAYS", "MUST", "ENFORCE", "REQUIRE"],
+            suggested_imperatives: ["ALWAYS", "MUST", "ENFORCE", "REQUIRE"]
+          }
+        });
+      }
     }
   }
 

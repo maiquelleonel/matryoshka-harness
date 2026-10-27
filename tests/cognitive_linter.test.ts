@@ -533,5 +533,216 @@ Second mention of \`.agents/skills/repeated-phantom.md\`.
       expect(result.durationMs).toBeLessThan(25);
     });
   });
+
+  describe("Subtask 5: Rule 4 (permissive-leak): Detects wishy-washy language ('try to', 'if possible', 'consider') in imperative sections", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-rule4-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("passes when AGENTS.md contains strict, definitive imperatives without wishy-washy language", () => {
+      const content = `# AGENTS
+## Core Directives
+- ALWAYS write unit tests for business logic.
+- ENFORCE zero compiler warnings.
+- MUST run bun test before pushing changes.
+- PREFER immutable state containers.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(0);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.summary.warnCount).toBe(0);
+    });
+
+    it("flags wishy-washy phrase 'try to' as a warn violation in imperative sections", () => {
+      const content = `# AGENTS
+## Implementation Guidelines
+- Try to run unit tests before opening a pull request.
+- Keep functions small.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(1);
+
+      const violation = permissiveViolations[0];
+      expect(violation.ruleId).toBe("permissive-leak");
+      expect(violation.rule_id).toBe("permissive-leak");
+      expect(violation.severity).toBe("warn");
+      expect(violation.message).toContain("try to");
+      expect(violation.message).toContain("Implementation Guidelines");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("Try to run unit tests");
+      expect(violation.suggestion).toContain("imperatives");
+      expect(violation.suggestion).toContain("try to");
+      expect(violation.metadata?.phrase).toBe("Try to");
+      expect(violation.metadata?.section).toBe("Implementation Guidelines");
+      expect(violation.metadata?.suggestedImperatives).toContain("ALWAYS");
+      expect(violation.metadata?.suggestedImperatives).toContain("MUST");
+
+      expect(result.score).toBe(95); // 100 - 5
+      expect(result.summary.warnCount).toBe(1);
+      expect(result.summary.failedCount).toBe(0);
+    });
+
+    it("flags wishy-washy phrase 'if possible' as a warn violation", () => {
+      const content = `# AGENTS
+## Code Quality
+- If possible, write integration tests for all endpoints.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(1);
+
+      const violation = permissiveViolations[0];
+      expect(violation.ruleId).toBe("permissive-leak");
+      expect(violation.severity).toBe("warn");
+      expect(violation.message).toContain("if possible");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("If possible, write integration tests");
+      expect(violation.suggestion).toContain("if possible");
+    });
+
+    it("flags wishy-washy phrase 'consider' as a warn violation", () => {
+      const content = `# AGENTS
+## Tooling
+- Consider using TypeScript for all new modules.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(1);
+
+      const violation = permissiveViolations[0];
+      expect(violation.ruleId).toBe("permissive-leak");
+      expect(violation.severity).toBe("warn");
+      expect(violation.message).toContain("consider");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("Consider using TypeScript");
+    });
+
+    it("flags other wishy-washy patterns ('maybe', 'ideally', 'we usually prefer')", () => {
+      const content = `# AGENTS
+## General Directives
+- Maybe add logging if needed.
+- Ideally tests should run fast.
+- We usually prefer functional style.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(3);
+
+      const phrases = permissiveViolations.map((v) => v.metadata?.phrase || v.metadata?.match);
+      expect(phrases).toContain("Maybe");
+      expect(phrases).toContain("Ideally");
+      expect(phrases).toContain("We usually prefer");
+
+      expect(result.score).toBe(85); // 100 - 3 * 5
+      expect(result.summary.warnCount).toBe(3);
+    });
+
+    it("ignores occurrences inside fenced markdown code blocks", () => {
+      const content = `# AGENTS
+## Invariants
+- ALWAYS validate incoming requests.
+
+\`\`\`typescript
+// try to connect to the database
+if (possible) {
+  considerFallback();
+}
+\`\`\`
+
+- MUST return 400 on invalid input.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(0);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+    });
+
+    it("does not false positive on legitimate words containing substrings ('considerable', 'reconsidered', 'try/catch')", () => {
+      const content = `# AGENTS
+## Architecture Notes
+- This refactoring has considerable architectural impact.
+- We reconsidered the database schema.
+- Use try/catch blocks only at boundaries.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(0);
+      expect(result.score).toBe(100);
+    });
+
+    it("detects multiple distinct leaks on the same line with unique violation IDs", () => {
+      const content = `# AGENTS
+- Try to optimize algorithms if possible.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const permissiveViolations = result.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(permissiveViolations).toHaveLength(2);
+
+      const ids = permissiveViolations.map((v) => v.id);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids[0]).not.toBe(ids[1]);
+    });
+
+    it("supports custom permissivePhrases option for domain-specific audits", () => {
+      const content = `# AGENTS
+- You should probably run linting.
+- It is kind of slow.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      // Default does not flag custom phrases
+      const defaultResult = auditCognitiveContext(tempDir);
+      expect(defaultResult.violations.filter((v) => v.ruleId === "permissive-leak")).toHaveLength(0);
+
+      // Custom option flags them
+      const customResult = auditCognitiveContext(tempDir, {
+        permissivePhrases: ["should probably", "kind of"]
+      });
+      const customViolations = customResult.violations.filter((v) => v.ruleId === "permissive-leak");
+      expect(customViolations).toHaveLength(2);
+    });
+
+    it("executes Rule 4 audit deterministically in sub-25ms", () => {
+      const content = `# AGENTS
+## Guidelines
+- Try to write clean code.
+- If possible, verify types.
+- Consider using bun test.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.durationMs).toBeLessThan(25);
+    });
+  });
 });
 
