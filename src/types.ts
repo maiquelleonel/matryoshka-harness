@@ -692,6 +692,11 @@ export interface TokenSavingsSummary {
   reductionPercentage: number;
 }
 
+export interface MigratedRootAgentsOptions {
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+}
+
 export interface LegacyMigrationOptions {
   projectPath?: string;
   from?: string;
@@ -699,6 +704,7 @@ export interface LegacyMigrationOptions {
   json?: boolean;
   force?: boolean;
   maxRootTokens?: number;
+  strictTokenGuard?: boolean;
 }
 
 export interface LegacyMigrationResult {

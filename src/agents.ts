@@ -14,6 +14,7 @@ import type {
   LegacyMigrationOptions,
   LegacyMigrationResult,
   LegacySkillMetadata,
+  MigratedRootAgentsOptions,
   PrimaryStack,
   ProjectStack,
   TokenSavingsSummary,
@@ -3000,6 +3001,80 @@ ${bodyContent}`;
   return extractedSkills;
 }
 
+export const LEGACY_SKILL_TITLES: Record<string, string> = {
+  "legacy-knowledge": "Preserved Legacy Knowledge",
+  "legacy-database": "Legacy Database",
+  "legacy-frontend": "Legacy Frontend",
+  "legacy-backend": "Legacy Backend",
+  "legacy-security": "Legacy Security",
+  "legacy-testing": "Legacy Testing",
+  "legacy-conventions": "Legacy Conventions",
+};
+
+/**
+ * Compiles a pristine, canonical lean root AGENTS.md strictly under 200 tokens
+ * that registers and links to extracted legacy skills in its modular catalog.
+ */
+export function compileMigratedRootAgents(
+  profile: ArchetypeProfile | RootAgentsProfileInput,
+  extractedSkills: ExtractedSkill[] = [],
+  options?: MigratedRootAgentsOptions
+): string {
+  const sanitizeCmd = (cmd?: string): string => {
+    if (!cmd) return "none";
+    const cleaned = cmd.trim().replace(/\s+/g, " ");
+    return cleaned.length > 0 ? cleaned : "none";
+  };
+
+  const runtime = profile.runtime?.trim() || "unknown";
+  const packageManager = profile.packageManager?.trim() || "unknown";
+  const testCommand = sanitizeCmd(profile.testCommand);
+  const buildCommand = sanitizeCmd(profile.buildCommand);
+  const lintCommand = sanitizeCmd(profile.lintCommand);
+
+  const skillsToFormat =
+    extractedSkills.length > 0
+      ? extractedSkills
+      : [
+          {
+            name: "legacy-knowledge",
+            relativePath: ".agents/skills/legacy-knowledge.md",
+          },
+        ];
+
+  const legacySkillsList = skillsToFormat
+    .map((s) => {
+      const title = LEGACY_SKILL_TITLES[s.name] || s.name;
+      return `* ${title}: \`${s.relativePath}\``;
+    })
+    .join("\n");
+
+  const content = `# 🤖 Project Operational Directives
+
+## 🌐 Stack & Identity
+* **Archetype:** ${profile.archetype}
+* **Runtime:** ${runtime} (${packageManager})
+* **Test Runner:** \`${testCommand}\`
+* **Build / Lint:** \`${buildCommand}\` | \`${lintCommand}\`
+
+## 🛡️ Anti-Slop Core Invariants
+* **YAGNI & DRY First:** Prefer simple composable functions over speculative class hierarchies.
+* **No Unprompted Refactoring:** Preserve working patterns; surgical edits only.
+* **Verification First:** Never declare completion without executing test suite evidence.
+
+## 🧭 On-Demand Specialized Skills
+Load specialized guidelines only when touching respective domains:
+${legacySkillsList}
+`;
+
+  const maxTokens = options?.maxTokens ?? 200;
+  if (options?.strictTokenGuard) {
+    assertTokenBudget(content, maxTokens);
+  }
+
+  return content;
+}
+
 /**
  * Main migration engine to safely parse monolithic legacy instruction files,
  * encapsulate historical domain context into modular skills (.agents/skills/legacy-knowledge.md),
@@ -3100,30 +3175,11 @@ export function migrateLegacyInstructions(
   }
 
   // Compile lean root AGENTS.md referencing legacy skills (< 200 tokens)
-  const legacySkillsList = extractedSkills
-    .map(
-      (s) =>
-        `* ${s.name === "legacy-knowledge" ? "Preserved Legacy Knowledge" : s.name}: \`${s.relativePath}\``
-    )
-    .join("\n");
-
-  const rootAgentsContent = `# 🤖 Project Operational Directives
-
-## 🌐 Stack & Identity
-* **Archetype:** ${profile.archetype}
-* **Runtime:** ${profile.runtime} (${profile.packageManager})
-* **Test Runner:** \`${profile.testCommand}\`
-* **Build / Lint:** \`${profile.buildCommand}\` | \`${profile.lintCommand}\`
-
-## 🛡️ Anti-Slop Core Invariants
-* **YAGNI & DRY First:** Prefer simple composable functions over speculative class hierarchies.
-* **No Unprompted Refactoring:** Preserve working patterns; surgical edits only.
-* **Verification First:** Never declare completion without executing test suite evidence.
-
-## 🧭 On-Demand Specialized Skills
-Load specialized guidelines only when touching respective domains:
-${legacySkillsList}
-`;
+  const maxRootTokens = options.maxRootTokens ?? 200;
+  const rootAgentsContent = compileMigratedRootAgents(profile, extractedSkills, {
+    maxTokens: maxRootTokens,
+    strictTokenGuard: options.strictTokenGuard,
+  });
 
   const rootAgentsTokens = estimateTokens(rootAgentsContent);
   const savedTokens = Math.max(0, beforeTokens - rootAgentsTokens);
