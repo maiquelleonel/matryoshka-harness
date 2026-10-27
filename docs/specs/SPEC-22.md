@@ -1,7 +1,7 @@
 # 📐 SPEC-22: feat(agents): cognitive context linter & turn-zero prompt simulator (`baba agents audit`)
 
 **Módulo:** SDD Engine / Automated Architecture  
-**Status:** in_progress (Subtask 3: Rule 2 (dead-skills))  
+**Status:** in_progress (Subtask 4: Rule 3 (negative-phrasing-trap))  
 **Gatilho:** Issue #22  
 **Target:** Bun + TypeScript  
 

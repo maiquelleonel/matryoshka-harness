@@ -2121,6 +2121,7 @@ export function auditCognitiveContext(
   const root = path.resolve(projectPath || options?.projectPath || process.cwd());
   const warnTokens = options?.warnTokens ?? TARGET_ROOT_AGENTS_TOKENS;
   const maxTokens = options?.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
+  const maxNegativePhrases = options?.maxNegativePhrases ?? 3;
 
   let targetFile: string | null = null;
 
@@ -2269,6 +2270,112 @@ export function auditCognitiveContext(
           }
         });
       }
+    }
+  }
+
+  // Rule 3: negative-phrasing-trap (Pink Elephant Paradox guard)
+  const prohibitiveRegex =
+    /\b(do\s+not|never|don['’]?t|prohibited|prohibit|must\s+not|cannot|can\s+not|can['’]?t)\b/gi;
+
+  interface SectionInfo {
+    name: string;
+    startLine: number;
+    lines: { lineNumber: number; content: string }[];
+  }
+
+  const sections: SectionInfo[] = [];
+  let currentSection: SectionInfo = {
+    name: "Root Instructions",
+    startLine: 1,
+    lines: []
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (typeof rawLine !== "string") {
+      continue;
+    }
+    const headingMatch = rawLine.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch && headingMatch[1]) {
+      if (currentSection.lines.length > 0 || currentSection.name !== "Root Instructions") {
+        sections.push(currentSection);
+      }
+      currentSection = {
+        name: headingMatch[1].trim(),
+        startLine: i + 1,
+        lines: [{ lineNumber: i + 1, content: rawLine }]
+      };
+    } else {
+      currentSection.lines.push({ lineNumber: i + 1, content: rawLine });
+    }
+  }
+  if (currentSection.lines.length > 0 || sections.length === 0) {
+    sections.push(currentSection);
+  }
+
+  const seenTrapIds = new Set<string>();
+
+  for (let sIndex = 0; sIndex < sections.length; sIndex++) {
+    const sec = sections[sIndex];
+    if (!sec) {
+      continue;
+    }
+    let matchCount = 0;
+    const matchedKeywords: string[] = [];
+    let firstLine: number | undefined;
+    let firstSnippet: string | undefined;
+
+    for (const l of sec.lines) {
+      const lineMatches = Array.from(l.content.matchAll(prohibitiveRegex));
+      if (lineMatches.length > 0) {
+        if (firstLine === undefined) {
+          firstLine = l.lineNumber;
+          firstSnippet = l.content.trim();
+        }
+        for (const m of lineMatches) {
+          const matchedText = m[0];
+          if (matchedText) {
+            matchCount++;
+            matchedKeywords.push(matchedText);
+          }
+        }
+      }
+    }
+
+    if (matchCount > maxNegativePhrases) {
+      const sectionSlug =
+        sec.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "root";
+
+      let trapId = `negative-phrasing-trap-${sectionSlug}`;
+      if (seenTrapIds.has(trapId)) {
+        trapId = `${trapId}-${sIndex + 1}`;
+      }
+      seenTrapIds.add(trapId);
+
+      violations.push({
+        id: trapId,
+        ruleId: "negative-phrasing-trap",
+        rule_id: "negative-phrasing-trap",
+        severity: "warn",
+        message: `Section "${sec.name}" contains ${matchCount} prohibitive phrases (threshold: ${maxNegativePhrases}), triggering the Pink Elephant Paradox.`,
+        file: targetFile,
+        line: firstLine,
+        snippet: firstSnippet,
+        suggestion:
+          "Reformulate negative prohibitions into positive behavioral constraints using anchors such as 'PREFER', 'USE', 'ENFORCE', or 'ALWAYS' to avoid the Pink Elephant Paradox.",
+        metadata: {
+          section: sec.name,
+          count: matchCount,
+          threshold: maxNegativePhrases,
+          keywords: matchedKeywords,
+          prohibitiveKeywords: matchedKeywords,
+          positiveAnchors: ["PREFER", "USE", "ENFORCE", "ALWAYS"],
+          positive_anchors: ["PREFER", "USE", "ENFORCE", "ALWAYS"]
+        }
+      });
     }
   }
 

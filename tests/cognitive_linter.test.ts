@@ -357,5 +357,181 @@ Second mention of \`.agents/skills/repeated-phantom.md\`.
       expect(result.summary.failedCount).toBe(1);
     });
   });
+
+  describe("Subtask 4: Rule 3 (negative-phrasing-trap): Flags excessive prohibitive keywords and suggests positive anchors", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-rule3-"));
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("passes when AGENTS.md has 3 or fewer prohibitive keywords (within threshold)", () => {
+      const content = `# AGENTS
+- DO NOT bypass CI checks.
+- NEVER push directly to main.
+- Use explicit types everywhere.
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(0);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+      expect(result.score).toBe(100);
+    });
+
+    it("flags excessive prohibitive keywords (> 3) with a warn violation and suggests positive anchors", () => {
+      const content = `# AGENTS
+## Coding Standards
+- DO NOT use any type
+- NEVER mutate state directly
+- DON'T commit console.log statements
+- PROHIBITED: global variable mutation
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(1);
+
+      const violation = negativeTrapViolations[0];
+      expect(violation.ruleId).toBe("negative-phrasing-trap");
+      expect(violation.rule_id).toBe("negative-phrasing-trap");
+      expect(violation.severity).toBe("warn");
+      expect(violation.message).toContain("Coding Standards");
+      expect(violation.message).toContain("4");
+      expect(violation.suggestion).toContain("PREFER");
+      expect(violation.suggestion).toContain("USE");
+      expect(violation.suggestion).toContain("ENFORCE");
+      expect(violation.suggestion).toContain("Pink Elephant");
+      expect(violation.line).toBe(3);
+      expect(violation.snippet).toContain("DO NOT use any type");
+
+      expect(violation.metadata?.count).toBe(4);
+      expect(violation.metadata?.positiveAnchors).toContain("PREFER");
+      expect(violation.metadata?.positiveAnchors).toContain("USE");
+      expect(violation.metadata?.positiveAnchors).toContain("ENFORCE");
+
+      // Score penalty: 100 - 5 = 95
+      expect(result.score).toBe(95);
+      expect(result.summary.warnCount).toBe(1);
+      expect(result.summary.warn_count).toBe(1);
+      expect(result.summary.failedCount).toBe(0);
+      expect(result.passed).toBe(true);
+      expect(result.passedStrict).toBe(true);
+    });
+
+    it("detects various prohibitive keywords case-insensitively (MUST NOT, CANNOT, CAN'T, DONT)", () => {
+      const content = `# AGENTS
+## Strict Constraints
+- MUST NOT bypass authentication checks
+- CANNOT use untyped variables
+- CAN'T ignore compiler errors
+- DONT skip unit testing
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(1);
+      expect(negativeTrapViolations[0].severity).toBe("warn");
+      expect(negativeTrapViolations[0].metadata?.count).toBe(4);
+    });
+
+    it("evaluates multiple sections independently and flags only sections exceeding threshold", () => {
+      const content = `# AGENTS
+## Negative Section
+- DO NOT do A
+- NEVER do B
+- DON'T do C
+- PROHIBITED to do D
+
+## Clean Section
+- PREFER immutability
+- USE explicit typing
+- ENFORCE linter rules
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(1);
+      expect(negativeTrapViolations[0].message).toContain("Negative Section");
+      expect(negativeTrapViolations[0].message).not.toContain("Clean Section");
+    });
+
+    it("flags multiple sections if both exceed the prohibitive keyword threshold", () => {
+      const content = `# AGENTS
+## Section One
+- DO NOT do A
+- NEVER do B
+- DON'T do C
+- MUST NOT do D
+
+## Section Two
+- DO NOT do E
+- NEVER do F
+- DON'T do G
+- CANNOT do H
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(2);
+      expect(result.summary.warnCount).toBe(2);
+      expect(result.score).toBe(90); // 100 - 2 * 5
+    });
+
+    it("handles documents without markdown headings by checking the root section", () => {
+      const content = `DO NOT leak secrets. NEVER bypass gates. DON'T ignore linter. PROHIBITED from running as root.`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      const negativeTrapViolations = result.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(negativeTrapViolations).toHaveLength(1);
+      expect(negativeTrapViolations[0].severity).toBe("warn");
+      expect(negativeTrapViolations[0].line).toBe(1);
+      expect(negativeTrapViolations[0].suggestion).toContain("Pink Elephant");
+    });
+
+    it("respects custom maxNegativePhrases option", () => {
+      const content = `# AGENTS
+- DO NOT bypass CI
+- NEVER ignore lint
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      // Default threshold is 3 -> 2 phrases pass
+      const defaultResult = auditCognitiveContext(tempDir);
+      expect(defaultResult.violations.some((v) => v.ruleId === "negative-phrasing-trap")).toBe(false);
+
+      // Custom threshold of 1 -> 2 phrases triggers warning
+      const customResult = auditCognitiveContext(tempDir, { maxNegativePhrases: 1 });
+      const violations = customResult.violations.filter((v) => v.ruleId === "negative-phrasing-trap");
+      expect(violations).toHaveLength(1);
+      expect(violations[0].metadata?.threshold).toBe(1);
+    });
+
+    it("executes rule check deterministically in sub-25ms", () => {
+      const content = `# AGENTS
+- DO NOT bypass CI
+- NEVER ignore lint
+- DON'T use any
+- PROHIBITED: ts-ignore
+`;
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), content, "utf-8");
+
+      const result = auditCognitiveContext(tempDir);
+      expect(result.durationMs).toBeLessThan(25);
+    });
+  });
 });
 
