@@ -367,7 +367,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
     case "baba":
     case "bbyg":
     case "matryoshka":
-    case "matrioska": {
+    case "matrioska":
+    case "matryoska": {
       return runCli(rest);
     }
 

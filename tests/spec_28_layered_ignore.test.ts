@@ -1893,16 +1893,715 @@ export function testSql(id: string) {
   });
 
   describe("Subtask 12: **AC-5:** Strict parity across all command aliases (`baba`, `bbyg`, `matryoshka`, `matrioska`)", () => {
-    it("ensures baba, bbyg, matryoshka, and matrioska all support --include-tests and --exclude", async () => {
-      for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
-        const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"], {
-          env: { ...process.env, BABA_ALIAS: alias },
-        });
-        expect(proc.exitCode).toBe(0);
-        const output = proc.stdout.toString();
-        expect(output).toContain("--include-tests");
-        expect(output).toContain("--exclude");
-      }
+    const canonicalAliases = ["baba", "bbyg", "matryoshka", "matrioska"] as const;
+
+    describe("CLI Help flag parity across all 4 command aliases", () => {
+      it("ensures baba, bbyg, matryoshka, and matrioska all support --include-tests and --exclude in wrap --help", async () => {
+        for (const alias of canonicalAliases) {
+          // Direct argument invocation: bun run cliPath <alias> wrap --help
+          const procDirect = Bun.spawnSync(["bun", "run", cliPath, alias, "wrap", "--help"]);
+          expect(procDirect.exitCode).toBe(0);
+          const outDirect = procDirect.stdout.toString();
+          expect(outDirect).toContain("--include-tests");
+          expect(outDirect).toContain("--exclude");
+
+          // Env-based invocation: bun run cliPath wrap --help with BABA_ALIAS
+          const procEnv = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"], {
+            env: { ...process.env, BABA_ALIAS: alias },
+          });
+          expect(procEnv.exitCode).toBe(0);
+          const outEnv = procEnv.stdout.toString();
+          expect(outEnv).toContain("--include-tests");
+          expect(outEnv).toContain("--exclude");
+        }
+      });
+
+      it("ensures baba, bbyg, matryoshka, and matrioska all support --include-tests and --exclude in scan --help", async () => {
+        for (const alias of canonicalAliases) {
+          const procDirect = Bun.spawnSync(["bun", "run", cliPath, alias, "scan", "--help"]);
+          expect(procDirect.exitCode).toBe(0);
+          const outDirect = procDirect.stdout.toString();
+          expect(outDirect).toContain("--include-tests");
+          expect(outDirect).toContain("--exclude");
+        }
+      });
+
+      it("ensures baba, bbyg, matryoshka, and matrioska all support --include-tests and --exclude in agents audit --help", async () => {
+        for (const alias of canonicalAliases) {
+          const procDirect = Bun.spawnSync(["bun", "run", cliPath, alias, "agents", "audit", "--help"]);
+          expect(procDirect.exitCode).toBe(0);
+          const outDirect = procDirect.stdout.toString();
+          expect(outDirect).toContain("--include-tests");
+          expect(outDirect).toContain("--exclude");
+        }
+      });
+
+      it("ensures baba, bbyg, matryoshka, and matrioska all support --exclude in agents generate --help", async () => {
+        for (const alias of canonicalAliases) {
+          const procDirect = Bun.spawnSync(["bun", "run", cliPath, alias, "agents", "generate", "--help"]);
+          expect(procDirect.exitCode).toBe(0);
+          const outDirect = procDirect.stdout.toString();
+          expect(outDirect).toContain("--exclude");
+        }
+      });
+    });
+
+    describe("Default test suite exclusion parity across all 4 aliases", () => {
+      it("omits test suite violations in wrap --dry-run across all 4 aliases by default", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-default-wrap", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "tests/ast_rules.test.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+
+        for (const alias of canonicalAliases) {
+          // Direct dispatch
+          const procDirect = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--json",
+          ]);
+          expect(procDirect.exitCode).toBe(0);
+          const parsedDirect = JSON.parse(procDirect.stdout.toString().trim());
+          const sqlDirect = (parsedDirect.violations || []).filter(
+            (v: any) => v.ruleId === "sql-interpolation"
+          );
+          expect(sqlDirect.length).toBe(0);
+          expect(parsedDirect.ast.score).toBe(100);
+
+          // Human output check
+          const procHuman = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+          ]);
+          expect(procHuman.exitCode).toBe(0);
+          const stdoutHuman = procHuman.stdout.toString();
+          expect(stdoutHuman).not.toContain("tests/ast_rules.test.ts");
+          expect(stdoutHuman).not.toContain("Fix SQL injection");
+          expect(stdoutHuman).toContain("AST Health:       100 / 100 (0 violation(s))");
+        }
+      });
+
+      it("excludes test routes and controllers in scan across all 4 aliases by default", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests/controllers"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/routes/api.ts"), "export const route = '/api';");
+        fs.writeFileSync(path.join(tempDir, "tests/routes/test.ts"), "export const testRoute = '/test';");
+        fs.writeFileSync(path.join(tempDir, "tests/controllers/test.ctrl.ts"), "export class TestCtrl {}");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-scan-app" }, null, 2)
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "scan",
+            tempDir,
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+          const controllers = parsed.entities.controllers.map((c: string) => c.replace(/\\/g, "/"));
+
+          expect(routes).toContain("src/routes/api.ts");
+          expect(routes).not.toContain("tests/routes/test.ts");
+          expect(controllers).not.toContain("tests/controllers/test.ctrl.ts");
+        }
+      });
+
+      it("skips test suite instruction files in agents audit across all 4 aliases by default", async () => {
+        fs.mkdirSync(path.join(tempDir, "tests/fixtures"), { recursive: true });
+        const bloated = [
+          "# Test Instructions",
+          ...Array(400).fill("never do bad patterns always write clean code"),
+        ].join("\n");
+        fs.writeFileSync(path.join(tempDir, "tests/fixtures/AGENTS.md"), bloated, "utf-8");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "agents",
+            "audit",
+            path.join(tempDir, "tests/fixtures"),
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.summary.scannedFiles.length).toBe(0);
+          expect(parsed.violations.length).toBe(0);
+        }
+      });
+    });
+
+    describe("--include-tests flag parity across all 4 aliases", () => {
+      it("reports test suite violations in wrap --dry-run across all 4 aliases when --include-tests is passed", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-include-tests", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "tests/ast_rules.test.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--include-tests",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const sqlViolations = (parsed.violations || []).filter(
+            (v: any) => v.ruleId === "sql-interpolation"
+          );
+          expect(sqlViolations.length).toBeGreaterThanOrEqual(1);
+          expect(parsed.summary.hasCriticalViolations).toBe(true);
+        }
+      });
+
+      it("includes test routes and controllers in scan across all 4 aliases when --include-tests is passed", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests/controllers"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/routes/api.ts"), "export const route = '/api';");
+        fs.writeFileSync(path.join(tempDir, "tests/routes/test.ts"), "export const testRoute = '/test';");
+        fs.writeFileSync(path.join(tempDir, "tests/controllers/test.ctrl.ts"), "export class TestCtrl {}");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-scan-include" }, null, 2)
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "scan",
+            tempDir,
+            "--include-tests",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+          const controllers = parsed.entities.controllers.map((c: string) => c.replace(/\\/g, "/"));
+
+          expect(routes).toContain("src/routes/api.ts");
+          expect(routes).toContain("tests/routes/test.ts");
+          expect(controllers).toContain("tests/controllers/test.ctrl.ts");
+        }
+      });
+
+      it("audits test suite instruction files in agents audit across all 4 aliases when --include-tests is passed", async () => {
+        fs.mkdirSync(path.join(tempDir, "tests/fixtures"), { recursive: true });
+        const bloated = [
+          "# Test Instructions",
+          ...Array(400).fill("never do bad patterns always write clean code"),
+        ].join("\n");
+        fs.writeFileSync(path.join(tempDir, "tests/fixtures/AGENTS.md"), bloated, "utf-8");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "agents",
+            "audit",
+            path.join(tempDir, "tests/fixtures"),
+            "--include-tests",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.summary.scannedFiles.length).toBe(1);
+          expect(parsed.violations.length).toBeGreaterThanOrEqual(1);
+        }
+      });
+    });
+
+    describe("Dedicated ignore files parity across all 4 aliases (.babaignore & .bbygignore)", () => {
+      it("respects .babaignore across all 4 aliases skipping docs/** in wrap --dry-run", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-babaignore", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "docs/hazard.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const sql = (parsed.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sql.length).toBe(0);
+          expect(parsed.ast.score).toBe(100);
+        }
+      });
+
+      it("respects .bbygignore fallback across all 4 aliases skipping docs/** in wrap --dry-run", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-bbygignore", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "docs/hazard.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(path.join(tempDir, ".bbygignore"), "docs/**\n");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const sql = (parsed.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sql.length).toBe(0);
+          expect(parsed.ast.score).toBe(100);
+        }
+      });
+
+      it("respects .babaignore in scan across all 4 aliases", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "docs/routes"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/routes/live.ts"), "export const live = '/live';");
+        fs.writeFileSync(path.join(tempDir, "docs/routes/doc.ts"), "export const doc = '/doc';");
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-scan-ignore" }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "scan",
+            tempDir,
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+          expect(routes).toContain("src/routes/live.ts");
+          expect(routes).not.toContain("docs/routes/doc.ts");
+        }
+      });
+    });
+
+    describe("--exclude flag parity across all 4 aliases", () => {
+      it("skips matched files in wrap --dry-run across all 4 aliases even when ignore files are absent", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-exclude-wrap", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "scripts/danger.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "scripts/**",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const sql = (parsed.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sql.length).toBe(0);
+          expect(parsed.ast.score).toBe(100);
+        }
+      });
+
+      it("supports comma-separated and repeated --exclude flags across all 4 aliases", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "dirA"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "dirB"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-rep-exclude", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "dirA/a.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(
+          path.join(tempDir, "dirB/b.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+
+        for (const alias of canonicalAliases) {
+          // 1. Repeated --exclude
+          const procRep = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "dirA/**",
+            "--exclude",
+            "dirB/**",
+            "--json",
+          ]);
+          expect(procRep.exitCode).toBe(0);
+          const parsedRep = JSON.parse(procRep.stdout.toString().trim());
+          const sqlRep = (parsedRep.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sqlRep.length).toBe(0);
+
+          // 2. Comma-separated --exclude
+          const procComma = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "dirA/**,dirB/**",
+            "--json",
+          ]);
+          expect(procComma.exitCode).toBe(0);
+          const parsedComma = JSON.parse(procComma.stdout.toString().trim());
+          const sqlComma = (parsedComma.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sqlComma.length).toBe(0);
+        }
+      });
+
+      it("respects --exclude in scan across all 4 aliases", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "legacy_routes"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/routes/live.ts"), "export const r = '/live';");
+        fs.writeFileSync(path.join(tempDir, "legacy_routes/old.ts"), "export const r = '/old';");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-scan-exclude" }, null, 2)
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "scan",
+            tempDir,
+            "--exclude",
+            "legacy_routes/**",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+          expect(routes).toContain("src/routes/live.ts");
+          expect(routes).not.toContain("legacy_routes/old.ts");
+        }
+      });
+
+      it("respects --exclude in agents generate across all 4 aliases", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/controllers"), { recursive: true });
+        fs.writeFileSync(path.join(tempDir, "src/controllers/user.ts"), "export class UserController {}");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "alias-parity-generate-exclude", dependencies: { express: "^4.18.0" } }, null, 2)
+        );
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "agents",
+            "generate",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "src/controllers/**",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.seams.controllers.length).toBe(0);
+        }
+      });
+
+      it("respects --exclude in agents audit across all 4 aliases", async () => {
+        fs.mkdirSync(path.join(tempDir, "custom"), { recursive: true });
+        const bloated = [
+          "# Bloated Guidelines",
+          ...Array(400).fill("never do bad things always write tests"),
+        ].join("\n");
+        fs.writeFileSync(path.join(tempDir, "custom/AGENTS.md"), bloated, "utf-8");
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "agents",
+            "audit",
+            path.join(tempDir, "custom"),
+            "--exclude",
+            "custom/AGENTS.md",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          const parsed = JSON.parse(proc.stdout.toString().trim());
+          expect(parsed.summary.scannedFiles.length).toBe(0);
+          expect(parsed.violations.length).toBe(0);
+        }
+      });
+    });
+
+    describe("Protective shell forwarder scripts parity (packages/*/bin/*.js)", () => {
+      const forwarderShells = [
+        { name: "baba", bin: path.resolve(__dirname, "../packages/baba/bin/baba.js") },
+        { name: "bbyg", bin: path.resolve(__dirname, "../packages/bbyg/bin/bbyg.js") },
+        { name: "matrioska", bin: path.resolve(__dirname, "../packages/matrioska/bin/matrioska.js") },
+        { name: "matryoska", bin: path.resolve(__dirname, "../packages/matryoska/bin/matryoska.js") },
+      ];
+
+      it("forwards --include-tests and --exclude in help output across all protective shells", () => {
+        for (const shell of forwarderShells) {
+          expect(fs.existsSync(shell.bin)).toBe(true);
+          const proc = Bun.spawnSync(["bun", shell.bin, "wrap", "--help"]);
+          expect(proc.exitCode).toBe(0);
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("--include-tests");
+          expect(stdout).toContain("--exclude");
+        }
+      });
+
+      it("forwards default test suite exclusion, --include-tests, and --exclude across all protective shells", () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "forwarder-parity-app", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Forwarder Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "tests/ast_rules.test.ts"),
+          "export const q = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(
+          path.join(tempDir, "scripts/danger.ts"),
+          "export const q2 = (id: string) => `SELECT * FROM tbl WHERE id = ${id}`;"
+        );
+
+        for (const shell of forwarderShells) {
+          // 1. Default: test files skipped, scripts/danger.ts flagged
+          const procDef = Bun.spawnSync(["bun", shell.bin, "wrap", tempDir, "--dry-run", "--json"]);
+          expect(procDef.exitCode).toBe(0);
+          const parsedDef = JSON.parse(procDef.stdout.toString().trim());
+          const sqlDef = (parsedDef.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          // Only scripts/danger.ts is flagged; tests/ast_rules.test.ts is excluded
+          expect(sqlDef.length).toBe(1);
+          expect(sqlDef[0].filePath).toContain("scripts/danger.ts");
+
+          // 2. With --exclude scripts/**: 0 violations
+          const procEx = Bun.spawnSync([
+            "bun",
+            shell.bin,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "scripts/**",
+            "--json",
+          ]);
+          expect(procEx.exitCode).toBe(0);
+          const parsedEx = JSON.parse(procEx.stdout.toString().trim());
+          const sqlEx = (parsedEx.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sqlEx.length).toBe(0);
+
+          // 3. With --include-tests: tests/ast_rules.test.ts is also flagged (2 violations total)
+          const procInc = Bun.spawnSync([
+            "bun",
+            shell.bin,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--include-tests",
+            "--json",
+          ]);
+          expect(procInc.exitCode).toBe(0);
+          const parsedInc = JSON.parse(procInc.stdout.toString().trim());
+          const sqlInc = (parsedInc.violations || []).filter((v: any) => v.ruleId === "sql-interpolation");
+          expect(sqlInc.length).toBe(2);
+        }
+      });
+    });
+
+    describe("Strict output equivalence across all 4 aliases", () => {
+      it("yields identical JSON diagnostics across baba, bbyg, matryoshka, and matrioska for layered ignore combinations", () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "custom"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "strict-parity-app", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# Strict Parity App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(path.join(tempDir, "tests/unit.test.ts"), "export const t = `SELECT 1`;");
+        fs.writeFileSync(path.join(tempDir, "docs/guide.ts"), "export const g = `SELECT 2`;");
+        fs.writeFileSync(path.join(tempDir, "custom/extra.ts"), "export const e = `SELECT 3`;");
+
+        fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+        const results: Record<string, any> = {};
+
+        for (const alias of canonicalAliases) {
+          const proc = Bun.spawnSync([
+            "bun",
+            "run",
+            cliPath,
+            alias,
+            "wrap",
+            tempDir,
+            "--dry-run",
+            "--exclude",
+            "custom/**",
+            "--json",
+          ]);
+          expect(proc.exitCode).toBe(0);
+          results[alias] = JSON.parse(proc.stdout.toString().trim());
+        }
+
+        // Validate exact equality across baba, bbyg, matryoshka, matrioska
+        const base = results.baba;
+        for (const alias of ["bbyg", "matryoshka", "matrioska"]) {
+          expect(results[alias].ast.score).toBe(base.ast.score);
+          expect(results[alias].ast.health).toBe(base.ast.health);
+          expect(results[alias].totalFilesAnalyzed).toBe(base.totalFilesAnalyzed);
+          expect(results[alias].violations.length).toBe(base.violations.length);
+          expect(results[alias].actionPlan.length).toBe(base.actionPlan.length);
+          expect(results[alias].summary.hasCriticalViolations).toBe(base.summary.hasCriticalViolations);
+        }
+      });
     });
   });
 });
