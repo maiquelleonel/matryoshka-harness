@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
-import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns } from "./ast";
+import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns, normalizeExcludePatterns } from "./ast";
 import type {
   BadgeOptions,
   CodebaseEntities,
@@ -480,7 +480,7 @@ export async function executeHarnessScore(
  */
 export function discoverCodebaseEntities(
   targetDir: string,
-  options?: { includeTests?: boolean; exclude?: string[]; excludePatterns?: string[] }
+  options?: { includeTests?: boolean; exclude?: string | string[]; excludePatterns?: string | string[] }
 ): CodebaseEntities {
   const routes: string[] = [];
   const models: string[] = [];
@@ -508,10 +508,10 @@ export function discoverCodebaseEntities(
     ".turbo",
   ]);
 
-  const excludePatterns = [
-    ...(options?.exclude ?? []),
-    ...(options?.excludePatterns ?? []),
-  ];
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+  ]);
   const gitignorePatterns = loadGitignorePatterns(root);
   const babaIgnorePatterns = loadBabaIgnorePatterns(root);
 

@@ -317,13 +317,19 @@ export function parseExcludeFlags(args: string[]): string[] {
     if (arg === "--exclude") {
       const next = args[i + 1];
       if (next && !next.startsWith("-")) {
-        const parts = next.split(",").map((s) => s.trim()).filter(Boolean);
+        const parts = next
+          .split(",")
+          .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+          .filter(Boolean);
         patterns.push(...parts);
         i++;
       }
     } else if (arg.startsWith("--exclude=")) {
       const val = arg.slice("--exclude=".length);
-      const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+      const parts = val
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+        .filter(Boolean);
       patterns.push(...parts);
     }
   }
@@ -433,13 +439,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         } else if (arg === "--exclude") {
           const next = rest[i + 1];
           if (next && !next.startsWith("-")) {
-            const parts = next.split(",").map((s) => s.trim()).filter(Boolean);
+            const parts = next
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+              .filter(Boolean);
             excludePatterns.push(...parts);
             i++;
           }
         } else if (arg.startsWith("--exclude=")) {
           const val = arg.slice("--exclude=".length);
-          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          const parts = val
+            .split(",")
+            .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+            .filter(Boolean);
           excludePatterns.push(...parts);
         } else if (arg === "--badge") {
           isBadge = true;
@@ -567,13 +579,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         } else if (arg === "--exclude") {
           const nextVal = rest[i + 1];
           if (nextVal && !nextVal.startsWith("-")) {
-            const parts = nextVal.split(",").map((s) => s.trim()).filter(Boolean);
+            const parts = nextVal
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+              .filter(Boolean);
             excludePatterns.push(...parts);
             i++;
           }
         } else if (arg.startsWith("--exclude=")) {
           const val = arg.slice("--exclude=".length);
-          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          const parts = val
+            .split(",")
+            .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+            .filter(Boolean);
           excludePatterns.push(...parts);
         } else if (arg === "--include-tests") {
           // Handled via isIncludeTests flag
@@ -1134,13 +1152,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         } else if (arg === "--exclude") {
           const nextVal = rest[i + 1];
           if (nextVal && !nextVal.startsWith("-")) {
-            const parts = nextVal.split(",").map((s) => s.trim()).filter(Boolean);
+            const parts = nextVal
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+              .filter(Boolean);
             excludePatterns.push(...parts);
             i++;
           }
         } else if (arg.startsWith("--exclude=")) {
           const val = arg.slice("--exclude=".length);
-          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          const parts = val
+            .split(",")
+            .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+            .filter(Boolean);
           excludePatterns.push(...parts);
         } else if (arg === "--output" || arg === "-o") {
           const nextVal = rest[i + 1];

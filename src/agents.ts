@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
-import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns } from "./ast";
+import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns, normalizeExcludePatterns } from "./ast";
 import type {
   ExtractedSkill,
   LegacyMigrationOptions,
@@ -205,8 +205,8 @@ export interface GenerateAgentsOptions {
   selectedSkills?: SkillName[];
   interactive?: boolean;
   yes?: boolean;
-  exclude?: string[];
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 export interface GenerateAgentsResult {
@@ -289,8 +289,8 @@ export function assertTokenBudget(
 export function discoverSeams(
   projectPath: string,
   options?: {
-    exclude?: string[];
-    excludePatterns?: string[];
+    exclude?: string | string[];
+    excludePatterns?: string | string[];
     includeTests?: boolean;
   }
 ): DiscoveredSeams {
@@ -336,10 +336,10 @@ export function discoverSeams(
     ".agents",
   ]);
 
-  const excludePatterns = [
-    ...(options?.exclude ?? []),
-    ...(options?.excludePatterns ?? []),
-  ];
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+  ]);
   const gitignorePatterns = loadGitignorePatterns(root);
   const babaIgnorePatterns = loadBabaIgnorePatterns(root);
 
@@ -532,8 +532,8 @@ export function discoverSeams(
 export function profileArchetype(
   projectPath: string,
   options?: {
-    exclude?: string[];
-    excludePatterns?: string[];
+    exclude?: string | string[];
+    excludePatterns?: string | string[];
     includeTests?: boolean;
   }
 ): ArchetypeProfile {
@@ -2266,8 +2266,8 @@ export interface CognitiveAuditOptions {
   maxCodeBlockLines?: number; // default: 25
   permissivePhrases?: string[];
   includeTests?: boolean;
-  exclude?: string[];
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 /**
@@ -2286,10 +2286,10 @@ export function auditCognitiveContext(
 
   let targetFile: string | null = null;
   const includeTests = options?.includeTests ?? false;
-  const excludePatterns = [
-    ...(options?.exclude ?? []),
-    ...(options?.excludePatterns ?? []),
-  ];
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+  ]);
 
   let rootDir = root;
   try {

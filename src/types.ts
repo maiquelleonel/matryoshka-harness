@@ -64,8 +64,8 @@ export interface HarnessScoreOptions {
   timeoutMs?: number;
   allowFallback?: boolean;
   includeTests?: boolean;
-  exclude?: string[];
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 export interface HarnessScoreResult {
@@ -196,7 +196,8 @@ export interface AstWalkerOptions {
   wasmGrammarPaths?: Partial<Record<AstLanguage, string>>;
   concurrency?: number;
   includeTests?: boolean;
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
   babaIgnorePatterns?: string[];
 }
 
@@ -346,8 +347,8 @@ export interface CompositeEvaluationOptions extends CompositeScorerOptions {
   astOptions?: AstWalkerOptions;
   ruleOptions?: AstRuleSuiteOptions;
   includeTests?: boolean;
-  exclude?: string[];
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 export interface Harness2EvaluationResult extends CompositeScoreResult {
@@ -463,6 +464,9 @@ export interface WrapCliOptions {
   dryRun?: boolean;
   json?: boolean;
   maxFileSizeKb?: number;
+  includeTests?: boolean;
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 // ==========================================

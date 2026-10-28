@@ -7,7 +7,7 @@
  */
 import * as path from "node:path";
 import { executeHarnessScore, normalizeMaturityLevel, inferGovernanceAxis } from "./scanner";
-import { walkCodebase } from "./ast";
+import { walkCodebase, normalizeExcludePatterns } from "./ast";
 import { runAstRules } from "./rules";
 import type {
   AggregatedGapsResult,
@@ -405,11 +405,12 @@ export async function evaluateCompositeHarness(
 
   // 2. Run Polyglot AST Walker
   const includeTests = options?.includeTests ?? options?.astOptions?.includeTests;
-  const excludePatterns = [
-    ...(options?.exclude ?? []),
-    ...(options?.excludePatterns ?? []),
-    ...(options?.astOptions?.excludePatterns ?? []),
-  ];
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+    ...(options?.astOptions?.exclude ? (Array.isArray(options.astOptions.exclude) ? options.astOptions.exclude : [options.astOptions.exclude]) : []),
+    ...(options?.astOptions?.excludePatterns ? (Array.isArray(options.astOptions.excludePatterns) ? options.astOptions.excludePatterns : [options.astOptions.excludePatterns]) : []),
+  ]);
 
   const walkResult = await walkCodebase(resolvedPath, {
     cwd: resolvedPath,

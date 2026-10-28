@@ -378,9 +378,32 @@ export interface IsIgnoredFileOptions {
   includeTests?: boolean;
   isDirectory?: boolean;
   customPatterns?: string[];
-  excludePatterns?: string[];
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
   gitignorePatterns?: string[];
   babaIgnorePatterns?: string[];
+}
+
+/**
+ * Normalizes exclude patterns from comma-separated strings or string arrays
+ * into a flat, trimmed list of non-empty glob patterns, stripping any surrounding quotes.
+ */
+export function normalizeExcludePatterns(
+  patterns?: string | string[] | (string | string[])[]
+): string[] {
+  if (!patterns) return [];
+  const rawList = Array.isArray(patterns) ? patterns.flat() : [patterns];
+  const result: string[] = [];
+  for (const item of rawList) {
+    if (typeof item === "string") {
+      const parts = item
+        .split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+        .filter(Boolean);
+      result.push(...parts);
+    }
+  }
+  return result;
 }
 
 /**
@@ -404,14 +427,23 @@ export function isIgnoredFile(
   let babaList: string[] = babaIgnorePatterns || [];
 
   if (Array.isArray(customPatternsOrOptions)) {
-    customList = customPatternsOrOptions;
+    customList = normalizeExcludePatterns(customPatternsOrOptions);
   } else if (customPatternsOrOptions && typeof customPatternsOrOptions === "object") {
     includeTests = customPatternsOrOptions.includeTests === true;
     isDirectory = customPatternsOrOptions.isDirectory;
-    customList = [
-      ...(customPatternsOrOptions.excludePatterns ?? []),
+    customList = normalizeExcludePatterns([
+      ...(customPatternsOrOptions.exclude
+        ? Array.isArray(customPatternsOrOptions.exclude)
+          ? customPatternsOrOptions.exclude
+          : [customPatternsOrOptions.exclude]
+        : []),
+      ...(customPatternsOrOptions.excludePatterns
+        ? Array.isArray(customPatternsOrOptions.excludePatterns)
+          ? customPatternsOrOptions.excludePatterns
+          : [customPatternsOrOptions.excludePatterns]
+        : []),
       ...(customPatternsOrOptions.customPatterns ?? []),
-    ];
+    ]);
     gitignoreList = customPatternsOrOptions.gitignorePatterns ?? gitignoreList;
     babaList = customPatternsOrOptions.babaIgnorePatterns ?? babaList;
   }
@@ -940,10 +972,15 @@ export async function walkCodebase(
   const gitignorePatterns = loadGitignorePatterns(resolvedRoot);
   const babaIgnorePatterns =
     options?.babaIgnorePatterns ?? loadBabaIgnorePatterns(resolvedRoot);
-  const excludePatterns = [
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude
+      ? Array.isArray(options.exclude)
+        ? options.exclude
+        : [options.exclude]
+      : []),
     ...(options?.excludePatterns ?? []),
     ...(options?.ignorePatterns ?? []),
-  ];
+  ]);
   const includeTests = options?.includeTests ?? false;
 
   const ignoreOptions: IsIgnoredFileOptions = {

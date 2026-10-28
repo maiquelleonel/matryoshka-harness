@@ -1047,24 +1047,56 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
         fs.writeFileSync(path.join(tempDir, "dirA/AGENTS.md"), bloated, "utf-8");
         fs.writeFileSync(path.join(tempDir, "dirB/AGENTS.md"), bloated, "utf-8");
 
-        // Repeated --exclude flags
-        const proc = Bun.spawnSync([
+        // Without --exclude: dirA/AGENTS.md fails audit
+        const procWithout = Bun.spawnSync([
           "bun",
           "run",
           cliPath,
           "agents",
           "audit",
-          tempDir,
+          path.join(tempDir, "dirA"),
+          "--json",
+        ]);
+        expect(procWithout.exitCode).toBe(0);
+        const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+        expect(parsedWithout.summary.scannedFiles.length).toBe(1);
+        expect(parsedWithout.violations.length).toBeGreaterThanOrEqual(1);
+
+        // 1. Repeated --exclude flags
+        const procRep = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "agents",
+          "audit",
+          path.join(tempDir, "dirA"),
           "--exclude",
           "dirA/AGENTS.md",
           "--exclude",
           "dirB/AGENTS.md",
           "--json",
         ]);
-        expect(proc.exitCode).toBe(0);
-        const parsed = JSON.parse(proc.stdout.toString().trim());
-        expect(parsed.summary.scannedFiles.length).toBe(0);
-        expect(parsed.violations.length).toBe(0);
+        expect(procRep.exitCode).toBe(0);
+        const parsedRep = JSON.parse(procRep.stdout.toString().trim());
+        expect(parsedRep.summary.scannedFiles.length).toBe(0);
+        expect(parsedRep.violations.length).toBe(0);
+
+        // 2. Comma-separated --exclude flag
+        const procComma = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "agents",
+          "audit",
+          path.join(tempDir, "dirB"),
+          "--exclude",
+          "dirA/AGENTS.md,dirB/AGENTS.md",
+          "--json",
+        ]);
+        expect(procComma.exitCode).toBe(0);
+        const parsedComma = JSON.parse(procComma.stdout.toString().trim());
+        expect(parsedComma.summary.scannedFiles.length).toBe(0);
+        expect(parsedComma.violations.length).toBe(0);
       });
     });
   });
