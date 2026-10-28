@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as readline from "node:readline";
 import pc from "picocolors";
 import type {
@@ -237,6 +239,108 @@ export function extractAllSelectedGuidelines(
   });
 }
 
+export interface SkillPreviewData {
+  skillName: SkillName;
+  title: string;
+  description: string;
+  fileName: string;
+  totalTokens: number;
+  bodyTokens: number;
+  frontmatterTokens: number;
+  frontmatterYaml: string;
+  frontmatter: Record<string, any> | null;
+  guidelines: DontVsDoSummary;
+  isSelected: boolean;
+  isRecommended: boolean;
+  footprint: TokenFootprintReport;
+  rawContent: string;
+}
+
+/**
+ * Extracts structured preview data for a specific modular skill, including
+ * frontmatter metadata, token metrics, and Don't vs Do guidelines.
+ */
+export function getSkillPreviewData(
+  skillName: SkillName,
+  options?: {
+    projectPath?: string;
+    profile?: ArchetypeProfile;
+    cumulativeSelectedSkills?: SkillName[];
+    tokenBudget?: number;
+    isSelected?: boolean;
+    isRecommended?: boolean;
+  }
+): SkillPreviewData {
+  const projectPath = options?.projectPath ?? process.cwd();
+  const profile = options?.profile ?? profileArchetype(projectPath);
+  const cat = MODULAR_SKILLS_CATALOG.find((s) => s.name === skillName);
+  const def = SKILL_DEFINITIONS[skillName];
+  let rawContent = resolveSkillContent(skillName, {
+    projectPath,
+    profile,
+  });
+
+  if (options?.projectPath) {
+    const diskPath = path.join(
+      path.resolve(options.projectPath),
+      ".agents",
+      "skills",
+      def?.fileName || `${skillName}.md`
+    );
+    if (fs.existsSync(diskPath)) {
+      try {
+        rawContent = fs.readFileSync(diskPath, "utf-8");
+      } catch {
+        // Fallback
+      }
+    }
+  }
+  const totalTokens = estimateTokens(rawContent);
+  const frontmatter = parseSkillFrontmatter(rawContent);
+  const guidelines = extractDontVsDoGuidelines(rawContent, skillName);
+
+  let frontmatterYaml = "";
+  if (rawContent.startsWith("---\n")) {
+    const endFm = rawContent.indexOf("\n---\n", 4);
+    if (endFm !== -1) {
+      frontmatterYaml = rawContent.slice(0, endFm + 5).trim();
+    }
+  }
+  const frontmatterTokens = frontmatterYaml ? estimateTokens(frontmatterYaml) : 0;
+  const bodyTokens = Math.max(0, totalTokens - frontmatterTokens);
+
+  const selected = options?.cumulativeSelectedSkills ?? [skillName];
+  const isSelected = options?.isSelected !== undefined
+    ? options.isSelected
+    : selected.includes(skillName);
+  const isRecommended = options?.isRecommended !== undefined
+    ? options.isRecommended
+    : profile.activeSkills.includes(skillName);
+
+  const footprint = calculateTokenFootprint(selected, {
+    projectPath,
+    profile,
+    tokenBudget: options?.tokenBudget,
+  });
+
+  return {
+    skillName,
+    title: cat?.title || skillName,
+    description: (frontmatter?.description as string) || cat?.description || "",
+    fileName: def?.fileName || `${skillName}.md`,
+    totalTokens,
+    bodyTokens,
+    frontmatterTokens,
+    frontmatterYaml,
+    frontmatter: frontmatter as Record<string, any> | null,
+    guidelines,
+    isSelected,
+    isRecommended,
+    footprint,
+    rawContent,
+  };
+}
+
 /**
  * Formats a detailed skill preview modal including frontmatter, token footprint, and Don't vs Do breakdown.
  */
@@ -247,73 +351,64 @@ export function formatSkillPreview(
     profile?: ArchetypeProfile;
     cumulativeSelectedSkills?: SkillName[];
     tokenBudget?: number;
+    isSelected?: boolean;
+    isRecommended?: boolean;
+    currentIndex?: number;
+    totalSkills?: number;
   }
 ): string {
-  const cat = MODULAR_SKILLS_CATALOG.find((s) => s.name === skillName);
-  const def = SKILL_DEFINITIONS[skillName];
-  const content = resolveSkillContent(skillName, {
-    projectPath: options?.projectPath,
-    profile: options?.profile,
-  });
-  const tokens = estimateTokens(content);
-  const fm = parseSkillFrontmatter(content);
-  const guidelines = extractDontVsDoGuidelines(content, skillName);
-
-  let fmBlock = "";
-  if (content.startsWith("---\n")) {
-    const endFm = content.indexOf("\n---\n", 4);
-    if (endFm !== -1) {
-      fmBlock = content.slice(0, endFm + 5).trim();
-    }
-  }
-  const fmTokens = fmBlock ? estimateTokens(fmBlock) : 0;
-  const bodyTokens = Math.max(0, tokens - fmTokens);
-
-  const selected = options?.cumulativeSelectedSkills ?? [skillName];
-  const footprint = calculateTokenFootprint(selected, {
-    projectPath: options?.projectPath,
-    profile: options?.profile,
-    tokenBudget: options?.tokenBudget,
-  });
+  const data = getSkillPreviewData(skillName, options);
 
   const lines: string[] = [];
+  const indexInfo = options?.currentIndex !== undefined && options?.totalSkills !== undefined
+    ? ` [${options.currentIndex + 1}/${options.totalSkills}]`
+    : "";
+
+  const statusBadge = data.isSelected
+    ? pc.green("◉ Selected")
+    : pc.dim("◯ Unselected");
+  const recBadge = data.isRecommended
+    ? pc.green("[recommended]")
+    : pc.dim("[optional]");
+
   lines.push(
     pc.bold(
-      pc.yellow(`\n🔍 Skill Preview: ${skillName} (${cat?.title || skillName})\n`)
+      pc.yellow(`\n🔍 Skill Preview: ${data.skillName} (${data.title})${indexInfo}\n`)
     )
   );
-  lines.push(`  ${pc.dim("File:")}        .agents/skills/${def?.fileName || `${skillName}.md`}`);
-  lines.push(`  ${pc.dim("Estimated:")}   ~${tokens} tokens`);
-  lines.push(`  ${pc.dim("Description:")} ${fm?.description || cat?.description || ""}\n`);
+  lines.push(`  ${pc.dim("File:")}        .agents/skills/${data.fileName}`);
+  lines.push(`  ${pc.dim("Status:")}      ${statusBadge}  ${recBadge}`);
+  lines.push(`  ${pc.dim("Estimated:")}   ~${data.totalTokens} tokens`);
+  lines.push(`  ${pc.dim("Description:")} ${data.description}\n`);
 
-  if (fmBlock) {
+  if (data.frontmatterYaml) {
     lines.push(pc.bold(pc.cyan("  📦 YAML Frontmatter:")));
-    lines.push(pc.dim("    " + fmBlock.split("\n").join("\n    ")) + "\n");
+    lines.push(pc.dim("    " + data.frontmatterYaml.split("\n").join("\n    ")) + "\n");
   }
 
   lines.push(pc.bold(pc.cyan("  📊 Token Footprint:")));
-  lines.push(`    ${pc.dim("•")} Skill Body: ~${bodyTokens} tokens`);
-  lines.push(`    ${pc.dim("•")} Frontmatter: ~${fmTokens} tokens`);
+  lines.push(`    ${pc.dim("•")} Skill Body: ~${data.bodyTokens} tokens`);
+  lines.push(`    ${pc.dim("•")} Frontmatter: ~${data.frontmatterTokens} tokens`);
   lines.push(
-    `    ${pc.dim("•")} Cumulative with Selection: ~${footprint.totalTokens} / ${footprint.tokenBudget} tokens (${footprint.budgetPercentage}%)\n`
+    `    ${pc.dim("•")} Cumulative with Selection: ~${data.footprint.totalTokens} / ${data.footprint.tokenBudget} tokens (${data.footprint.budgetPercentage}%)\n`
   );
 
   lines.push(pc.bold(pc.cyan("  📋 Don't vs Do Guidelines:")));
-  if (guidelines.dos.length > 0) {
+  if (data.guidelines.dos.length > 0) {
     lines.push(pc.bold(pc.green("    ✅ DO (Best Practices & Invariants):")));
-    for (const d of guidelines.dos) {
+    for (const d of data.guidelines.dos) {
       lines.push(`      ${pc.green("•")} ${d}`);
     }
   }
-  if (guidelines.donts.length > 0) {
+  if (data.guidelines.donts.length > 0) {
     lines.push(pc.bold(pc.red("    ❌ DON'T (Anti-Patterns & Prohibitions):")));
-    for (const d of guidelines.donts) {
+    for (const d of data.guidelines.donts) {
       lines.push(`      ${pc.red("•")} ${d}`);
     }
   }
 
   lines.push(
-    pc.dim("\n  Press [Escape], [p], [i], or [Enter] to return to checklist.\n")
+    pc.dim("\n  [Space] Toggle selection | [←/→] Prev/Next skill | [Esc/Enter/p/i] Return to checklist.\n")
   );
 
   return lines.join("\n");
@@ -646,6 +741,26 @@ export class InteractivePromptSession {
     this.inPreview = false;
   }
 
+  public previewNext(): void {
+    this.moveDown();
+  }
+
+  public previewPrevious(): void {
+    this.moveUp();
+  }
+
+  public getActivePreviewData(): SkillPreviewData {
+    const current = this.getActiveItem();
+    return getSkillPreviewData(current.name, {
+      projectPath: this.projectPath,
+      profile: this.profile,
+      cumulativeSelectedSkills: this.getSelectedSkills(),
+      tokenBudget: this.options.maxTokens,
+      isSelected: current.selected,
+      isRecommended: current.recommended,
+    });
+  }
+
   public openGuidelines(): void {
     this.inGuidelinesModal = true;
     this.inPreview = false;
@@ -687,6 +802,10 @@ export class InteractivePromptSession {
           profile: this.profile,
           cumulativeSelectedSkills: this.getSelectedSkills(),
           tokenBudget: this.options.maxTokens,
+          isSelected: current.selected,
+          isRecommended: current.recommended,
+          currentIndex: this.cursor,
+          totalSkills: this.items.length,
         });
       }
     }
@@ -785,7 +904,11 @@ export async function runInteractiveSkillSelector(
       (stdin as any).setEncoding("utf8");
     }
 
-    readline.emitKeypressEvents(stdin);
+    try {
+      (readline as any).emitKeypressEvents(stdin, { escapeCodeTimeout: 20 });
+    } catch {
+      readline.emitKeypressEvents(stdin);
+    }
 
     const cleanup = () => {
       if (isFinished) return;
@@ -801,8 +924,17 @@ export async function runInteractiveSkillSelector(
       }
     };
 
+    let lastHandledKey = "";
+    let lastHandledTime = 0;
+
     const handleAction = (keyName: string, keyCtrl?: boolean, keyChar?: string) => {
       if (isFinished) return;
+      const now = Date.now();
+      if (keyName && keyName === lastHandledKey && now - lastHandledTime < 15) {
+        return;
+      }
+      lastHandledKey = keyName;
+      lastHandledTime = now;
       if (keyCtrl && keyName === "c") {
         cleanup();
         stdout.write(pc.red("\nAborted by user (SIGINT).\n"));
@@ -832,9 +964,34 @@ export async function runInteractiveSkillSelector(
           keyName === "i" ||
           keyName === "return" ||
           keyName === "enter" ||
-          keyChar === "q"
+          keyChar === "q" ||
+          keyName === "q" ||
+          keyChar === "p" ||
+          keyChar === "i"
         ) {
           session.closePreview();
+          render();
+        } else if (keyName === "space" || keyChar === " ") {
+          session.toggleCurrent();
+          render();
+        } else if (
+          keyName === "right" ||
+          keyChar === "l" ||
+          keyName === "tab" ||
+          keyChar === "n" ||
+          keyName === "down" ||
+          keyChar === "j"
+        ) {
+          session.previewNext();
+          render();
+        } else if (
+          keyName === "left" ||
+          keyChar === "h" ||
+          keyChar === "b" ||
+          keyName === "up" ||
+          keyChar === "k"
+        ) {
+          session.previewPrevious();
           render();
         }
         return;
@@ -881,7 +1038,7 @@ export async function runInteractiveSkillSelector(
           footprint,
           guidelinesSummary,
         });
-      } else if (keyChar === "q" || keyName === "escape") {
+      } else if (keyChar === "q" || keyName === "q" || keyName === "escape") {
         cleanup();
         resolve({ confirmed: false, selectedSkills: [], items: session.getItems() });
       }
@@ -895,9 +1052,11 @@ export async function runInteractiveSkillSelector(
 
     const onData = (data: Buffer | string) => {
       const str = data.toString();
-      // Handle Enter directly if piped without keypress event
+      // Handle Enter and standalone Escape directly if piped without keypress event
       if (str === "\r" || str === "\n" || str === "\r\n") {
-        handleAction("return", false);
+        handleAction("return", false, "\r");
+      } else if (str === "\u001b") {
+        handleAction("escape", false, "\u001b");
       }
     };
 

@@ -22,6 +22,9 @@ import {
   shouldRunInteractivePrompt,
   InteractivePromptSession,
   promptInteractiveSkillSelection,
+  getSkillPreviewData,
+  formatSkillPreview,
+  type SkillPreviewData,
   type InteractiveSelectorOptions,
   type TokenFootprintReport,
   type DontVsDoSummary,
@@ -1382,6 +1385,384 @@ dependencies = [
     });
   });
 });
+
+describe("SPEC-26 Subtask 6: Skill Content Preview Modal/Screen", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask6-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Skill Content Inspection Data Extraction & Frontmatter Parsing", () => {
+    it("extracts comprehensive structured preview data for all modular skills", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "preview-data-test" }));
+      const profile = profileArchetype(tempDir);
+
+      for (const skill of MODULAR_SKILLS_CATALOG) {
+        const preview = getSkillPreviewData(skill.name, {
+          projectPath: tempDir,
+          profile,
+          cumulativeSelectedSkills: ["skill-backend"],
+        });
+
+        expect(preview.skillName).toBe(skill.name);
+        expect(preview.title).toBe(skill.title);
+        expect(preview.description.length).toBeGreaterThan(0);
+        expect(preview.fileName).toContain(".md");
+        expect(preview.totalTokens).toBeGreaterThan(0);
+        expect(preview.bodyTokens).toBeGreaterThan(0);
+        expect(preview.footprint).toBeDefined();
+        expect(preview.rawContent.length).toBeGreaterThan(0);
+        expect(preview.guidelines).toBeDefined();
+      }
+    });
+
+    it("parses YAML frontmatter, frontmatter tokens, and body tokens accurately", () => {
+      const preview = getSkillPreviewData("skill-backend", {
+        projectPath: tempDir,
+      });
+
+      expect(preview.frontmatterYaml).toContain("name: skill-backend");
+      expect(preview.frontmatterYaml).toContain("description:");
+      expect(preview.frontmatterTokens).toBeGreaterThan(0);
+      expect(preview.totalTokens).toBe(preview.bodyTokens + preview.frontmatterTokens);
+      expect(preview.frontmatter).not.toBeNull();
+      expect(preview.frontmatter?.name).toBe("skill-backend");
+    });
+
+    it("handles custom instructions skill with repository-specific file overrides", () => {
+      const customSkillsDir = path.join(tempDir, ".agents", "skills");
+      fs.mkdirSync(customSkillsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(customSkillsDir, "custom-instructions.md"),
+        `---
+name: custom-instructions
+description: Custom engineering standards for our monorepo
+---
+# Monorepo Guidelines
+* Never commit secrets to git.
+* Always enforce conventional commits.
+`
+      );
+
+      const preview = getSkillPreviewData("custom-instructions", {
+        projectPath: tempDir,
+      });
+
+      expect(preview.description).toBe("Custom engineering standards for our monorepo");
+      expect(preview.frontmatterYaml).toContain("Custom engineering standards for our monorepo");
+      expect(preview.guidelines.donts.some(r => r.includes("Never commit secrets"))).toBe(true);
+      expect(preview.guidelines.dos.some(r => r.includes("Always enforce conventional"))).toBe(true);
+    });
+  });
+
+  describe("AC-2: Terminal Preview Modal Rendering & Visual Composition", () => {
+    it("renders formatted preview modal with selection status badge, recommendation badge, and index pagination", () => {
+      const output = formatSkillPreview("skill-backend", {
+        projectPath: tempDir,
+        isSelected: true,
+        isRecommended: true,
+        currentIndex: 0,
+        totalSkills: 6,
+        cumulativeSelectedSkills: ["skill-backend", "skill-database"],
+        tokenBudget: 2500,
+      });
+
+      expect(output).toContain("Skill Preview: skill-backend");
+      expect(output).toContain(".agents/skills/skill-backend.md");
+      expect(output).toContain("Selected");
+      expect(output).toContain("[recommended]");
+      expect(output).toContain("[1/6]");
+      expect(output).toContain("YAML Frontmatter:");
+      expect(output).toContain("Token Footprint:");
+      expect(output).toContain("Skill Body:");
+      expect(output).toContain("Frontmatter:");
+      expect(output).toContain("Cumulative with Selection:");
+      expect(output).toContain("Don't vs Do Guidelines:");
+      expect(output).toContain("DO (Best Practices");
+      expect(output).toContain("DON'T (Anti-Patterns");
+      expect(output).toContain("[Space] Toggle selection");
+      expect(output).toContain("[←/→]");
+    });
+
+    it("renders unselected status badge and optional badge when skill is not selected or recommended", () => {
+      const output = formatSkillPreview("custom-instructions", {
+        projectPath: tempDir,
+        isSelected: false,
+        isRecommended: false,
+        currentIndex: 5,
+        totalSkills: 6,
+      });
+
+      expect(output).toContain("Skill Preview: custom-instructions");
+      expect(output).toContain("Unselected");
+      expect(output).toContain("[optional]");
+      expect(output).toContain("[6/6]");
+    });
+  });
+
+  describe("AC-3: In-Modal Toggling & Skill Traversal Navigation", () => {
+    it("allows traversing skills with previewNext and previewPrevious inside InteractivePromptSession", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "modal-nav-test" }));
+      const profile = profileArchetype(tempDir);
+      const session = new InteractivePromptSession({ profile, projectPath: tempDir });
+
+      session.openPreview();
+      expect(session.isInPreview()).toBe(true);
+      expect(session.getActiveItem().name).toBe("skill-backend");
+
+      // Next preview
+      session.previewNext();
+      expect(session.getActiveItem().name).toBe("skill-database");
+
+      // Next preview again
+      session.previewNext();
+      expect(session.getActiveItem().name).toBe("skill-frontend");
+
+      // Previous preview
+      session.previewPrevious();
+      expect(session.getActiveItem().name).toBe("skill-database");
+
+      // Previous wraps to last
+      session.previewPrevious();
+      expect(session.getActiveItem().name).toBe("skill-backend");
+      session.previewPrevious();
+      expect(session.getActiveItem().name).toBe("custom-instructions");
+
+      // Closes preview cleanly
+      session.closePreview();
+      expect(session.isInPreview()).toBe(false);
+    });
+
+    it("toggles skill selection directly from within preview modal using Space in interactive runner", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "inmodal-toggle-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+      });
+
+      // Flow:
+      // 1. Open preview with 'p' on skill-backend (initially recommended = true)
+      // 2. Press Space to toggle skill-backend OFF while inside preview modal
+      // 3. Press 'p' to exit preview modal
+      // 4. Press Enter to confirm selection
+      setTimeout(() => stdin.write("p"), 20);
+      setTimeout(() => stdin.write(" "), 40);
+      setTimeout(() => stdin.write("p"), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).not.toContain("skill-backend");
+    });
+
+    it("navigates skills with arrow keys and vim keys directly inside preview modal", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "modal-keys-nav-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+      });
+
+      // Flow:
+      // 1. Open preview with 'i' (inspect) on index 0 (skill-backend)
+      // 2. Press Right Arrow (\u001b[C) to advance preview to skill-database
+      // 3. Press Right Arrow (\u001b[C) to advance preview to skill-frontend
+      // 4. Press Space to toggle skill-frontend ON
+      // 5. Press Left Arrow (\u001b[D) back to skill-database
+      // 6. Press Space to toggle skill-database OFF
+      // 7. Press Escape to close preview
+      // 8. Press Enter to confirm
+      setTimeout(() => stdin.write("i"), 20);
+      setTimeout(() => stdin.write("\u001b[C"), 40);
+      setTimeout(() => stdin.write("\u001b[C"), 60);
+      setTimeout(() => stdin.write(" "), 80);
+      setTimeout(() => stdin.write("\u001b[D"), 100);
+      setTimeout(() => stdin.write(" "), 120);
+      setTimeout(() => stdin.write("\u001b"), 140);
+      setTimeout(() => stdin.write("\r"), 160);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).toContain("skill-frontend");
+      expect(result.selectedSkills).not.toContain("skill-database");
+      expect(output).toContain("Skill Preview: skill-database");
+      expect(output).toContain("Skill Preview: skill-frontend");
+    });
+
+    it("exits preview modal via enter without confirming checklist prematurely", async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const profile = profileArchetype(tempDir);
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+      });
+
+      // Press 'p' to enter preview, press '\r' to exit preview, then press 'q' to abort checklist
+      setTimeout(() => stdin.write("p"), 20);
+      setTimeout(() => stdin.write("\r"), 50);
+      setTimeout(() => stdin.write("q"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(false);
+    });
+
+    it("exits preview modal via escape key without confirming checklist prematurely", async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const profile = profileArchetype(tempDir);
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+      });
+
+      // Press 'p' to enter preview, press '\u001b' to exit preview, then press 'q' to abort checklist
+      setTimeout(() => stdin.write("p"), 20);
+      setTimeout(() => stdin.write("\u001b"), 50);
+      setTimeout(() => stdin.write("q"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(false);
+    });
+
+    it("exits preview modal via p or i key without confirming selection prematurely", async () => {
+      for (const exitKey of ["p", "i"]) {
+        const stdin = new PassThrough();
+        const stdout = new PassThrough();
+        const profile = profileArchetype(tempDir);
+
+        const selectorPromise = runInteractiveSkillSelector({
+          profile,
+          projectPath: tempDir,
+          stdin,
+          stdout,
+          dryRun: true,
+        });
+
+        // Open preview with 'p', exit with exitKey, then press 'q' to abort checklist
+        setTimeout(() => stdin.write("p"), 20);
+        setTimeout(() => stdin.write(exitKey), 50);
+        setTimeout(() => stdin.write("q"), 80);
+
+        const result = await selectorPromise;
+        expect(result.confirmed).toBe(false);
+      }
+    });
+
+    it("closes preview modal and returns to checklist when q is pressed inside preview", async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const profile = profileArchetype(tempDir);
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+      });
+
+      // Press 'p' to enter preview, press 'q' to close preview, then press 'q' again to abort checklist
+      setTimeout(() => stdin.write("p"), 20);
+      setTimeout(() => stdin.write("q"), 50);
+      setTimeout(() => stdin.write("q"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(false);
+    });
+  });
+
+  describe("AC-4: Interactive Stream Simulation & End-to-End Persistence", () => {
+    it("persists filesystem skills reflecting modifications performed inside the preview modal", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "modal-persistence-e2e",
+          scripts: { test: "bun test" }
+        })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" },
+      });
+
+      // 1. Open preview ('p') on skill-backend (recommended)
+      // 2. Toggle skill-backend OFF (' ')
+      // 3. Move to custom-instructions (Left arrow wraps around to custom-instructions)
+      // 4. Toggle custom-instructions ON (' ')
+      // 5. Exit preview ('p')
+      // 6. Confirm checklist ('\r')
+      setTimeout(() => stdin.write("p"), 20);
+      setTimeout(() => stdin.write(" "), 40);
+      setTimeout(() => stdin.write("\u001b[D"), 60);
+      setTimeout(() => stdin.write(" "), 80);
+      setTimeout(() => stdin.write("p"), 100);
+      setTimeout(() => stdin.write("\r"), 120);
+
+      const promptResult = await promptPromise;
+      expect(promptResult.confirmed).toBe(true);
+      expect(promptResult.selectedSkills).not.toContain("skill-backend");
+      expect(promptResult.selectedSkills).toContain("custom-instructions");
+
+      const genResult = generateAgents(tempDir, {
+        selectedSkills: promptResult.selectedSkills,
+        force: true
+      });
+
+      expect(genResult.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
+    });
+  });
+});
+
 
 
 

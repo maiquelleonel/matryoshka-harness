@@ -40,9 +40,13 @@ Feature: feat(agents): interactive skill inspector and terminal selector for bab
     When A requisição correspondente a 'Subtask 5: **Interactive Prompt Interface:**' é executada
     Then O resultado de 'Subtask 5: **Interactive Prompt Interface:**' é processado e persistido em conformidade com o contrato
   Scenario: AC-6 - Subtask 6: **Skill Content Preview Modal/Screen:**
-    Given O ambiente de execução está operacional e pronto para processar 'Subtask 6: **Skill Content Preview Modal/Screen:**'
-    When A requisição correspondente a 'Subtask 6: **Skill Content Preview Modal/Screen:**' é executada
-    Then O resultado de 'Subtask 6: **Skill Content Preview Modal/Screen:**' é processado e persistido em conformidade com o contrato
+    Given um usuário inspeciona uma skill com 'p' ou 'i' no seletor interativo de terminal
+    When o modal de pré-visualização de skill é acionado
+    Then deve renderizar título, arquivo, status de seleção, recomendação de perfil e paginação [X/Y]
+    And deve exibir o bloco de Frontmatter YAML e as diretrizes categorizadas de DO e DON'T
+    And deve discriminar o custo de tokens do corpo vs cabeçalho e footprint cumulativo vs orçamento
+    And deve permitir alternar a seleção da skill com [Space] e navegar com setas [←/→] ou vim keys dentro do modal
+    And deve retornar ao checklist ao pressionar [Escape], [p], [i] ou [Enter].
   Scenario: AC-7 - Subtask 7: **Headless & Flag Parity:**
     Given O ambiente de execução está operacional e pronto para processar 'Subtask 7: **Headless & Flag Parity:**'
     When A requisição correspondente a 'Subtask 7: **Headless & Flag Parity:**' é executada

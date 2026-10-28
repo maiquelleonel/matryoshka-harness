@@ -1950,8 +1950,19 @@ export function resolveSkillContent(
       return compileSecuritySkill({ projectPath: root, profile });
     case "skill-testing":
       return compileTestingSkill({ projectPath: root, profile });
-    case "custom-instructions":
+    case "custom-instructions": {
+      if (root) {
+        const customPath = path.join(root, ".agents", "skills", "custom-instructions.md");
+        if (fs.existsSync(customPath)) {
+          try {
+            return fs.readFileSync(customPath, "utf-8");
+          } catch {
+            // fallback
+          }
+        }
+      }
       return SKILL_DEFINITIONS["custom-instructions"]?.content || "";
+    }
     default:
       return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
   }
