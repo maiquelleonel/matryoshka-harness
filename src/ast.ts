@@ -259,7 +259,14 @@ export function matchesPattern(
   }
 
   let isAnchored = false;
-  if (normPattern.startsWith("/")) {
+  if (normPattern.startsWith("./")) {
+    normPattern = normPattern.slice(2);
+    if (normPattern.startsWith("**/")) {
+      isAnchored = false;
+    } else {
+      isAnchored = true;
+    }
+  } else if (normPattern.startsWith("/")) {
     isAnchored = true;
     normPattern = normPattern.slice(1);
   } else if (normPattern.startsWith("**/")) {
@@ -345,12 +352,20 @@ export function matchesPattern(
  * Checks whether any pattern in the list un-ignores a path inside dirPath.
  */
 function hasNegationUnderDir(dirPath: string, patterns: string[]): boolean {
-  const norm = dirPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  let norm = dirPath.replace(/\\/g, "/").trim();
+  if (norm.startsWith("./")) {
+    norm = norm.slice(2);
+  }
+  norm = norm.replace(/^\/+|\/+$/g, "");
   const prefix = norm ? `${norm}/` : "";
   for (const pat of patterns) {
     const trimmed = pat.trim();
     if (trimmed.startsWith("!") && !trimmed.startsWith("\\!")) {
-      const clean = trimmed.slice(1).replace(/^\/+/, "");
+      let clean = trimmed.slice(1).trim();
+      if (clean.startsWith("./")) {
+        clean = clean.slice(2);
+      }
+      clean = clean.replace(/^\/+/, "");
       if (clean.startsWith(prefix) || !clean.includes("/")) {
         return true;
       }

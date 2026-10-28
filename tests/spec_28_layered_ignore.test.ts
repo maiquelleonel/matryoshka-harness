@@ -8,7 +8,9 @@ import {
   matchesPattern,
   loadBabaIgnorePatterns,
   resolveBabaIgnorePath,
+  AstEngine,
 } from "../src/ast";
+import { evaluateCompositeHarness } from "../src/scorer";
 import type { AstWalkResult } from "../src/types";
 
 describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => {
@@ -364,25 +366,67 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
     });
   });
 
-  describe("Subtask 3-5: Dedicated Ignore Files (.babaignore & .bbygignore)", () => {
-    it("loads .babaignore and skips matching relative paths during walkCodebase", async () => {
-      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
-      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
-      fs.mkdirSync(path.join(tempDir, "generated"), { recursive: true });
+  describe("Subtask 5: Relative paths matching patterns in this file must be bypassed during directory walks and AST parsing", () => {
+    it("bypasses directory walks early when directory matches relative patterns in .babaignore (pruning subtree)", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/nested/ignored_dir/deep"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "src/nested/normal"), { recursive: true });
 
-      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const app = true;");
-      fs.writeFileSync(path.join(tempDir, "docs/sample.ts"), "export const docCode = 123;");
-      fs.writeFileSync(path.join(tempDir, "generated/schema.ts"), "export const schema = {};");
-
-      // Write .babaignore
+      fs.writeFileSync(path.join(tempDir, "src/nested/normal/valid.ts"), "export const ok = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "src/nested/ignored_dir/deep/file.ts"),
+        "export const danger = 2;"
+      );
       fs.writeFileSync(
         path.join(tempDir, ".babaignore"),
-        "# ignore docs and generated code\ndocs/**\ngenerated/\n"
+        "src/nested/ignored_dir/\n"
       );
 
-      const patterns = loadBabaIgnorePatterns(tempDir);
-      expect(patterns).toContain("docs/**");
-      expect(patterns).toContain("generated/");
+      const result = await walkCodebase(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toContain("src/nested/normal/valid.ts");
+      expect(scannedPaths).not.toContain("src/nested/ignored_dir/deep/file.ts");
+
+      // Verify directory was pruned and registered as skipped with reason "ignored"
+      const skippedRelPaths = result.skippedFiles.map((s) => s.relativePath.replace(/\\/g, "/"));
+      expect(skippedRelPaths).toContain("src/nested/ignored_dir");
+    });
+
+    it("bypasses AST parsing for individual files matching relative patterns while scanning sibling files in the same directory", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/api"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/api/routes.ts"), "export const routes = [];");
+      fs.writeFileSync(
+        path.join(tempDir, "src/api/routes.generated.ts"),
+        "export const generatedRoutes = [];"
+      );
+
+      fs.writeFileSync(
+        path.join(tempDir, ".babaignore"),
+        "src/api/*.generated.ts\n"
+      );
+
+      const result = await walkCodebase(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toContain("src/api/routes.ts");
+      expect(scannedPaths).not.toContain("src/api/routes.generated.ts");
+
+      const skipped = result.skippedFiles.find(
+        (s) => s.relativePath.replace(/\\/g, "/") === "src/api/routes.generated.ts"
+      );
+      expect(skipped).toBeDefined();
+      expect(skipped?.reason).toBe("ignored");
+    });
+
+    it("bypasses relative paths matching leading ./ patterns in .babaignore during directory walks and AST parsing", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "build"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const app = true;");
+      fs.writeFileSync(path.join(tempDir, "build/bundle.ts"), "export const bundle = 1;");
+
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "./build/**\n");
 
       const result = await walkCodebase(tempDir);
       const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
@@ -390,7 +434,70 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
       expect(scannedPaths).toEqual(["src/index.ts"]);
     });
 
-    it("falls back to .bbygignore when .babaignore is not present", async () => {
+    it("AstEngine.walk bypasses relative paths matching .babaignore during walks and AST parsing", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "generated"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const app = 1;");
+      fs.writeFileSync(path.join(tempDir, "generated/code.ts"), "export const code = 2;");
+
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "generated/\n");
+
+      const engine = new AstEngine();
+      const result = await engine.walk(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toEqual(["src/index.ts"]);
+    });
+
+    it("bypasses files matching .babaignore relative patterns in composite harness evaluation, avoiding false-positive AST violations", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "legacy"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "ignore-eval-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Ignore Eval App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const ok = 1;");
+      // File with deliberate SQL interpolation antipattern
+      fs.writeFileSync(
+        path.join(tempDir, "legacy/hazard.ts"),
+        "export function query(id: string) { return `SELECT * FROM table WHERE id = ${id}`; }"
+      );
+
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "legacy/**\n");
+
+      const harnessResult = await evaluateCompositeHarness(tempDir);
+
+      const sqlViolations = (harnessResult.violations || []).filter(
+        (v) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlViolations.length).toBe(0);
+      expect(harnessResult.totalFilesAnalyzed).toBe(1);
+    });
+
+    it("respects relative pattern negations during directory walks and AST parsing", async () => {
+      fs.mkdirSync(path.join(tempDir, "modules/auth"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "modules/auth/public.ts"), "export const pub = true;");
+      fs.writeFileSync(path.join(tempDir, "modules/auth/secret.ts"), "export const priv = false;");
+
+      fs.writeFileSync(
+        path.join(tempDir, ".babaignore"),
+        "modules/auth/**\n!modules/auth/public.ts\n"
+      );
+
+      const result = await walkCodebase(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toContain("modules/auth/public.ts");
+      expect(scannedPaths).not.toContain("modules/auth/secret.ts");
+    });
+
+    it("falls back to .bbygignore when .babaignore is not present and bypasses matching relative paths", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "fixtures"), { recursive: true });
 
