@@ -18,6 +18,8 @@ import {
   formatTokenFootprint,
   extractDontVsDoGuidelines,
   extractAllSelectedGuidelines,
+  isHeadlessEnvironment,
+  shouldRunInteractivePrompt,
   type InteractiveSelectorOptions,
   type TokenFootprintReport,
   type DontVsDoSummary
@@ -850,5 +852,197 @@ description: Sample skill
     });
   });
 });
+
+describe("SPEC-26 Subtask 4: Smoothly Fallback to Non-Interactive Mode in Headless/CI Environments", () => {
+  let tempDir: string;
+  const cliPath = path.resolve(__dirname, "../src/cli.ts");
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask4-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Headless Environment Auto-Detection and Helper Contracts", () => {
+    it("exports isHeadlessEnvironment helper detecting non-TTY and CI environments", () => {
+      expect(isHeadlessEnvironment).toBeFunction();
+      expect(isHeadlessEnvironment({ stdin: { isTTY: false } })).toBe(true);
+      expect(isHeadlessEnvironment({ stdin: { isTTY: true }, env: { CI: "true" } })).toBe(true);
+      expect(isHeadlessEnvironment({ stdin: { isTTY: true }, env: { CONTINUOUS_INTEGRATION: "1" } })).toBe(true);
+      expect(isHeadlessEnvironment({ stdin: { isTTY: true }, env: { GITHUB_ACTIONS: "true" } })).toBe(true);
+      expect(isHeadlessEnvironment({ stdin: { isTTY: true }, env: {} })).toBe(false);
+    });
+
+    it("exports shouldRunInteractivePrompt with strict decision logic for TTY, flags, and CI", () => {
+      expect(shouldRunInteractivePrompt).toBeFunction();
+
+      // When --yes or -y is supplied, never prompt
+      expect(shouldRunInteractivePrompt({ isYes: true, stdin: { isTTY: true }, stdout: { isTTY: true } })).toBe(false);
+
+      // When --json is supplied, never prompt
+      expect(shouldRunInteractivePrompt({ isJson: true, stdin: { isTTY: true }, stdout: { isTTY: true } })).toBe(false);
+
+      // When stdin is not a TTY (headless/piped), never prompt
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: false }, stdout: { isTTY: true } })).toBe(false);
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: false }, isInteractive: true })).toBe(false);
+
+      // When running in CI without explicit interactive flag, never prompt
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: true }, stdout: { isTTY: true }, env: { CI: "true" } })).toBe(false);
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: true }, stdout: { isTTY: true }, env: { CONTINUOUS_INTEGRATION: "1" } })).toBe(false);
+
+      // When in interactive TTY terminal and not in CI, should prompt
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: true }, stdout: { isTTY: true }, env: {} })).toBe(true);
+
+      // When --interactive is explicitly set with a TTY terminal, should prompt
+      expect(shouldRunInteractivePrompt({ stdin: { isTTY: true }, stdout: { isTTY: true }, isInteractive: true, env: { CI: "true" } })).toBe(true);
+    });
+
+    it("supports fallbackNonInteractive option in runInteractiveSkillSelector to resolve immediately without hanging", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "fallback-test" }));
+      const profile = profileArchetype(tempDir);
+
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const result = await runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        fallbackNonInteractive: true
+      });
+
+      expect(result.confirmed).toBe(true);
+      expect(result.headlessFallback).toBe(true);
+      expect(result.selectedSkills).toEqual(profile.activeSkills);
+      expect(result.footprint).toBeDefined();
+      expect(result.guidelinesSummary).toBeDefined();
+    });
+  });
+
+  describe("AC-2: CLI Fallback to Non-Interactive Mode with --yes / -y", () => {
+    it("bypasses interactive prompts and generates profile-recommended skills with --yes", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-yes-subtask4",
+          dependencies: { express: "^4.18.2" }
+        })
+      );
+      fs.mkdirSync(path.join(tempDir, "src", "routes"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "src", "routes", "index.ts"), "export const r = 1;");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--yes"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+    });
+
+    it("bypasses interactive prompts and generates profile-recommended skills with -y shorthand", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-shorty-subtask4",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-y"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("works seamlessly with --dry-run and --yes together", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-dryrun-yes-test",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--yes", "--dry-run"]);
+      expect(proc.exitCode).toBe(0);
+      expect(proc.stdout.toString()).toContain("Matryoshka Adaptive Agents Generator");
+      // In dry-run, AGENTS.md should NOT be created
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+    });
+  });
+
+  describe("AC-3: Headless CI Auto-detection and Non-TTY Fallback", () => {
+    it("executes in deterministic batch mode when process.stdin.isTTY is false without interactive flags", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "headless-batch-test",
+          dependencies: { fastapi: "^0.100.0" }
+        })
+      );
+
+      // Child process runs with non-TTY stdin by default in Bun.spawnSync
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-backend.md"))).toBe(true);
+    });
+
+    it("smoothly falls back when --interactive is provided in a non-TTY environment", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "interactive-in-headless-test",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      // In non-TTY, --interactive must smoothly fall back to non-interactive mode without hanging
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--interactive"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("bypasses prompt automatically when CI environment variable is present", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "ci-env-auto-test",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir], {
+        env: { ...process.env, CI: "true" }
+      });
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("maintains strict alias parity across baba, bbyg, and matryoshka in headless mode", () => {
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        const subTemp = path.join(tempDir, `alias-${alias}`);
+        fs.mkdirSync(subTemp, { recursive: true });
+        fs.writeFileSync(path.join(subTemp, "package.json"), JSON.stringify({ name: `alias-${alias}-test` }));
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", subTemp, "-y"], {
+          env: { ...process.env, BABA_ALIAS: alias }
+        });
+        expect(proc.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(subTemp, "AGENTS.md"))).toBe(true);
+      }
+    });
+  });
+});
+
 
 
