@@ -9,7 +9,11 @@ import type {
 import {
   SKILL_DEFINITIONS,
   estimateTokens,
-  parseSkillFrontmatter
+  parseSkillFrontmatter,
+  profileArchetype,
+  compileRootAgents,
+  MAX_ROOT_AGENTS_TOKENS,
+  resolveSkillContent
 } from "./agents";
 
 export interface SkillItem {
@@ -56,6 +60,298 @@ export const MODULAR_SKILLS_CATALOG: Array<{
     description: "Repository-specific overrides, domain rules, bespoke workflows, and developer guidelines.",
   },
 ];
+
+export interface TokenFootprintReport {
+  rootTokens: number;
+  skillsTokens: Record<SkillName, number>;
+  totalSkillsTokens: number;
+  totalTokens: number;
+  selectedSkillsCount: number;
+  totalAvailableSkillsCount: number;
+  tokenBudget: number;
+  budgetPercentage: number;
+  isWithinBudget: boolean;
+  savingsVsMonolithic: {
+    monolithicCost: number;
+    savedTokens: number;
+    savingsPercentage: number;
+  };
+}
+
+export interface DontVsDoSummary {
+  skillName: SkillName | string;
+  title: string;
+  dos: string[];
+  donts: string[];
+  totalRules: number;
+}
+
+/**
+ * Calculates the exact token footprint for selected skills and root AGENTS.md.
+ */
+export function calculateTokenFootprint(
+  selectedSkills: SkillName[],
+  options?: {
+    profile?: ArchetypeProfile;
+    projectPath?: string;
+    tokenBudget?: number;
+    maxTokens?: number;
+  }
+): TokenFootprintReport {
+  const projectPath = options?.projectPath ?? process.cwd();
+  const profile = options?.profile ?? profileArchetype(projectPath);
+  const effectiveProfile: ArchetypeProfile = {
+    ...profile,
+    activeSkills: selectedSkills,
+  };
+  const maxTokens = options?.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
+  const rootContent = compileRootAgents(effectiveProfile, { maxTokens });
+  const rootTokens = estimateTokens(rootContent);
+
+  const skillsTokens = {} as Record<SkillName, number>;
+  let totalSkillsTokens = 0;
+
+  for (const cat of MODULAR_SKILLS_CATALOG) {
+    const isSelected = selectedSkills.includes(cat.name);
+    const content = resolveSkillContent(cat.name, {
+      projectPath,
+      profile: effectiveProfile,
+    });
+    const tokens = estimateTokens(content);
+    if (isSelected) {
+      skillsTokens[cat.name] = tokens;
+      totalSkillsTokens += tokens;
+    }
+  }
+
+  const totalTokens = rootTokens + totalSkillsTokens;
+  const tokenBudget = options?.tokenBudget ?? 2500;
+  const budgetPercentage = Math.round((totalTokens / tokenBudget) * 100);
+  const isWithinBudget = totalTokens <= tokenBudget;
+
+  const monolithicCost = 1500;
+  const savedTokens = Math.max(0, monolithicCost - rootTokens);
+  const savingsPercentage = Math.round((savedTokens / monolithicCost) * 100);
+
+  return {
+    rootTokens,
+    skillsTokens,
+    totalSkillsTokens,
+    totalTokens,
+    selectedSkillsCount: selectedSkills.length,
+    totalAvailableSkillsCount: MODULAR_SKILLS_CATALOG.length,
+    tokenBudget,
+    budgetPercentage,
+    isWithinBudget,
+    savingsVsMonolithic: {
+      monolithicCost,
+      savedTokens,
+      savingsPercentage,
+    },
+  };
+}
+
+/**
+ * Formats a live token footprint display with visual budget and FinOps breakdown.
+ */
+export function formatTokenFootprint(footprint: TokenFootprintReport): string {
+  const statusBadge = footprint.isWithinBudget
+    ? pc.green("✓ Within budget")
+    : pc.red("⚠️ Exceeds budget");
+
+  const lines: string[] = [
+    pc.bold(pc.cyan("📊 Token Footprint:")),
+    `  ${pc.dim("•")} Root AGENTS.md:   ${pc.yellow(`~${footprint.rootTokens}`)} tokens`,
+    `  ${pc.dim("•")} Selected Skills:  ${pc.yellow(`~${footprint.totalSkillsTokens}`)} tokens (${footprint.selectedSkillsCount}/${footprint.totalAvailableSkillsCount} active)`,
+    `  ${pc.dim("•")} Total Footprint:  ${pc.bold(pc.white(`~${footprint.totalTokens}`))} / ${footprint.tokenBudget} tokens (${footprint.budgetPercentage}% of budget) - [${statusBadge}]`,
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * Extracts and classifies rules into DO and DON'T directives from skill markdown content.
+ */
+export function extractDontVsDoGuidelines(
+  content: string,
+  skillName?: SkillName | string
+): DontVsDoSummary {
+  const title =
+    (skillName && MODULAR_SKILLS_CATALOG.find((s) => s.name === skillName)?.title) ||
+    skillName ||
+    "Custom Guidelines";
+
+  let body = content;
+  if (content.startsWith("---\n")) {
+    const endFm = content.indexOf("\n---\n", 4);
+    if (endFm !== -1) {
+      body = content.slice(endFm + 5);
+    }
+  }
+
+  const dos: string[] = [];
+  const donts: string[] = [];
+
+  const lines = body.split("\n");
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed.startsWith("* ") && !trimmed.startsWith("- ")) {
+      continue;
+    }
+
+    const ruleText = trimmed.replace(/^[\*\-]\s+/, "").trim();
+    if (!ruleText) continue;
+
+    const strippedPrefix = ruleText.replace(/^\*\*[^\*]+:\*\*\s*/, "").trim();
+
+    const isDont =
+      /^(never|avoid|do not|don't|no\s+|prohibit|cannot|stop)\b/i.test(strippedPrefix) ||
+      /\b(never|don't|do not)\b/i.test(strippedPrefix);
+
+    if (isDont) {
+      donts.push(ruleText);
+    } else {
+      dos.push(ruleText);
+    }
+  }
+
+  return {
+    skillName: skillName || "custom",
+    title,
+    dos,
+    donts,
+    totalRules: dos.length + donts.length,
+  };
+}
+
+/**
+ * Extracts aggregate Don't vs Do guidelines across all selected skills.
+ */
+export function extractAllSelectedGuidelines(
+  selectedSkills: SkillName[],
+  projectPath?: string,
+  profile?: ArchetypeProfile
+): DontVsDoSummary[] {
+  return selectedSkills.map((name) => {
+    const content = resolveSkillContent(name, { projectPath, profile });
+    return extractDontVsDoGuidelines(content, name);
+  });
+}
+
+/**
+ * Formats a detailed skill preview modal including frontmatter, token footprint, and Don't vs Do breakdown.
+ */
+export function formatSkillPreview(
+  skillName: SkillName,
+  options?: {
+    projectPath?: string;
+    profile?: ArchetypeProfile;
+    cumulativeSelectedSkills?: SkillName[];
+    tokenBudget?: number;
+  }
+): string {
+  const cat = MODULAR_SKILLS_CATALOG.find((s) => s.name === skillName);
+  const def = SKILL_DEFINITIONS[skillName];
+  const content = resolveSkillContent(skillName, {
+    projectPath: options?.projectPath,
+    profile: options?.profile,
+  });
+  const tokens = estimateTokens(content);
+  const fm = parseSkillFrontmatter(content);
+  const guidelines = extractDontVsDoGuidelines(content, skillName);
+
+  let fmBlock = "";
+  if (content.startsWith("---\n")) {
+    const endFm = content.indexOf("\n---\n", 4);
+    if (endFm !== -1) {
+      fmBlock = content.slice(0, endFm + 5).trim();
+    }
+  }
+  const fmTokens = fmBlock ? estimateTokens(fmBlock) : 0;
+  const bodyTokens = Math.max(0, tokens - fmTokens);
+
+  const selected = options?.cumulativeSelectedSkills ?? [skillName];
+  const footprint = calculateTokenFootprint(selected, {
+    projectPath: options?.projectPath,
+    profile: options?.profile,
+    tokenBudget: options?.tokenBudget,
+  });
+
+  const lines: string[] = [];
+  lines.push(
+    pc.bold(
+      pc.yellow(`\n🔍 Skill Preview: ${skillName} (${cat?.title || skillName})\n`)
+    )
+  );
+  lines.push(`  ${pc.dim("File:")}        .agents/skills/${def?.fileName || `${skillName}.md`}`);
+  lines.push(`  ${pc.dim("Estimated:")}   ~${tokens} tokens`);
+  lines.push(`  ${pc.dim("Description:")} ${fm?.description || cat?.description || ""}\n`);
+
+  if (fmBlock) {
+    lines.push(pc.bold(pc.cyan("  📦 YAML Frontmatter:")));
+    lines.push(pc.dim("    " + fmBlock.split("\n").join("\n    ")) + "\n");
+  }
+
+  lines.push(pc.bold(pc.cyan("  📊 Token Footprint:")));
+  lines.push(`    ${pc.dim("•")} Skill Body: ~${bodyTokens} tokens`);
+  lines.push(`    ${pc.dim("•")} Frontmatter: ~${fmTokens} tokens`);
+  lines.push(
+    `    ${pc.dim("•")} Cumulative with Selection: ~${footprint.totalTokens} / ${footprint.tokenBudget} tokens (${footprint.budgetPercentage}%)\n`
+  );
+
+  lines.push(pc.bold(pc.cyan("  📋 Don't vs Do Guidelines:")));
+  if (guidelines.dos.length > 0) {
+    lines.push(pc.bold(pc.green("    ✅ DO (Best Practices & Invariants):")));
+    for (const d of guidelines.dos) {
+      lines.push(`      ${pc.green("•")} ${d}`);
+    }
+  }
+  if (guidelines.donts.length > 0) {
+    lines.push(pc.bold(pc.red("    ❌ DON'T (Anti-Patterns & Prohibitions):")));
+    for (const d of guidelines.donts) {
+      lines.push(`      ${pc.red("•")} ${d}`);
+    }
+  }
+
+  lines.push(
+    pc.dim("\n  Press [Escape], [p], [i], or [Enter] to return to checklist.\n")
+  );
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats aggregate Don't vs Do guidelines across multiple skills.
+ */
+export function formatDontVsDoGuidelines(
+  summaries: DontVsDoSummary | DontVsDoSummary[]
+): string {
+  const list = Array.isArray(summaries) ? summaries : [summaries];
+  const lines: string[] = [];
+
+  lines.push(pc.bold(pc.cyan("\n📋 Don't vs Do Guidelines Preview:\n")));
+  lines.push(pc.dim("━".repeat(68)));
+
+  for (const item of list) {
+    lines.push(pc.bold(pc.magenta(`• ${item.title} (${item.skillName})`)));
+    if (item.dos.length > 0) {
+      lines.push(pc.bold(pc.green("  ✅ DO:")));
+      for (const d of item.dos) {
+        lines.push(`    ${pc.green("•")} ${d}`);
+      }
+    }
+    if (item.donts.length > 0) {
+      lines.push(pc.bold(pc.red("  ❌ DON'T:")));
+      for (const d of item.donts) {
+        lines.push(`    ${pc.red("•")} ${d}`);
+      }
+    }
+    lines.push("");
+  }
+
+  lines.push(pc.dim("━".repeat(68)));
+  lines.push(pc.dim("  Press [Escape], [g], or [Enter] to return to checklist.\n"));
+  return lines.join("\n");
+}
 
 /**
  * Formats a comprehensive, human-readable review of the detected archetype and stack profile.
@@ -133,6 +429,8 @@ export interface InteractiveSelectorResult {
   confirmed: boolean;
   selectedSkills: SkillName[];
   items?: SkillItem[];
+  footprint?: TokenFootprintReport;
+  guidelinesSummary?: DontVsDoSummary[];
 }
 
 /**
@@ -165,38 +463,58 @@ export async function runInteractiveSkillSelector(
 
   let cursor = 0;
   let inPreview = false;
+  let inGuidelinesModal = false;
 
   const render = () => {
+    if (inGuidelinesModal) {
+      const activeSelected = items.filter((it) => it.selected).map((it) => it.name);
+      const summaries = extractAllSelectedGuidelines(activeSelected, projectPath, profile);
+      stdout.write(formatDontVsDoGuidelines(summaries));
+      return;
+    }
+
+    if (inPreview) {
+      const current = items[cursor] ?? items[0];
+      const activeSelected = items.filter((it) => it.selected).map((it) => it.name);
+      if (current) {
+        stdout.write(
+          formatSkillPreview(current.name, {
+            projectPath,
+            profile,
+            cumulativeSelectedSkills: activeSelected,
+            tokenBudget: options.maxTokens,
+          })
+        );
+      }
+      return;
+    }
+
     // Print stack review header first
     const reviewText = formatArchetypeProfileReview(profile, projectPath);
     let output = reviewText + "\n";
 
-    if (inPreview) {
-      const current = items[cursor] ?? items[0];
-      const def = current ? SKILL_DEFINITIONS[current.name] : undefined;
-      const content = def?.content || "";
-      const tokens = estimateTokens(content);
-      const fm = parseSkillFrontmatter(content);
+    output += pc.bold(pc.cyan("Interactive Skills Checklist:\n"));
+    output += pc.dim(
+      "  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [a] toggle all, [p/i] to inspect, [g] guidelines preview, [Enter] to confirm, [q] to quit.\n\n"
+    );
 
-      output += pc.bold(pc.yellow(`\n🔍 Skill Preview: ${current?.name ?? "skill"} (${current?.title ?? ""})\n`));
-      output += `  ${pc.dim("File:")}        .agents/skills/${def?.fileName || `${current?.name ?? "skill"}.md`}\n`;
-      output += `  ${pc.dim("Estimated:")}   ~${tokens} tokens\n`;
-      output += `  ${pc.dim("Description:")} ${fm?.description || current?.description || ""}\n`;
-      output += pc.dim("\n  Press [Escape], [p], [i], or [Enter] to return to checklist.\n");
-    } else {
-      output += pc.bold(pc.cyan("Interactive Skills Checklist:\n"));
-      output += pc.dim("  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [a] toggle all, [p/i] to inspect, [Enter] to confirm, [q] to quit.\n\n");
+    items.forEach((item, index) => {
+      const isCurrent = index === cursor;
+      const pointer = isCurrent ? pc.cyan("❯ ") : "  ";
+      const check = item.selected ? pc.green("◉ ") : pc.dim("◯ ");
+      const nameText = isCurrent ? pc.bold(pc.white(item.name)) : pc.dim(item.name);
+      const recTag = item.recommended ? pc.green(" [recommended]") : pc.dim(" [optional]");
+      output += `${pointer}${check}${nameText} - ${item.title}${recTag}\n`;
+    });
+    output += "\n";
 
-      items.forEach((item, index) => {
-        const isCurrent = index === cursor;
-        const pointer = isCurrent ? pc.cyan("❯ ") : "  ";
-        const check = item.selected ? pc.green("◉ ") : pc.dim("◯ ");
-        const nameText = isCurrent ? pc.bold(pc.white(item.name)) : pc.dim(item.name);
-        const recTag = item.recommended ? pc.green(" [recommended]") : pc.dim(" [optional]");
-        output += `${pointer}${check}${nameText} - ${item.title}${recTag}\n`;
-      });
-      output += "\n";
-    }
+    const currentSelected = items.filter((it) => it.selected).map((it) => it.name);
+    const footprint = calculateTokenFootprint(currentSelected, {
+      projectPath,
+      profile,
+      tokenBudget: options.maxTokens ?? 2500,
+    });
+    output += formatTokenFootprint(footprint) + "\n\n";
 
     stdout.write(output);
   };
@@ -246,7 +564,22 @@ export async function runInteractiveSkillSelector(
       if (keyCtrl && keyName === "c") {
         cleanup();
         stdout.write(pc.red("\nAborted by user (SIGINT).\n"));
-        resolve({ confirmed: false, selectedSkills: [], items: items.map(it => ({ ...it })) });
+        resolve({ confirmed: false, selectedSkills: [], items: items.map((it) => ({ ...it })) });
+        return;
+      }
+
+      if (inGuidelinesModal) {
+        if (
+          keyName === "escape" ||
+          keyName === "g" ||
+          keyName === "return" ||
+          keyName === "enter" ||
+          keyChar === "g" ||
+          keyChar === "q"
+        ) {
+          inGuidelinesModal = false;
+          render();
+        }
         return;
       }
 
@@ -289,6 +622,9 @@ export async function runInteractiveSkillSelector(
           item.selected = !allSelected;
         }
         render();
+      } else if (keyName === "g" || keyChar === "g") {
+        inGuidelinesModal = true;
+        render();
       } else if (keyName === "p" || keyName === "i" || keyChar === "p" || keyChar === "i") {
         inPreview = true;
         render();
@@ -297,10 +633,22 @@ export async function runInteractiveSkillSelector(
         const selectedSkills = items
           .filter((it) => it.selected)
           .map((it) => it.name);
-        resolve({ confirmed: true, selectedSkills, items: items.map(it => ({ ...it })) });
+        const footprint = calculateTokenFootprint(selectedSkills, {
+          projectPath,
+          profile,
+          tokenBudget: options.maxTokens ?? 2500,
+        });
+        const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+        resolve({
+          confirmed: true,
+          selectedSkills,
+          items: items.map((it) => ({ ...it })),
+          footprint,
+          guidelinesSummary,
+        });
       } else if (keyChar === "q" || keyName === "escape") {
         cleanup();
-        resolve({ confirmed: false, selectedSkills: [], items: items.map(it => ({ ...it })) });
+        resolve({ confirmed: false, selectedSkills: [], items: items.map((it) => ({ ...it })) });
       }
     };
 

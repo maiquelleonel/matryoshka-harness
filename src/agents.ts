@@ -1928,6 +1928,36 @@ ${skillsList}
 }
 
 /**
+ * Resolves the rendered markdown content for a modular skill given optional project context.
+ */
+export function resolveSkillContent(
+  skillName: SkillName,
+  options?: {
+    projectPath?: string;
+    profile?: ArchetypeProfile;
+  }
+): string {
+  const root = options?.projectPath ? path.resolve(options.projectPath) : undefined;
+  const profile = options?.profile;
+  switch (skillName) {
+    case "skill-backend":
+      return compileBackendSkill({ projectPath: root, profile });
+    case "skill-database":
+      return compileDatabaseSkill({ projectPath: root, profile });
+    case "skill-frontend":
+      return compileFrontendSkill({ projectPath: root, profile });
+    case "skill-security":
+      return compileSecuritySkill({ projectPath: root, profile });
+    case "skill-testing":
+      return compileTestingSkill({ projectPath: root, profile });
+    case "custom-instructions":
+      return SKILL_DEFINITIONS["custom-instructions"]?.content || "";
+    default:
+      return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
+  }
+}
+
+/**
  * Main engine to generate adaptive AGENTS.md and modular skills.
  */
 export function generateAgents(
@@ -1961,28 +1991,9 @@ export function generateAgents(
     }
   ];
 
-  const resolveSkillContent = (skillName: SkillName): string => {
-    switch (skillName) {
-      case "skill-backend":
-        return compileBackendSkill({ projectPath: root, profile: effectiveProfile });
-      case "skill-database":
-        return compileDatabaseSkill({ projectPath: root, profile: effectiveProfile });
-      case "skill-frontend":
-        return compileFrontendSkill({ projectPath: root, profile: effectiveProfile });
-      case "skill-security":
-        return compileSecuritySkill({ projectPath: root, profile: effectiveProfile });
-      case "skill-testing":
-        return compileTestingSkill({ projectPath: root, profile: effectiveProfile });
-      case "custom-instructions":
-        return SKILL_DEFINITIONS["custom-instructions"].content;
-      default:
-        return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
-    }
-  };
-
   for (const skillName of effectiveSkills) {
     const def = SKILL_DEFINITIONS[skillName];
-    const skillContent = resolveSkillContent(skillName);
+    const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     plannedFiles.push({
       path: path.join(".agents", "skills", def.fileName),
       tokens: estimateTokens(skillContent),
@@ -2048,7 +2059,7 @@ export function generateAgents(
   for (const skillName of effectiveSkills) {
     const def = SKILL_DEFINITIONS[skillName];
     const skillFilePath = path.join(skillsDir, def.fileName);
-    const skillContent = resolveSkillContent(skillName);
+    const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     fs.writeFileSync(skillFilePath, skillContent, "utf-8");
   }
 
