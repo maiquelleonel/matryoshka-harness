@@ -6,6 +6,7 @@ import { PassThrough } from "node:stream";
 import {
   profileArchetype,
   generateAgents,
+  SKILL_DEFINITIONS,
   type ArchetypeProfile,
   type SkillName
 } from "../src/agents";
@@ -13,7 +14,13 @@ import {
   formatArchetypeProfileReview,
   runInteractiveSkillSelector,
   MODULAR_SKILLS_CATALOG,
-  type InteractiveSelectorOptions
+  calculateTokenFootprint,
+  formatTokenFootprint,
+  extractDontVsDoGuidelines,
+  extractAllSelectedGuidelines,
+  type InteractiveSelectorOptions,
+  type TokenFootprintReport,
+  type DontVsDoSummary
 } from "../src/agents-tui";
 
 describe("SPEC-26 Subtask 1: Review Detected Archetype & Stack Profile", () => {
@@ -580,4 +587,268 @@ describe("SPEC-26 Subtask 2: Selectively Toggle Specialized Skills Using Arrow K
     });
   });
 });
+
+describe("SPEC-26 Subtask 3: Live-preview Generated Don't vs Do Guidelines and Token Footprint", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask3-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Token Footprint Calculation and Live Preview", () => {
+    it("calculates accurate token footprint for selected skills and root AGENTS.md", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "footprint-test" }));
+      const profile = profileArchetype(tempDir);
+      const selectedSkills: SkillName[] = ["skill-backend", "skill-database"];
+
+      const footprint = calculateTokenFootprint(selectedSkills, {
+        profile,
+        projectPath: tempDir,
+        tokenBudget: 2500,
+      });
+
+      expect(footprint.rootTokens).toBeGreaterThan(0);
+      expect(footprint.skillsTokens["skill-backend"]).toBeGreaterThan(0);
+      expect(footprint.skillsTokens["skill-database"]).toBeGreaterThan(0);
+      expect(footprint.totalSkillsTokens).toBe(
+        footprint.skillsTokens["skill-backend"] + footprint.skillsTokens["skill-database"]
+      );
+      expect(footprint.totalTokens).toBe(footprint.rootTokens + footprint.totalSkillsTokens);
+      expect(footprint.selectedSkillsCount).toBe(2);
+      expect(footprint.totalAvailableSkillsCount).toBe(6);
+      expect(footprint.tokenBudget).toBe(2500);
+      expect(footprint.budgetPercentage).toBeGreaterThan(0);
+      expect(footprint.isWithinBudget).toBe(true);
+      expect(footprint.savingsVsMonolithic.savedTokens).toBeGreaterThan(0);
+    });
+
+    it("formats live token footprint display with visual budget and FinOps breakdown", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "footprint-fmt-test" }));
+      const profile = profileArchetype(tempDir);
+      const selectedSkills: SkillName[] = ["skill-backend", "skill-security"];
+
+      const footprint = calculateTokenFootprint(selectedSkills, {
+        profile,
+        projectPath: tempDir,
+        tokenBudget: 2500,
+      });
+
+      const formatted = formatTokenFootprint(footprint);
+      expect(formatted).toContain("Token Footprint");
+      expect(formatted).toContain("Root AGENTS.md");
+      expect(formatted).toContain("Selected Skills");
+      expect(formatted).toContain("budget");
+      expect(formatted).toContain("Within budget");
+    });
+
+    it("dynamically updates live token footprint in TUI as skills are toggled", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "live-footprint-tui-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Initially renders footprint
+      // Press space to toggle skill-backend OFF (decreasing token footprint)
+      // Press enter to confirm
+      setTimeout(() => stdin.write(" "), 30);
+      setTimeout(() => stdin.write("\r"), 60);
+
+      const result = await selectorPromise;
+      expect(output).toContain("Token Footprint");
+      expect(result.footprint).toBeDefined();
+      expect(result.footprint?.selectedSkillsCount).toBe(result.selectedSkills.length);
+      expect(result.footprint?.totalTokens).toBeGreaterThan(0);
+    });
+
+    it("returns computed token footprint report in selector result upon confirmation", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "result-footprint-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+        initialSelectedSkills: ["skill-backend", "skill-testing"]
+      });
+
+      setTimeout(() => stdin.write("\r"), 30);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.footprint).toBeDefined();
+      expect(result.footprint?.selectedSkillsCount).toBe(2);
+      expect(result.footprint?.skillsTokens["skill-backend"]).toBeGreaterThan(0);
+      expect(result.footprint?.skillsTokens["skill-testing"]).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AC-2: Don't vs Do Guidelines Extraction & Classification", () => {
+    it("extracts and categorizes rules into DO and DON'T directives from skill markdown content", () => {
+      const sampleSkill = `---
+name: skill-sample
+description: Sample skill
+---
+# Sample Skill
+
+## 1. Safety Rules
+* Never mutate shared state directly in background tasks.
+* Avoid blocking synchronous calls in asynchronous workers.
+* Always wrap database transactions in explicit try-catch blocks.
+* Ensure all sensitive payloads are encrypted before persistence.
+`;
+
+      const summary = extractDontVsDoGuidelines(sampleSkill, "skill-sample");
+      expect(summary.skillName).toBe("skill-sample");
+      expect(summary.donts.length).toBe(2);
+      expect(summary.donts.some(r => r.includes("Never mutate shared state"))).toBe(true);
+      expect(summary.donts.some(r => r.includes("Avoid blocking synchronous"))).toBe(true);
+      expect(summary.dos.length).toBe(2);
+      expect(summary.dos.some(r => r.includes("Always wrap database transactions"))).toBe(true);
+      expect(summary.dos.some(r => r.includes("Ensure all sensitive payloads"))).toBe(true);
+      expect(summary.totalRules).toBe(4);
+    });
+
+    it("extracts guidelines for all canonical skills (backend, database, frontend, security, testing)", () => {
+      const canonicalSkills: SkillName[] = [
+        "skill-backend",
+        "skill-database",
+        "skill-frontend",
+        "skill-security",
+        "skill-testing"
+      ];
+
+      for (const skillName of canonicalSkills) {
+        const content = SKILL_DEFINITIONS[skillName].content;
+        const summary = extractDontVsDoGuidelines(content, skillName);
+        expect(summary.skillName).toBe(skillName);
+        expect(summary.dos.length).toBeGreaterThan(0);
+        expect(summary.donts.length).toBeGreaterThan(0);
+        expect(summary.totalRules).toBeGreaterThan(0);
+      }
+    });
+
+    it("extracts aggregate guidelines for all selected skills", () => {
+      const selected: SkillName[] = ["skill-backend", "skill-database"];
+      const summaries = extractAllSelectedGuidelines(selected, tempDir);
+      expect(summaries.length).toBe(2);
+      expect(summaries[0].skillName).toBe("skill-backend");
+      expect(summaries[1].skillName).toBe("skill-database");
+      expect(summaries[0].dos.length).toBeGreaterThan(0);
+      expect(summaries[0].donts.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AC-3: Interactive Skill Preview Modal with Frontmatter, Footprint, and Guidelines", () => {
+    it("renders comprehensive preview modal with frontmatter, token footprint, and Don't vs Do breakdown when pressing 'p' or 'i'", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "modal-preview-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Press 'p' to open preview modal, then return with Enter, then confirm
+      setTimeout(() => stdin.write("p"), 30);
+      setTimeout(() => stdin.write("\r"), 60);
+      setTimeout(() => stdin.write("\r"), 90);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+
+      // Verify preview modal includes YAML frontmatter, token footprint, and Don't vs Do breakdown
+      expect(output).toContain("Skill Preview:");
+      expect(output).toContain("YAML Frontmatter");
+      expect(output).toContain("Token Footprint");
+      expect(output).toContain("Don't vs Do Guidelines");
+      expect(output).toContain("DO");
+      expect(output).toContain("DON'T");
+    });
+
+    it("allows opening full aggregate Don't vs Do guidelines preview modal via 'g' key", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "guidelines-modal-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Press 'g' to open aggregate guidelines modal, then return with Enter, then confirm
+      setTimeout(() => stdin.write("g"), 30);
+      setTimeout(() => stdin.write("\r"), 60);
+      setTimeout(() => stdin.write("\r"), 90);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(output).toContain("Don't vs Do Guidelines Preview");
+      expect(output).toContain("skill-backend");
+    });
+
+    it("includes guidelines summary in interactive selector result", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "summary-result-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true,
+        initialSelectedSkills: ["skill-backend", "skill-security"]
+      });
+
+      setTimeout(() => stdin.write("\r"), 30);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.guidelinesSummary).toBeDefined();
+      expect(result.guidelinesSummary?.length).toBe(2);
+      expect(result.guidelinesSummary?.find(g => g.skillName === "skill-backend")).toBeDefined();
+    });
+  });
+});
+
 
