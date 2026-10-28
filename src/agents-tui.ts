@@ -126,11 +126,13 @@ export interface InteractiveSelectorOptions {
   force?: boolean;
   maxTokens?: number;
   strictTokenGuard?: boolean;
+  initialSelectedSkills?: SkillName[];
 }
 
 export interface InteractiveSelectorResult {
   confirmed: boolean;
   selectedSkills: SkillName[];
+  items?: SkillItem[];
 }
 
 /**
@@ -149,12 +151,15 @@ export async function runInteractiveSkillSelector(
   // Build selectable items list
   const items: SkillItem[] = MODULAR_SKILLS_CATALOG.map((cat) => {
     const recommended = profile.activeSkills.includes(cat.name);
+    const selected = options.initialSelectedSkills
+      ? options.initialSelectedSkills.includes(cat.name)
+      : recommended;
     return {
       name: cat.name,
       title: cat.title,
       description: cat.description,
       recommended,
-      selected: recommended,
+      selected,
     };
   });
 
@@ -180,7 +185,7 @@ export async function runInteractiveSkillSelector(
       output += pc.dim("\n  Press [Escape], [p], [i], or [Enter] to return to checklist.\n");
     } else {
       output += pc.bold(pc.cyan("Interactive Skills Checklist:\n"));
-      output += pc.dim("  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [p/i] to inspect, [Enter] to confirm, [q] to quit.\n\n");
+      output += pc.dim("  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [a] toggle all, [p/i] to inspect, [Enter] to confirm, [q] to quit.\n\n");
 
       items.forEach((item, index) => {
         const isCurrent = index === cursor;
@@ -201,6 +206,7 @@ export async function runInteractiveSkillSelector(
 
   return new Promise<InteractiveSelectorResult>((resolve) => {
     let rawModeActive = false;
+    let isFinished = false;
     const isTTY = Boolean((stdin as any).isTTY);
 
     if (isTTY && typeof (stdin as any).setRawMode === "function") {
@@ -222,6 +228,8 @@ export async function runInteractiveSkillSelector(
     readline.emitKeypressEvents(stdin);
 
     const cleanup = () => {
+      if (isFinished) return;
+      isFinished = true;
       (stdin as any).removeListener("keypress", onKeyPress);
       (stdin as any).removeListener("data", onData);
       if (rawModeActive && typeof (stdin as any).setRawMode === "function") {
@@ -234,10 +242,11 @@ export async function runInteractiveSkillSelector(
     };
 
     const handleAction = (keyName: string, keyCtrl?: boolean, keyChar?: string) => {
+      if (isFinished) return;
       if (keyCtrl && keyName === "c") {
         cleanup();
         stdout.write(pc.red("\nAborted by user (SIGINT).\n"));
-        resolve({ confirmed: false, selectedSkills: [] });
+        resolve({ confirmed: false, selectedSkills: [], items: items.map(it => ({ ...it })) });
         return;
       }
 
@@ -262,10 +271,22 @@ export async function runInteractiveSkillSelector(
       } else if (keyName === "down" || keyChar === "j") {
         cursor = (cursor + 1) % items.length;
         render();
+      } else if (keyName === "home") {
+        cursor = 0;
+        render();
+      } else if (keyName === "end") {
+        cursor = items.length - 1;
+        render();
       } else if (keyName === "space" || keyChar === " ") {
         const item = items[cursor];
         if (item) {
           item.selected = !item.selected;
+        }
+        render();
+      } else if (keyChar === "a" || keyChar === "A") {
+        const allSelected = items.every((it) => it.selected);
+        for (const item of items) {
+          item.selected = !allSelected;
         }
         render();
       } else if (keyName === "p" || keyName === "i" || keyChar === "p" || keyChar === "i") {
@@ -276,10 +297,10 @@ export async function runInteractiveSkillSelector(
         const selectedSkills = items
           .filter((it) => it.selected)
           .map((it) => it.name);
-        resolve({ confirmed: true, selectedSkills });
+        resolve({ confirmed: true, selectedSkills, items: items.map(it => ({ ...it })) });
       } else if (keyChar === "q" || keyName === "escape") {
         cleanup();
-        resolve({ confirmed: false, selectedSkills: [] });
+        resolve({ confirmed: false, selectedSkills: [], items: items.map(it => ({ ...it })) });
       }
     };
 

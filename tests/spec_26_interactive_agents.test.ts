@@ -248,3 +248,336 @@ dependencies = [
     });
   });
 });
+
+describe("SPEC-26 Subtask 2: Selectively Toggle Specialized Skills Using Arrow Keys and Spacebar", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask2-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Arrow Key Navigation and Cursor Movement", () => {
+    it("navigates down and up using arrow keys (↓ / ↑)", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "nav-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Press Down arrow twice (\u001b[B), then Up arrow once (\u001b[A), then toggle space, then Enter
+      // Initial items: 0: skill-backend (rec: true), 1: skill-database (rec: true), 2: skill-frontend (rec: false)...
+      // Down -> index 1 (skill-database)
+      // Down -> index 2 (skill-frontend)
+      // Up -> index 1 (skill-database)
+      // Space -> toggle skill-database (was true, now false)
+      // Enter -> confirm
+      setTimeout(() => stdin.write("\u001b[B"), 20);
+      setTimeout(() => stdin.write("\u001b[B"), 40);
+      setTimeout(() => stdin.write("\u001b[A"), 60);
+      setTimeout(() => stdin.write(" "), 80);
+      setTimeout(() => stdin.write("\r"), 100);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).not.toContain("skill-database");
+      expect(result.selectedSkills).toContain("skill-backend");
+      expect(result.items).toBeDefined();
+      expect(result.items?.find(it => it.name === "skill-database")?.selected).toBe(false);
+    });
+
+    it("wraps around when moving up from index 0 and down from the last index", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "wrap-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // At index 0, Up arrow wraps to last item (custom-instructions, rec: false)
+      // Space -> toggle custom-instructions ON
+      // Enter -> confirm
+      setTimeout(() => stdin.write("\u001b[A"), 20);
+      setTimeout(() => stdin.write(" "), 40);
+      setTimeout(() => stdin.write("\r"), 60);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).toContain("custom-instructions");
+    });
+
+    it("supports vim-style navigation keys (j / k) equivalently to arrow keys", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "vim-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Press 'j' (down to index 1), 'j' (down to index 2: skill-frontend), Space (toggle ON), 'k' (up to index 1), Enter
+      setTimeout(() => stdin.write("j"), 20);
+      setTimeout(() => stdin.write("j"), 40);
+      setTimeout(() => stdin.write(" "), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).toContain("skill-frontend");
+    });
+
+    it("renders visual pointer ❯ on the active skill row", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "pointer-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      setTimeout(() => stdin.write("\u001b[B"), 20); // Move down
+      setTimeout(() => stdin.write("\r"), 40);
+
+      await selectorPromise;
+      expect(output).toContain("❯");
+      expect(output).toContain("Interactive Skills Checklist:");
+    });
+  });
+
+  describe("AC-2: Selective Toggling via Spacebar", () => {
+    it("toggles an initially recommended skill OFF using spacebar", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "toggle-off-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Cursor is at index 0 (skill-backend, which is recommended).
+      // Press Space to toggle it OFF, then Enter.
+      setTimeout(() => stdin.write(" "), 20);
+      setTimeout(() => stdin.write("\r"), 40);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).not.toContain("skill-backend");
+    });
+
+    it("toggles an optional skill ON using spacebar", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "toggle-on-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Navigate down to index 2 (skill-frontend, optional in backend project)
+      // Down, Down, Space (toggle ON), Enter
+      setTimeout(() => stdin.write("\u001b[B"), 20);
+      setTimeout(() => stdin.write("\u001b[B"), 40);
+      setTimeout(() => stdin.write(" "), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).toContain("skill-frontend");
+    });
+
+    it("allows toggling multiple skills across different positions using arrow keys and spacebar", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "multi-toggle-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // 0: skill-backend (toggle OFF)
+      // Down -> 1: skill-database (leave ON)
+      // Down -> 2: skill-frontend (toggle ON)
+      // Down -> 3: skill-security (toggle OFF)
+      // Enter
+      setTimeout(() => stdin.write(" "), 20);
+      setTimeout(() => stdin.write("\u001b[B"), 40);
+      setTimeout(() => stdin.write("\u001b[B"), 60);
+      setTimeout(() => stdin.write(" "), 80);
+      setTimeout(() => stdin.write("\u001b[B"), 100);
+      setTimeout(() => stdin.write(" "), 120);
+      setTimeout(() => stdin.write("\r"), 140);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).not.toContain("skill-backend");
+      expect(result.selectedSkills).toContain("skill-database");
+      expect(result.selectedSkills).toContain("skill-frontend");
+      expect(result.selectedSkills).not.toContain("skill-security");
+    });
+
+    it("toggles all skills using 'a' key shortcut", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "toggle-all-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Press 'a' (some unselected, so selects all), then 'a' again (all selected, so deselects all),
+      // then Space on current item (toggles index 0 ON), Enter
+      setTimeout(() => stdin.write("a"), 20);
+      setTimeout(() => stdin.write("a"), 40);
+      setTimeout(() => stdin.write(" "), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.selectedSkills).toEqual(["skill-backend"]);
+    });
+
+    it("reflects toggled state visually with ◉ (selected) and ◯ (unselected)", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "visual-toggle-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      setTimeout(() => stdin.write(" "), 20); // Toggle index 0 OFF
+      setTimeout(() => stdin.write("\r"), 40);
+
+      await selectorPromise;
+      expect(output).toContain("◉");
+      expect(output).toContain("◯");
+    });
+  });
+
+  describe("AC-3: Selective Persistence and Cancellation", () => {
+    it("persists strictly the selected skills after interactive toggling", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "persistence-test", scripts: { test: "bun test" } })
+      );
+
+      const selectedSkills: SkillName[] = ["skill-frontend", "custom-instructions"];
+      const result = generateAgents(tempDir, {
+        selectedSkills,
+        force: true
+      });
+
+      expect(result.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-security.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+    });
+
+    it("persists no skill files when all skills are toggled off", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "empty-skills-test", scripts: { test: "bun test" } })
+      );
+
+      const result = generateAgents(tempDir, {
+        selectedSkills: [],
+        force: true
+      });
+
+      expect(result.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      if (fs.existsSync(skillsDir)) {
+        const files = fs.readdirSync(skillsDir);
+        expect(files.filter(f => f.endsWith(".md")).length).toBe(0);
+      }
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("aborts and returns confirmed: false when q or escape is pressed", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "abort-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      setTimeout(() => stdin.write("q"), 20);
+
+      const result = await selectorPromise;
+      expect(result.confirmed).toBe(false);
+      expect(result.selectedSkills).toEqual([]);
+    });
+  });
+});
+
