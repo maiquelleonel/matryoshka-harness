@@ -413,81 +413,40 @@ export function formatArchetypeProfileReview(
   return lines.join("\n");
 }
 
-export interface HeadlessEnvironmentOptions {
-  stdin?: { isTTY?: boolean } | NodeJS.ReadableStream;
-  env?: Record<string, string | undefined>;
-}
-
-/**
- * Detects whether execution is running in a headless or non-interactive environment (non-TTY stdin or CI).
- */
-export function isHeadlessEnvironment(options: HeadlessEnvironmentOptions = {}): boolean {
-  const env = options.env ?? process.env;
-  const isCI = Boolean(
-    env.CI === "true" ||
-    env.CI === "1" ||
-    env.CONTINUOUS_INTEGRATION === "1" ||
-    env.CONTINUOUS_INTEGRATION === "true" ||
-    Boolean(env.GITHUB_ACTIONS) ||
-    env.DEBIAN_FRONTEND === "noninteractive"
-  );
-  const stdinIsTTY = options.stdin !== undefined
-    ? Boolean((options.stdin as any).isTTY)
-    : Boolean(process.stdin?.isTTY);
-
-  return isCI || !stdinIsTTY;
-}
-
-export interface PromptDecisionOptions {
-  stdin?: NodeJS.ReadableStream | { isTTY?: boolean };
-  stdout?: NodeJS.WritableStream | { isTTY?: boolean };
-  isYes?: boolean;
-  isJson?: boolean;
-  isInteractive?: boolean;
+export interface ShouldRunInteractiveOptions {
+  interactive?: boolean;
+  yes?: boolean;
+  isTTY?: boolean;
   ci?: boolean;
-  env?: Record<string, string | undefined>;
 }
 
 /**
- * Evaluates whether an interactive TUI prompt should be launched based on terminal capabilities and flags.
+ * Evaluates whether an interactive terminal prompt should be launched,
+ * or smoothly fall back to deterministic non-interactive batch mode.
  */
-export function shouldRunInteractivePrompt(options: PromptDecisionOptions): boolean {
-  if (options.isJson || options.isYes) {
+export function shouldRunInteractive(options: ShouldRunInteractiveOptions = {}): boolean {
+  if (options.yes) {
+    return false;
+  }
+  const isCI =
+    options.ci ??
+    (Boolean(process.env.CI && process.env.CI !== "0" && process.env.CI !== "false") ||
+      Boolean(process.env.CONTINUOUS_INTEGRATION));
+
+  const isTTY =
+    options.isTTY ?? Boolean(process.stdin?.isTTY && (process.stdout ? process.stdout.isTTY : true));
+
+  if (options.interactive) {
+    // If explicitly requested interactive, only run if stdin is indeed a TTY
+    return isTTY;
+  }
+
+  // In CI environments, default to non-interactive
+  if (isCI) {
     return false;
   }
 
-  const env = options.env ?? process.env;
-  const isCI = options.ci ?? Boolean(
-    env.CI === "true" ||
-    env.CI === "1" ||
-    env.CONTINUOUS_INTEGRATION === "1" ||
-    env.CONTINUOUS_INTEGRATION === "true" ||
-    Boolean(env.GITHUB_ACTIONS) ||
-    env.DEBIAN_FRONTEND === "noninteractive"
-  );
-
-  const stdinIsTTY = options.stdin !== undefined
-    ? Boolean((options.stdin as any).isTTY)
-    : Boolean(process.stdin?.isTTY);
-  const stdoutIsTTY = options.stdout !== undefined
-    ? Boolean((options.stdout as any).isTTY)
-    : Boolean(process.stdout?.isTTY);
-
-  const hasInteractiveTerminal = stdinIsTTY && stdoutIsTTY;
-
-  if (!stdinIsTTY) {
-    return false;
-  }
-
-  if (isCI && !options.isInteractive) {
-    return false;
-  }
-
-  if (options.isInteractive && stdinIsTTY) {
-    return true;
-  }
-
-  return hasInteractiveTerminal && !isCI;
+  return isTTY;
 }
 
 export interface InteractiveSelectorOptions {
@@ -500,7 +459,11 @@ export interface InteractiveSelectorOptions {
   maxTokens?: number;
   strictTokenGuard?: boolean;
   initialSelectedSkills?: SkillName[];
-  fallbackNonInteractive?: boolean;
+  yes?: boolean;
+  interactive?: boolean;
+  fallbackToNonInteractive?: boolean;
+  isTTY?: boolean;
+  ci?: boolean;
 }
 
 export interface InteractiveSelectorResult {
@@ -509,7 +472,7 @@ export interface InteractiveSelectorResult {
   items?: SkillItem[];
   footprint?: TokenFootprintReport;
   guidelinesSummary?: DontVsDoSummary[];
-  headlessFallback?: boolean;
+  fallbackApplied?: boolean;
 }
 
 /**
@@ -540,22 +503,40 @@ export async function runInteractiveSkillSelector(
     };
   });
 
-  if (options.fallbackNonInteractive) {
-    const selectedSkills = options.initialSelectedSkills ?? profile.activeSkills;
-    const footprint = calculateTokenFootprint(selectedSkills, {
+  const effectiveIsTTY =
+    options.isTTY ??
+    (options.stdin ? Boolean((options.stdin as any).isTTY) : Boolean(process.stdin?.isTTY));
+  const effectiveCI =
+    options.ci ??
+    (Boolean(process.env.CI && process.env.CI !== "0" && process.env.CI !== "false") ||
+      Boolean(process.env.CONTINUOUS_INTEGRATION));
+
+  const canRunInteractive = shouldRunInteractive({
+    interactive: options.interactive,
+    yes: options.yes,
+    isTTY: effectiveIsTTY,
+    ci: effectiveCI,
+  });
+
+  const shouldFallback =
+    Boolean(options.yes) || (Boolean(options.fallbackToNonInteractive) && !canRunInteractive);
+
+  if (shouldFallback) {
+    const activeSelected = items.filter((it) => it.selected).map((it) => it.name);
+    const footprint = calculateTokenFootprint(activeSelected, {
       projectPath,
       profile,
       tokenBudget: options.maxTokens ?? 2500,
     });
-    const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+    const summaries = extractAllSelectedGuidelines(activeSelected, projectPath, profile);
 
     return {
       confirmed: true,
-      selectedSkills,
+      selectedSkills: activeSelected,
       items: items.map((it) => ({ ...it })),
       footprint,
-      guidelinesSummary,
-      headlessFallback: true,
+      guidelinesSummary: summaries,
+      fallbackApplied: true,
     };
   }
 

@@ -28,8 +28,7 @@ import {
 import {
   formatArchetypeProfileReview,
   runInteractiveSkillSelector,
-  isHeadlessEnvironment,
-  shouldRunInteractivePrompt,
+  shouldRunInteractive,
 } from "./agents-tui";
 import { detectStack } from "./detector";
 import {
@@ -754,28 +753,24 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       try {
-        const isCI = Boolean(
-          process.env.CI === "true" ||
-          process.env.CI === "1" ||
-          process.env.CONTINUOUS_INTEGRATION === "1" ||
-          process.env.CONTINUOUS_INTEGRATION === "true" ||
-          process.env.GITHUB_ACTIONS ||
-          process.env.DEBIAN_FRONTEND === "noninteractive"
-        );
+        const isInteractiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+        const isCI =
+          Boolean(process.env.CI && process.env.CI !== "0" && process.env.CI !== "false") ||
+          Boolean(process.env.CONTINUOUS_INTEGRATION);
 
-        const shouldPrompt = shouldRunInteractivePrompt({
-          stdin: process.stdin,
-          stdout: process.stdout,
-          isYes,
-          isInteractive,
-          isJson,
-          ci: isCI,
-        });
+        const shouldPrompt =
+          !isJson &&
+          shouldRunInteractive({
+            interactive: isInteractive,
+            yes: isYes,
+            isTTY: isInteractiveTerminal,
+            ci: isCI,
+          });
 
-        if (isInteractive && !process.stdin.isTTY && !isJson) {
-          console.log(
+        if (isInteractive && !shouldPrompt && !isYes && !isJson) {
+          console.warn(
             pc.yellow(
-              "\nNotice: Headless environment detected (process.stdin.isTTY is false). Falling back to non-interactive mode.\n"
+              "Warning: Interactive mode requested but running in headless/CI environment without a valid TTY. Smoothly falling back to non-interactive mode.\n"
             )
           );
         }
