@@ -60,3 +60,6 @@ Feature: feat(agents): interactive skill inspector and terminal selector for bab
 
 ## 📁 5. Arquivos Afetados
 - `AGENTS.md`
+- `src/agents-tui.ts`
+- `src/cli.ts`
+- `tests/spec_26_interactive_agents.test.ts`

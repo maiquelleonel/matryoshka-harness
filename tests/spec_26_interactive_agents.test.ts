@@ -20,9 +20,13 @@ import {
   extractAllSelectedGuidelines,
   isHeadlessEnvironment,
   shouldRunInteractivePrompt,
+  InteractivePromptSession,
+  promptInteractiveSkillSelection,
   type InteractiveSelectorOptions,
   type TokenFootprintReport,
-  type DontVsDoSummary
+  type DontVsDoSummary,
+  type InteractivePromptOptions,
+  type InteractivePromptResult
 } from "../src/agents-tui";
 
 describe("SPEC-26 Subtask 1: Review Detected Archetype & Stack Profile", () => {
@@ -755,10 +759,10 @@ description: Sample skill
       const selected: SkillName[] = ["skill-backend", "skill-database"];
       const summaries = extractAllSelectedGuidelines(selected, tempDir);
       expect(summaries.length).toBe(2);
-      expect(summaries[0].skillName).toBe("skill-backend");
-      expect(summaries[1].skillName).toBe("skill-database");
-      expect(summaries[0].dos.length).toBeGreaterThan(0);
-      expect(summaries[0].donts.length).toBeGreaterThan(0);
+      expect(summaries[0]?.skillName).toBe("skill-backend");
+      expect(summaries[1]?.skillName).toBe("skill-database");
+      expect(summaries[0]?.dos.length).toBeGreaterThan(0);
+      expect(summaries[0]?.donts.length).toBeGreaterThan(0);
     });
   });
 
@@ -1043,6 +1047,342 @@ describe("SPEC-26 Subtask 4: Smoothly Fallback to Non-Interactive Mode in Headle
     });
   });
 });
+
+describe("SPEC-26 Subtask 5: Interactive Prompt Interface", () => {
+  let tempDir: string;
+  const cliPath = path.resolve(__dirname, "../src/cli.ts");
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask5-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Interactive Prompt Interface Setup & Stack Profile Presentation", () => {
+    it("initializes InteractivePromptSession presenting detected archetype, runtime, and modular checklist", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "pyproject.toml"),
+        `[project]
+name = "fastapi-sample"
+dependencies = [
+    "fastapi>=0.100.0",
+    "sqlalchemy>=2.0.0",
+    "pytest>=7.0.0"
+]
+`
+      );
+      fs.mkdirSync(path.join(tempDir, "routes"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "routes", "api.py"), "def route(): pass");
+
+      const profile = profileArchetype(tempDir);
+      const session = new InteractivePromptSession({
+        profile,
+        projectPath: tempDir,
+      });
+
+      expect(session).toBeDefined();
+      expect(session.getProfile().archetype).toBe("api_backend");
+      expect(session.getProfile().runtime).toBe("python");
+
+      // Checklist must contain all 6 modular skills
+      const items = session.getItems();
+      expect(items.length).toBe(6);
+      const names = items.map(it => it.name);
+      expect(names).toEqual([
+        "skill-backend",
+        "skill-database",
+        "skill-frontend",
+        "skill-security",
+        "skill-testing",
+        "custom-instructions",
+      ]);
+
+      // Recommended skills should be initially selected based on detected profile
+      expect(session.getSelectedSkills()).toContain("skill-backend");
+      expect(session.getSelectedSkills()).toContain("skill-database");
+      expect(session.getSelectedSkills()).toContain("skill-security");
+      expect(session.getSelectedSkills()).toContain("skill-testing");
+
+      // Screen rendering must present stack review, checklist, and live footprint
+      const screen = session.renderScreen();
+      expect(screen).toContain("Matryoshka Interactive Skill Inspector");
+      expect(screen).toContain("Archetype:");
+      expect(screen).toContain("Runtime:");
+      expect(screen).toContain("Interactive Skills Checklist:");
+      expect(screen).toContain("Token Footprint:");
+      expect(screen).toContain("skill-backend");
+      expect(screen).toContain("custom-instructions");
+    });
+  });
+
+  describe("AC-2: Interactive Prompt Session Primitives and State Transitions", () => {
+    it("handles cursor navigation and wrapping correctly", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "cursor-test" }));
+      const profile = profileArchetype(tempDir);
+      const session = new InteractivePromptSession({ profile, projectPath: tempDir });
+
+      expect(session.getCursor()).toBe(0);
+      expect(session.getActiveItem().name).toBe("skill-backend");
+
+      // Move down
+      session.moveDown();
+      expect(session.getCursor()).toBe(1);
+      expect(session.getActiveItem().name).toBe("skill-database");
+
+      // Move up back to 0
+      session.moveUp();
+      expect(session.getCursor()).toBe(0);
+
+      // Move up wraps to last item (custom-instructions)
+      session.moveUp();
+      expect(session.getCursor()).toBe(5);
+      expect(session.getActiveItem().name).toBe("custom-instructions");
+
+      // Move down wraps to 0
+      session.moveDown();
+      expect(session.getCursor()).toBe(0);
+    });
+
+    it("toggles current item, individual skill, and toggle all state", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "toggle-session-test" }));
+      const profile = profileArchetype(tempDir);
+      const session = new InteractivePromptSession({
+        profile,
+        projectPath: tempDir,
+        initialSelectedSkills: ["skill-backend"]
+      });
+
+      expect(session.getSelectedSkills()).toEqual(["skill-backend"]);
+
+      // Toggle current (at index 0: skill-backend) -> turns OFF
+      session.toggleCurrent();
+      expect(session.getSelectedSkills()).toEqual([]);
+
+      // Toggle current again -> turns ON
+      session.toggleCurrent();
+      expect(session.getSelectedSkills()).toEqual(["skill-backend"]);
+
+      // Explicitly toggle a specific skill
+      session.toggleSkill("skill-frontend", true);
+      expect(session.getSelectedSkills()).toContain("skill-frontend");
+      expect(session.getSelectedSkills()).toContain("skill-backend");
+
+      // Toggle all: since not all are selected, toggles all ON
+      session.toggleAll();
+      expect(session.getSelectedSkills().length).toBe(6);
+
+      // Toggle all again: since all are selected, toggles all OFF
+      session.toggleAll();
+      expect(session.getSelectedSkills().length).toBe(0);
+    });
+
+    it("manages preview and guidelines modal visibility states", () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "modals-test" }));
+      const profile = profileArchetype(tempDir);
+      const session = new InteractivePromptSession({ profile, projectPath: tempDir });
+
+      expect(session.isInPreview()).toBe(false);
+      expect(session.isInGuidelines()).toBe(false);
+
+      // Open skill preview
+      session.openPreview();
+      expect(session.isInPreview()).toBe(true);
+      const previewOutput = session.renderScreen();
+      expect(previewOutput).toContain("Skill Preview:");
+      expect(previewOutput).toContain("YAML Frontmatter");
+
+      session.closePreview();
+      expect(session.isInPreview()).toBe(false);
+
+      // Open guidelines modal
+      session.openGuidelines();
+      expect(session.isInGuidelines()).toBe(true);
+      const guidelinesOutput = session.renderScreen();
+      expect(guidelinesOutput).toContain("Don't vs Do Guidelines Preview");
+
+      session.closeGuidelines();
+      expect(session.isInGuidelines()).toBe(false);
+    });
+  });
+
+  describe("AC-3: High-Level Orchestrator promptInteractiveSkillSelection Integration", () => {
+    it("launches interactive session via streams, responds to user input and confirms selection", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "orchestrator-test", scripts: { test: "bun test" } })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" }
+      });
+
+      // Navigate down to skill-frontend (down twice from index 0), toggle it ON (Space), then confirm (Enter)
+      setTimeout(() => stdin.write("\u001b[B"), 20);
+      setTimeout(() => stdin.write("\u001b[B"), 40);
+      setTimeout(() => stdin.write(" "), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const result = await promptPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.bypassed).toBe(false);
+      expect(result.selectedSkills).toContain("skill-frontend");
+      expect(result.profile).toBeDefined();
+      expect(result.footprint).toBeDefined();
+      expect(output).toContain("Interactive Skills Checklist:");
+    });
+
+    it("bypasses interactive prompt immediately when isYes is set to true", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "yes-bypass-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const result = await promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isYes: true,
+      });
+
+      expect(result.confirmed).toBe(true);
+      expect(result.bypassed).toBe(true);
+      expect(result.selectedSkills).toEqual(profile.activeSkills);
+      expect(result.footprint).toBeDefined();
+    });
+
+    it("bypasses interactive prompt immediately when isJson is set to true", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "json-bypass-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+
+      const result = await promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isJson: true,
+      });
+
+      expect(result.confirmed).toBe(true);
+      expect(result.bypassed).toBe(true);
+      expect(result.selectedSkills).toEqual(profile.activeSkills);
+    });
+
+    it("falls back gracefully when running in headless environment (non-TTY stdin)", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "headless-session-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      (stdin as any).isTTY = false;
+      const stdout = new PassThrough();
+
+      const result = await promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        // without explicit isInteractive
+      });
+
+      expect(result.confirmed).toBe(true);
+      expect(result.bypassed).toBe(true);
+      expect(result.headlessFallback).toBe(true);
+      expect(result.selectedSkills).toEqual(profile.activeSkills);
+    });
+
+    it("handles user cancellation (q) returning confirmed: false and empty selectedSkills", async () => {
+      fs.writeFileSync(path.join(tempDir, "package.json"), JSON.stringify({ name: "cancel-test" }));
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" }
+      });
+
+      setTimeout(() => stdin.write("q"), 20);
+
+      const result = await promptPromise;
+      expect(result.confirmed).toBe(false);
+      expect(result.bypassed).toBe(false);
+      expect(result.selectedSkills).toEqual([]);
+    });
+  });
+
+  describe("AC-4: End-to-End Persistence after Interactive Confirmation", () => {
+    it("generates and persists exactly the confirmed skills from interactive prompt", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "e2e-interactive-persistence",
+          scripts: { test: "bun test" }
+        })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" },
+        initialSelectedSkills: ["skill-backend", "custom-instructions"]
+      });
+
+      // Press Enter to confirm selection
+      setTimeout(() => stdin.write("\r"), 30);
+
+      const promptResult = await promptPromise;
+      expect(promptResult.confirmed).toBe(true);
+
+      const genResult = generateAgents(tempDir, {
+        selectedSkills: promptResult.selectedSkills,
+        force: true
+      });
+
+      expect(genResult.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-security.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+    });
+  });
+});
+
 
 
 

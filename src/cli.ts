@@ -28,6 +28,7 @@ import {
 import {
   formatArchetypeProfileReview,
   runInteractiveSkillSelector,
+  promptInteractiveSkillSelection,
   isHeadlessEnvironment,
   shouldRunInteractivePrompt,
 } from "./agents-tui";
@@ -782,13 +783,18 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
         let selectedSkills: SkillName[] | undefined;
         if (shouldPrompt) {
-          const selectorResult = await runInteractiveSkillSelector({
+          const selectorResult = await promptInteractiveSkillSelection({
             profile: profileArchetype(resolvedPath),
             projectPath: resolvedPath,
+            stdin: process.stdin,
+            stdout: process.stdout,
             dryRun: isDryRun,
             force: isForce,
             maxTokens,
             strictTokenGuard: isStrict,
+            isInteractive,
+            isYes,
+            isJson,
           });
 
           if (!selectorResult.confirmed) {

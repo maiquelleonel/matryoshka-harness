@@ -512,6 +512,210 @@ export interface InteractiveSelectorResult {
   headlessFallback?: boolean;
 }
 
+export interface InteractivePromptOptions {
+  profile?: ArchetypeProfile;
+  projectPath?: string;
+  stdin?: any;
+  stdout?: any;
+  dryRun?: boolean;
+  force?: boolean;
+  maxTokens?: number;
+  strictTokenGuard?: boolean;
+  initialSelectedSkills?: SkillName[];
+  fallbackNonInteractive?: boolean;
+  isYes?: boolean;
+  isJson?: boolean;
+  isInteractive?: boolean;
+  env?: Record<string, string | undefined>;
+}
+
+export interface InteractivePromptResult extends InteractiveSelectorResult {
+  bypassed?: boolean;
+  profile: ArchetypeProfile;
+  renderedScreen?: string;
+}
+
+/**
+ * InteractivePromptSession encapsulates the state and rendering logic
+ * for the interactive skill inspector and terminal checklist.
+ */
+export class InteractivePromptSession {
+  private profile: ArchetypeProfile;
+  private projectPath: string;
+  private items: SkillItem[];
+  private cursor: number = 0;
+  private inPreview: boolean = false;
+  private inGuidelinesModal: boolean = false;
+  private options: InteractivePromptOptions;
+
+  constructor(options: InteractivePromptOptions = {}) {
+    this.options = options;
+    this.projectPath = options.projectPath ?? process.cwd();
+    this.profile = options.profile ?? profileArchetype(this.projectPath);
+
+    const initial = options.initialSelectedSkills ?? this.profile.activeSkills;
+
+    this.items = MODULAR_SKILLS_CATALOG.map((cat) => ({
+      name: cat.name,
+      title: cat.title,
+      description: cat.description,
+      recommended: this.profile.activeSkills.includes(cat.name),
+      selected: initial.includes(cat.name),
+    }));
+  }
+
+  public getProfile(): ArchetypeProfile {
+    return this.profile;
+  }
+
+  public getProjectPath(): string {
+    return this.projectPath;
+  }
+
+  public getItems(): SkillItem[] {
+    return this.items.map((it) => ({ ...it }));
+  }
+
+  public getSelectedSkills(): SkillName[] {
+    return this.items.filter((it) => it.selected).map((it) => it.name);
+  }
+
+  public getCursor(): number {
+    return this.cursor;
+  }
+
+  public getActiveItem(): SkillItem {
+    const item = this.items[this.cursor] ?? this.items[0];
+    if (!item) {
+      throw new Error("No items in skill checklist");
+    }
+    return item;
+  }
+
+  public isInPreview(): boolean {
+    return this.inPreview;
+  }
+
+  public isInGuidelines(): boolean {
+    return this.inGuidelinesModal;
+  }
+
+  public moveUp(): void {
+    if (this.items.length === 0) return;
+    this.cursor = (this.cursor - 1 + this.items.length) % this.items.length;
+  }
+
+  public moveDown(): void {
+    if (this.items.length === 0) return;
+    this.cursor = (this.cursor + 1) % this.items.length;
+  }
+
+  public toggleCurrent(): boolean {
+    const item = this.items[this.cursor];
+    if (item) {
+      item.selected = !item.selected;
+      return item.selected;
+    }
+    return false;
+  }
+
+  public toggleSkill(name: SkillName, forceState?: boolean): boolean {
+    const item = this.items.find((it) => it.name === name);
+    if (item) {
+      item.selected = forceState !== undefined ? forceState : !item.selected;
+      return item.selected;
+    }
+    return false;
+  }
+
+  public toggleAll(): boolean {
+    const allSelected = this.items.every((it) => it.selected);
+    const target = !allSelected;
+    for (const item of this.items) {
+      item.selected = target;
+    }
+    return target;
+  }
+
+  public openPreview(): void {
+    this.inPreview = true;
+    this.inGuidelinesModal = false;
+  }
+
+  public closePreview(): void {
+    this.inPreview = false;
+  }
+
+  public openGuidelines(): void {
+    this.inGuidelinesModal = true;
+    this.inPreview = false;
+  }
+
+  public closeGuidelines(): void {
+    this.inGuidelinesModal = false;
+  }
+
+  public calculateFootprint(): TokenFootprintReport {
+    const selected = this.getSelectedSkills();
+    return calculateTokenFootprint(selected, {
+      projectPath: this.projectPath,
+      profile: this.profile,
+      tokenBudget: this.options.maxTokens ?? 2500,
+    });
+  }
+
+  public extractGuidelines(): DontVsDoSummary[] {
+    const selected = this.getSelectedSkills();
+    return extractAllSelectedGuidelines(selected, this.projectPath, this.profile);
+  }
+
+  public render(): string {
+    return this.renderScreen();
+  }
+
+  public renderScreen(): string {
+    if (this.inGuidelinesModal) {
+      const summaries = this.extractGuidelines();
+      return formatDontVsDoGuidelines(summaries);
+    }
+
+    if (this.inPreview) {
+      const current = this.getActiveItem();
+      if (current) {
+        return formatSkillPreview(current.name, {
+          projectPath: this.projectPath,
+          profile: this.profile,
+          cumulativeSelectedSkills: this.getSelectedSkills(),
+          tokenBudget: this.options.maxTokens,
+        });
+      }
+    }
+
+    const reviewText = formatArchetypeProfileReview(this.profile, this.projectPath);
+    let output = reviewText + "\n";
+
+    output += pc.bold(pc.cyan("Interactive Skills Checklist:\n"));
+    output += pc.dim(
+      "  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [a] toggle all, [p/i] to inspect, [g] guidelines preview, [Enter] to confirm, [q] to quit.\n\n"
+    );
+
+    this.items.forEach((item, index) => {
+      const isCurrent = index === this.cursor;
+      const pointer = isCurrent ? pc.cyan("❯ ") : "  ";
+      const check = item.selected ? pc.green("◉ ") : pc.dim("◯ ");
+      const nameText = isCurrent ? pc.bold(pc.white(item.name)) : pc.dim(item.name);
+      const recTag = item.recommended ? pc.green(" [recommended]") : pc.dim(" [optional]");
+      output += `${pointer}${check}${nameText} - ${item.title}${recTag}\n`;
+    });
+    output += "\n";
+
+    const footprint = this.calculateFootprint();
+    output += formatTokenFootprint(footprint) + "\n\n";
+
+    return output;
+  }
+}
+
 /**
  * Runs an interactive TUI prompt to review archetype and toggle modular skills.
  */
@@ -525,96 +729,36 @@ export async function runInteractiveSkillSelector(
     stdout = process.stdout,
   } = options;
 
-  // Build selectable items list
-  const items: SkillItem[] = MODULAR_SKILLS_CATALOG.map((cat) => {
-    const recommended = profile.activeSkills.includes(cat.name);
-    const selected = options.initialSelectedSkills
-      ? options.initialSelectedSkills.includes(cat.name)
-      : recommended;
-    return {
-      name: cat.name,
-      title: cat.title,
-      description: cat.description,
-      recommended,
-      selected,
-    };
+  const session = new InteractivePromptSession({
+    profile,
+    projectPath,
+    stdin,
+    stdout,
+    dryRun: options.dryRun,
+    force: options.force,
+    maxTokens: options.maxTokens,
+    strictTokenGuard: options.strictTokenGuard,
+    initialSelectedSkills: options.initialSelectedSkills,
+    fallbackNonInteractive: options.fallbackNonInteractive,
   });
 
   if (options.fallbackNonInteractive) {
     const selectedSkills = options.initialSelectedSkills ?? profile.activeSkills;
-    const footprint = calculateTokenFootprint(selectedSkills, {
-      projectPath,
-      profile,
-      tokenBudget: options.maxTokens ?? 2500,
-    });
-    const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+    const footprint = session.calculateFootprint();
+    const guidelinesSummary = session.extractGuidelines();
 
     return {
       confirmed: true,
       selectedSkills,
-      items: items.map((it) => ({ ...it })),
+      items: session.getItems(),
       footprint,
       guidelinesSummary,
       headlessFallback: true,
     };
   }
 
-  let cursor = 0;
-  let inPreview = false;
-  let inGuidelinesModal = false;
-
   const render = () => {
-    if (inGuidelinesModal) {
-      const activeSelected = items.filter((it) => it.selected).map((it) => it.name);
-      const summaries = extractAllSelectedGuidelines(activeSelected, projectPath, profile);
-      stdout.write(formatDontVsDoGuidelines(summaries));
-      return;
-    }
-
-    if (inPreview) {
-      const current = items[cursor] ?? items[0];
-      const activeSelected = items.filter((it) => it.selected).map((it) => it.name);
-      if (current) {
-        stdout.write(
-          formatSkillPreview(current.name, {
-            projectPath,
-            profile,
-            cumulativeSelectedSkills: activeSelected,
-            tokenBudget: options.maxTokens,
-          })
-        );
-      }
-      return;
-    }
-
-    // Print stack review header first
-    const reviewText = formatArchetypeProfileReview(profile, projectPath);
-    let output = reviewText + "\n";
-
-    output += pc.bold(pc.cyan("Interactive Skills Checklist:\n"));
-    output += pc.dim(
-      "  Use [↑/↓] or [j/k] to navigate, [Space] to toggle, [a] toggle all, [p/i] to inspect, [g] guidelines preview, [Enter] to confirm, [q] to quit.\n\n"
-    );
-
-    items.forEach((item, index) => {
-      const isCurrent = index === cursor;
-      const pointer = isCurrent ? pc.cyan("❯ ") : "  ";
-      const check = item.selected ? pc.green("◉ ") : pc.dim("◯ ");
-      const nameText = isCurrent ? pc.bold(pc.white(item.name)) : pc.dim(item.name);
-      const recTag = item.recommended ? pc.green(" [recommended]") : pc.dim(" [optional]");
-      output += `${pointer}${check}${nameText} - ${item.title}${recTag}\n`;
-    });
-    output += "\n";
-
-    const currentSelected = items.filter((it) => it.selected).map((it) => it.name);
-    const footprint = calculateTokenFootprint(currentSelected, {
-      projectPath,
-      profile,
-      tokenBudget: options.maxTokens ?? 2500,
-    });
-    output += formatTokenFootprint(footprint) + "\n\n";
-
-    stdout.write(output);
+    stdout.write(session.renderScreen());
   };
 
   // Render initial view
@@ -662,11 +806,11 @@ export async function runInteractiveSkillSelector(
       if (keyCtrl && keyName === "c") {
         cleanup();
         stdout.write(pc.red("\nAborted by user (SIGINT).\n"));
-        resolve({ confirmed: false, selectedSkills: [], items: items.map((it) => ({ ...it })) });
+        resolve({ confirmed: false, selectedSkills: [], items: session.getItems() });
         return;
       }
 
-      if (inGuidelinesModal) {
+      if (session.isInGuidelines()) {
         if (
           keyName === "escape" ||
           keyName === "g" ||
@@ -675,13 +819,13 @@ export async function runInteractiveSkillSelector(
           keyChar === "g" ||
           keyChar === "q"
         ) {
-          inGuidelinesModal = false;
+          session.closeGuidelines();
           render();
         }
         return;
       }
 
-      if (inPreview) {
+      if (session.isInPreview()) {
         if (
           keyName === "escape" ||
           keyName === "p" ||
@@ -690,63 +834,56 @@ export async function runInteractiveSkillSelector(
           keyName === "enter" ||
           keyChar === "q"
         ) {
-          inPreview = false;
+          session.closePreview();
           render();
         }
         return;
       }
 
       if (keyName === "up" || keyChar === "k") {
-        cursor = (cursor - 1 + items.length) % items.length;
+        session.moveUp();
         render();
       } else if (keyName === "down" || keyChar === "j") {
-        cursor = (cursor + 1) % items.length;
+        session.moveDown();
         render();
       } else if (keyName === "home") {
-        cursor = 0;
+        while (session.getCursor() > 0) {
+          session.moveUp();
+        }
         render();
       } else if (keyName === "end") {
-        cursor = items.length - 1;
+        const count = session.getItems().length;
+        while (session.getCursor() < count - 1) {
+          session.moveDown();
+        }
         render();
       } else if (keyName === "space" || keyChar === " ") {
-        const item = items[cursor];
-        if (item) {
-          item.selected = !item.selected;
-        }
+        session.toggleCurrent();
         render();
       } else if (keyChar === "a" || keyChar === "A") {
-        const allSelected = items.every((it) => it.selected);
-        for (const item of items) {
-          item.selected = !allSelected;
-        }
+        session.toggleAll();
         render();
       } else if (keyName === "g" || keyChar === "g") {
-        inGuidelinesModal = true;
+        session.openGuidelines();
         render();
       } else if (keyName === "p" || keyName === "i" || keyChar === "p" || keyChar === "i") {
-        inPreview = true;
+        session.openPreview();
         render();
       } else if (keyName === "return" || keyName === "enter") {
         cleanup();
-        const selectedSkills = items
-          .filter((it) => it.selected)
-          .map((it) => it.name);
-        const footprint = calculateTokenFootprint(selectedSkills, {
-          projectPath,
-          profile,
-          tokenBudget: options.maxTokens ?? 2500,
-        });
-        const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+        const selectedSkills = session.getSelectedSkills();
+        const footprint = session.calculateFootprint();
+        const guidelinesSummary = session.extractGuidelines();
         resolve({
           confirmed: true,
           selectedSkills,
-          items: items.map((it) => ({ ...it })),
+          items: session.getItems(),
           footprint,
           guidelinesSummary,
         });
       } else if (keyChar === "q" || keyName === "escape") {
         cleanup();
-        resolve({ confirmed: false, selectedSkills: [], items: items.map((it) => ({ ...it })) });
+        resolve({ confirmed: false, selectedSkills: [], items: session.getItems() });
       }
     };
 
@@ -767,4 +904,73 @@ export async function runInteractiveSkillSelector(
     (stdin as any).on("keypress", onKeyPress);
     (stdin as any).on("data", onData);
   });
+}
+
+/**
+ * High-level orchestrator that evaluates execution environment and either
+ * launches the interactive TUI prompt or seamlessly falls back to non-interactive mode.
+ */
+export async function promptInteractiveSkillSelection(
+  options: InteractivePromptOptions = {}
+): Promise<InteractivePromptResult> {
+  const projectPath = options.projectPath ?? process.cwd();
+  const profile = options.profile ?? profileArchetype(projectPath);
+
+  const shouldPrompt = shouldRunInteractivePrompt({
+    stdin: options.stdin ?? process.stdin,
+    stdout: options.stdout ?? process.stdout,
+    isYes: options.isYes,
+    isJson: options.isJson,
+    isInteractive: options.isInteractive,
+    ci: options.env ? Boolean(options.env.CI) : undefined,
+    env: options.env,
+  });
+
+  const isHeadless = !shouldPrompt || options.fallbackNonInteractive;
+
+  if (isHeadless) {
+    const selectedSkills = options.initialSelectedSkills ?? profile.activeSkills;
+    const footprint = calculateTokenFootprint(selectedSkills, {
+      projectPath,
+      profile,
+      tokenBudget: options.maxTokens ?? 2500,
+    });
+    const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+
+    return {
+      confirmed: true,
+      bypassed: true,
+      headlessFallback: Boolean(!options.isYes && !options.isJson),
+      selectedSkills,
+      profile,
+      items: MODULAR_SKILLS_CATALOG.map((cat) => ({
+        name: cat.name,
+        title: cat.title,
+        description: cat.description,
+        recommended: profile.activeSkills.includes(cat.name),
+        selected: selectedSkills.includes(cat.name),
+      })),
+      footprint,
+      guidelinesSummary,
+    };
+  }
+
+  const selectorResult = await runInteractiveSkillSelector({
+    profile,
+    projectPath,
+    stdin: options.stdin,
+    stdout: options.stdout,
+    dryRun: options.dryRun,
+    force: options.force,
+    maxTokens: options.maxTokens,
+    strictTokenGuard: options.strictTokenGuard,
+    initialSelectedSkills: options.initialSelectedSkills,
+    fallbackNonInteractive: options.fallbackNonInteractive,
+  });
+
+  return {
+    ...selectorResult,
+    bypassed: false,
+    profile,
+  };
 }
