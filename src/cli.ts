@@ -28,6 +28,8 @@ import {
 import {
   formatArchetypeProfileReview,
   runInteractiveSkillSelector,
+  isHeadlessEnvironment,
+  shouldRunInteractivePrompt,
 } from "./agents-tui";
 import { detectStack } from "./detector";
 import {
@@ -752,8 +754,31 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       try {
-        const isInteractiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-        const shouldPrompt = !isJson && !isYes && (isInteractive || isInteractiveTerminal);
+        const isCI = Boolean(
+          process.env.CI === "true" ||
+          process.env.CI === "1" ||
+          process.env.CONTINUOUS_INTEGRATION === "1" ||
+          process.env.CONTINUOUS_INTEGRATION === "true" ||
+          process.env.GITHUB_ACTIONS ||
+          process.env.DEBIAN_FRONTEND === "noninteractive"
+        );
+
+        const shouldPrompt = shouldRunInteractivePrompt({
+          stdin: process.stdin,
+          stdout: process.stdout,
+          isYes,
+          isInteractive,
+          isJson,
+          ci: isCI,
+        });
+
+        if (isInteractive && !process.stdin.isTTY && !isJson) {
+          console.log(
+            pc.yellow(
+              "\nNotice: Headless environment detected (process.stdin.isTTY is false). Falling back to non-interactive mode.\n"
+            )
+          );
+        }
 
         let selectedSkills: SkillName[] | undefined;
         if (shouldPrompt) {

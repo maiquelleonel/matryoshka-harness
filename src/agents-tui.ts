@@ -413,6 +413,83 @@ export function formatArchetypeProfileReview(
   return lines.join("\n");
 }
 
+export interface HeadlessEnvironmentOptions {
+  stdin?: { isTTY?: boolean } | NodeJS.ReadableStream;
+  env?: Record<string, string | undefined>;
+}
+
+/**
+ * Detects whether execution is running in a headless or non-interactive environment (non-TTY stdin or CI).
+ */
+export function isHeadlessEnvironment(options: HeadlessEnvironmentOptions = {}): boolean {
+  const env = options.env ?? process.env;
+  const isCI = Boolean(
+    env.CI === "true" ||
+    env.CI === "1" ||
+    env.CONTINUOUS_INTEGRATION === "1" ||
+    env.CONTINUOUS_INTEGRATION === "true" ||
+    Boolean(env.GITHUB_ACTIONS) ||
+    env.DEBIAN_FRONTEND === "noninteractive"
+  );
+  const stdinIsTTY = options.stdin !== undefined
+    ? Boolean((options.stdin as any).isTTY)
+    : Boolean(process.stdin?.isTTY);
+
+  return isCI || !stdinIsTTY;
+}
+
+export interface PromptDecisionOptions {
+  stdin?: NodeJS.ReadableStream | { isTTY?: boolean };
+  stdout?: NodeJS.WritableStream | { isTTY?: boolean };
+  isYes?: boolean;
+  isJson?: boolean;
+  isInteractive?: boolean;
+  ci?: boolean;
+  env?: Record<string, string | undefined>;
+}
+
+/**
+ * Evaluates whether an interactive TUI prompt should be launched based on terminal capabilities and flags.
+ */
+export function shouldRunInteractivePrompt(options: PromptDecisionOptions): boolean {
+  if (options.isJson || options.isYes) {
+    return false;
+  }
+
+  const env = options.env ?? process.env;
+  const isCI = options.ci ?? Boolean(
+    env.CI === "true" ||
+    env.CI === "1" ||
+    env.CONTINUOUS_INTEGRATION === "1" ||
+    env.CONTINUOUS_INTEGRATION === "true" ||
+    Boolean(env.GITHUB_ACTIONS) ||
+    env.DEBIAN_FRONTEND === "noninteractive"
+  );
+
+  const stdinIsTTY = options.stdin !== undefined
+    ? Boolean((options.stdin as any).isTTY)
+    : Boolean(process.stdin?.isTTY);
+  const stdoutIsTTY = options.stdout !== undefined
+    ? Boolean((options.stdout as any).isTTY)
+    : Boolean(process.stdout?.isTTY);
+
+  const hasInteractiveTerminal = stdinIsTTY && stdoutIsTTY;
+
+  if (!stdinIsTTY) {
+    return false;
+  }
+
+  if (isCI && !options.isInteractive) {
+    return false;
+  }
+
+  if (options.isInteractive && stdinIsTTY) {
+    return true;
+  }
+
+  return hasInteractiveTerminal && !isCI;
+}
+
 export interface InteractiveSelectorOptions {
   profile: ArchetypeProfile;
   projectPath?: string;
@@ -423,6 +500,7 @@ export interface InteractiveSelectorOptions {
   maxTokens?: number;
   strictTokenGuard?: boolean;
   initialSelectedSkills?: SkillName[];
+  fallbackNonInteractive?: boolean;
 }
 
 export interface InteractiveSelectorResult {
@@ -431,6 +509,7 @@ export interface InteractiveSelectorResult {
   items?: SkillItem[];
   footprint?: TokenFootprintReport;
   guidelinesSummary?: DontVsDoSummary[];
+  headlessFallback?: boolean;
 }
 
 /**
@@ -460,6 +539,25 @@ export async function runInteractiveSkillSelector(
       selected,
     };
   });
+
+  if (options.fallbackNonInteractive) {
+    const selectedSkills = options.initialSelectedSkills ?? profile.activeSkills;
+    const footprint = calculateTokenFootprint(selectedSkills, {
+      projectPath,
+      profile,
+      tokenBudget: options.maxTokens ?? 2500,
+    });
+    const guidelinesSummary = extractAllSelectedGuidelines(selectedSkills, projectPath, profile);
+
+    return {
+      confirmed: true,
+      selectedSkills,
+      items: items.map((it) => ({ ...it })),
+      footprint,
+      guidelinesSummary,
+      headlessFallback: true,
+    };
+  }
 
   let cursor = 0;
   let inPreview = false;
