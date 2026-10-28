@@ -1101,8 +1101,8 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
     });
   });
 
-  describe("AC-1 & AC-2: baba wrap test suite exclusion and --include-tests", () => {
-    it("AC-1: baba wrap --dry-run does not report SQL injection in tests/ directory by default", async () => {
+  describe("Subtask 8: **AC-1:** `baba wrap --dry-run` on a project containing `tests/ast_rules.test.ts` with literal SQL strings does not trigger SQL injection security remediation checklist by default", () => {
+    it("does not report SQL injection in human output remediation checklist (dry-run content) by default", async () => {
       // Set up project with src/ and tests/
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
@@ -1123,6 +1123,57 @@ export function testSql(id: string) {
   const sql = \`SELECT * FROM users WHERE id = \${id}\`;
   return sql;
 }
+export function testQuery(name: string) {
+  return "SELECT * FROM accounts WHERE name = '" + name + "'";
+}
+        `.trim()
+      );
+
+      // Execute baba wrap in human dry-run mode
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run"]);
+      expect(proc.exitCode).toBe(0);
+
+      const stdout = proc.stdout.toString();
+      // Verify report is displayed in dry-run mode
+      expect(stdout).toContain("# 🛡️ Matryoshka Diagnostic & Harness² Remediation Report");
+      expect(stdout).toContain("[dry-run] (not written to disk)");
+
+      // AC-1: Must NOT trigger SQL injection security remediation checklist
+      expect(stdout).not.toContain("Fix SQL injection");
+      expect(stdout).not.toContain("sql-interpolation");
+      expect(stdout).not.toContain("tests/ast_rules.test.ts");
+      expect(stdout).not.toContain("Unparameterized SQL Query");
+
+      // Verify AST health reports 0 violations detected
+      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+      expect(stdout).toContain("No AST context-fencing violations detected. Repository is clean!");
+
+      // Verify the Step-by-Step Surgical Action Plan checklist is present but contains NO SQL injection items
+      expect(stdout).toContain("## 🎯 Step-by-Step Surgical Action Plan");
+      const surgicalPlanSection = stdout.split("## 🎯 Step-by-Step Surgical Action Plan")[1] || "";
+      expect(surgicalPlanSection.toLowerCase()).not.toContain("sql");
+      expect(surgicalPlanSection).not.toContain("tests/ast_rules.test.ts");
+    });
+
+    it("does not include SQL injection violations or action plan items in JSON output by default", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "tests/ast_rules.test.ts"),
+        `
+export function testSql(id: string) {
+  const sql = \`SELECT * FROM users WHERE id = \${id}\`;
+  return sql;
+}
         `.trim()
       );
 
@@ -1135,8 +1186,77 @@ export function testSql(id: string) {
         (v: any) => v.ruleId === "sql-interpolation"
       );
       expect(sqlViolations.length).toBe(0);
+      expect(parsed.summary.hasCriticalViolations).toBe(false);
+      expect(parsed.summary.bySeverity.critical).toBe(0);
+      expect(parsed.ast.score).toBe(100);
+
+      // Verify actionPlan contains zero SQL injection remediation items
+      const sqlActionPlan = (parsed.actionPlan || []).filter(
+        (item: any) =>
+          item.action?.toLowerCase().includes("sql") ||
+          item.target?.includes("tests/ast_rules.test.ts") ||
+          item.id === "sql-interpolation"
+      );
+      expect(sqlActionPlan.length).toBe(0);
     });
 
+    it("does not trigger SQL injection remediation checklist when evaluating the workspace root which contains tests/ast_rules.test.ts", async () => {
+      const workspaceRoot = path.resolve(__dirname, "..");
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        workspaceRoot,
+        "--dry-run",
+        "--json",
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      const sqlViolations = (parsed.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlViolations.length).toBe(0);
+
+      const sqlActionPlan = (parsed.actionPlan || []).filter(
+        (item: any) =>
+          item.action?.toLowerCase().includes("sql") ||
+          item.target?.includes("ast_rules.test.ts")
+      );
+      expect(sqlActionPlan.length).toBe(0);
+    });
+
+    it("maintains parity across all command aliases omitting SQL injection remediation checklist on tests/ast_rules.test.ts", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "tests/ast_rules.test.ts"),
+        `export const sql = (id: string) => \`SELECT * FROM users WHERE id = \${id}\`;`
+      );
+
+      for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(proc.exitCode).toBe(0);
+        const output = proc.stdout.toString();
+        expect(output).not.toContain("Fix SQL injection");
+        expect(output).not.toContain("tests/ast_rules.test.ts");
+      }
+    });
+  });
+
+  describe("Subtask 9: **AC-2:** Passing `baba wrap --include-tests` evaluates `tests/` and reports any violations found inside test files", () => {
     it("AC-2: baba wrap --include-tests reports SQL injection hazard inside tests/ directory", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
@@ -1179,7 +1299,7 @@ export function testSql(id: string) {
     });
   });
 
-  describe("AC-3 & AC-4: CLI --exclude and .babaignore integration", () => {
+  describe("Subtask 10: **AC-3:** Adding `docs/**` to `.babaignore` successfully skips scanning the `docs` directory", () => {
     it("AC-3: Adding docs/** to .babaignore skips scanning docs directory", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
@@ -1207,7 +1327,9 @@ export function testSql(id: string) {
       );
       expect(sqlViolations.length).toBe(0);
     });
+  });
 
+  describe("Subtask 11: **AC-4:** Passing `--exclude <pattern>` skips matched files even if absent from ignore files", () => {
     it("AC-4: Passing --exclude <pattern> skips matched files", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
@@ -1290,7 +1412,7 @@ export function testSql(id: string) {
     });
   });
 
-  describe("AC-5: Strict Parity Across Command Aliases", () => {
+  describe("Subtask 12: **AC-5:** Strict parity across all command aliases (`baba`, `bbyg`, `matryoshka`, `matrioska`)", () => {
     it("ensures baba, bbyg, matryoshka, and matrioska all support --include-tests and --exclude", async () => {
       for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
         const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"], {
