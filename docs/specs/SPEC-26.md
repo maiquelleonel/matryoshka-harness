@@ -48,9 +48,12 @@ Feature: feat(agents): interactive skill inspector and terminal selector for bab
     And deve permitir alternar a seleção da skill com [Space] e navegar com setas [←/→] ou vim keys dentro do modal
     And deve retornar ao checklist ao pressionar [Escape], [p], [i] ou [Enter].
   Scenario: AC-7 - Subtask 7: **Headless & Flag Parity:**
-    Given O ambiente de execução está operacional e pronto para processar 'Subtask 7: **Headless & Flag Parity:**'
-    When A requisição correspondente a 'Subtask 7: **Headless & Flag Parity:**' é executada
-    Then O resultado de 'Subtask 7: **Headless & Flag Parity:**' é processado e persistido em conformidade com o contrato
+    Given um desenvolvedor ou pipeline de automação executa o comando de geração de agents
+    When invocado com '--interactive' ou '-i' em ambiente sem TTY (headless)
+    Then deve emitir aviso de ambiente headless e realizar fallback não-interativo determinístico sem travar
+    And quando invocado com '--yes' ou '-y', deve sobrepor qualquer flag interativa e gerar skills recomendadas diretamente em disco
+    And quando invocado com '--json', deve priorizar payload estruturado e suprimir qualquer terminal interativo
+    And deve garantir paridade estrita de comportamento e saída em disco entre os aliases 'baba', 'bbyg' e 'matryoshka'.
 ```
 
 ---

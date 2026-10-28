@@ -39,6 +39,8 @@ baba agents generate [path] [options]
 ```
 
 #### Options:
+* `--interactive, -i` — Launch interactive terminal UI to review stack and select skills. In headless environments, automatically falls back to deterministic batch mode.
+* `--yes, -y` — Bypass interactive prompts and apply recommended defaults non-interactively.
 * `--force, -f` — Overwrite existing `AGENTS.md`. Automatically creates an `AGENTS.md.bak` backup to prevent loss of custom instructions.
 * `--dry-run` — Preview planned generation and token savings without writing files to disk.
 * `--json` — Output result as structured JSON.

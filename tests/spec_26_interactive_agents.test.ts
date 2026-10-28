@@ -1763,6 +1763,612 @@ description: Custom engineering standards for our monorepo
   });
 });
 
+describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
+  let tempDir: string;
+  const cliPath = path.resolve(__dirname, "../src/cli.ts");
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask7-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Interactive Skill Selection in TTY Terminal (--interactive, -i)", () => {
+    it("launches interactive prompt when running baba agents generate with --interactive flag in TTY", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "interactive-flag-test", dependencies: { express: "^4.18.2" } })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" }
+      });
+
+      setTimeout(() => stdin.write("\r"), 30);
+
+      const result = await promptPromise;
+      expect(result.confirmed).toBe(true);
+      expect(result.bypassed).toBe(false);
+      expect(result.selectedSkills).toContain("skill-backend");
+      expect(output).toContain("Interactive Skills Checklist:");
+    });
+
+    it("allows toggling skills and persists only confirmed skills via interactive selection", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "interactive-toggle-persist", dependencies: { fastify: "^4.0.0" } })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" }
+      });
+
+      // 0: skill-backend -> toggle off (space)
+      // down -> 1: skill-database -> toggle off (space)
+      // confirm -> enter
+      setTimeout(() => stdin.write(" "), 20);
+      setTimeout(() => stdin.write("\u001b[B"), 40);
+      setTimeout(() => stdin.write(" "), 60);
+      setTimeout(() => stdin.write("\r"), 80);
+
+      const promptResult = await promptPromise;
+      expect(promptResult.confirmed).toBe(true);
+      expect(promptResult.selectedSkills).not.toContain("skill-backend");
+      expect(promptResult.selectedSkills).not.toContain("skill-database");
+
+      const genResult = generateAgents(tempDir, {
+        selectedSkills: promptResult.selectedSkills,
+        force: true
+      });
+      expect(genResult.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
+    });
+
+    it("aborts cleanly without modifying files when user cancels with q or escape", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "interactive-abort-test" })
+      );
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      (stdin as any).isTTY = true;
+      (stdout as any).isTTY = true;
+
+      const promptPromise = promptInteractiveSkillSelection({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        isInteractive: true,
+        env: { CI: "" }
+      });
+
+      setTimeout(() => stdin.write("q"), 20);
+
+      const promptResult = await promptPromise;
+      expect(promptResult.confirmed).toBe(false);
+      expect(promptResult.selectedSkills).toEqual([]);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+    });
+  });
+
+  describe("AC-2: Fallback to Non-Interactive Mode with --yes, -y, and --non-interactive", () => {
+    it("bypasses prompts and generates all profile-recommended skills directly with --yes", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "yes-flag-test",
+          dependencies: { express: "^4.18.2", pg: "^8.11.0" }
+        })
+      );
+      fs.mkdirSync(path.join(tempDir, "routes"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "routes", "api.ts"), "export const a = 1;");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--yes"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+
+      const agentsPath = path.join(tempDir, "AGENTS.md");
+      expect(fs.existsSync(agentsPath)).toBe(true);
+
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(true);
+    });
+
+    it("bypasses prompts identically with -y shorthand flag", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "short-y-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-y"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("bypasses prompts identically with --non-interactive flag", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "non-interactive-flag-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--non-interactive"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("preserves precedence: --yes overrides --interactive flag to force non-interactive mode", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "yes-overrides-interactive", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--yes", "--interactive"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("works with --dry-run and --yes without creating files on disk", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "dryrun-yes-parity", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--yes", "--dry-run"]);
+      expect(proc.exitCode).toBe(0);
+      expect(proc.stdout.toString()).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(false);
+    });
+
+    it("works with --force and -y creating a .bak backup when AGENTS.md exists", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "force-backup-parity", scripts: { test: "bun test" } })
+      );
+      fs.writeFileSync(path.join(tempDir, "AGENTS.md"), "# Pre-existing instructions", "utf-8");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-y", "--force"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md.bak"))).toBe(true);
+      const bakContent = fs.readFileSync(path.join(tempDir, "AGENTS.md.bak"), "utf-8");
+      expect(bakContent).toBe("# Pre-existing instructions");
+    });
+  });
+
+  describe("AC-3: Headless CI Auto-detection & Non-TTY Fallback", () => {
+    it("executes in deterministic batch mode in non-TTY environment without hanging", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "headless-autodetect-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("smoothly falls back when --interactive is provided in a non-TTY environment", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "headless-fallback-notice-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--interactive"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("auto-detects CI environments and executes non-interactively without prompt", () => {
+      const ciVariables = [
+        { CI: "true" },
+        { CONTINUOUS_INTEGRATION: "1" },
+        { GITHUB_ACTIONS: "true" },
+        { DEBIAN_FRONTEND: "noninteractive" }
+      ];
+
+      for (const envVar of ciVariables) {
+        const sub = path.join(tempDir, `ci-${Object.keys(envVar)[0]}`);
+        fs.mkdirSync(sub, { recursive: true });
+        fs.writeFileSync(path.join(sub, "package.json"), JSON.stringify({ name: "ci-test" }));
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", sub], {
+          env: { ...process.env, ...envVar }
+        });
+        expect(proc.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(sub, "AGENTS.md"))).toBe(true);
+      }
+    });
+
+    it("preserves pure JSON output without notice contamination when --json is provided in headless", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "json-pure-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync([
+        "bun", "run", cliPath, "agents", "generate", tempDir, "--interactive", "--json"
+      ]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString().trim();
+      expect(() => JSON.parse(stdout)).not.toThrow();
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("success");
+      expect(parsed.rootAgentsPath).toBe(path.join(tempDir, "AGENTS.md"));
+    });
+  });
+
+  describe("AC-4: Strict Alias Parity Across baba, bbyg, and matryoshka", () => {
+    it("maintains strict batch generation parity with -y flag across all 3 aliases", () => {
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        const sub = path.join(tempDir, `alias-batch-${alias}`);
+        fs.mkdirSync(sub, { recursive: true });
+        fs.writeFileSync(
+          path.join(sub, "package.json"),
+          JSON.stringify({ name: `parity-${alias}`, dependencies: { express: "^4.18.2" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", sub, "-y"], {
+          env: { ...process.env, BABA_ALIAS: alias }
+        });
+        expect(proc.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(sub, "AGENTS.md"))).toBe(true);
+        expect(fs.existsSync(path.join(sub, ".agents", "skills", "skill-backend.md"))).toBe(true);
+      }
+    });
+
+    it("maintains strict headless fallback notice parity across all 3 aliases", () => {
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        const sub = path.join(tempDir, `alias-notice-${alias}`);
+        fs.mkdirSync(sub, { recursive: true });
+        fs.writeFileSync(path.join(sub, "package.json"), JSON.stringify({ name: `notice-${alias}` }));
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", sub, "--interactive"], {
+          env: { ...process.env, BABA_ALIAS: alias }
+        });
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("Headless environment detected");
+        expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+        expect(fs.existsSync(path.join(sub, "AGENTS.md"))).toBe(true);
+      }
+    });
+
+    it("maintains strict JSON output parity across all 3 aliases with --dry-run and -y", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "json-parity-app", dependencies: { fastify: "^4.0.0" } })
+      );
+
+      const outputs: any[] = [];
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        const proc = Bun.spawnSync(
+          ["bun", "run", cliPath, "agents", "generate", tempDir, "--dry-run", "-y", "--json"],
+          { env: { ...process.env, BABA_ALIAS: alias } }
+        );
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        outputs.push(parsed);
+      }
+
+      expect(outputs[0].archetype).toBe(outputs[1].archetype);
+      expect(outputs[0].archetype).toBe(outputs[2].archetype);
+      expect(outputs[0].rootTokens).toBe(outputs[1].rootTokens);
+      expect(outputs[0].rootTokens).toBe(outputs[2].rootTokens);
+      expect(outputs[0].plannedFiles.length).toBe(outputs[1].plannedFiles.length);
+      expect(outputs[0].plannedFiles.length).toBe(outputs[2].plannedFiles.length);
+    });
+
+    it("maintains help parity: displays --interactive and --yes flags in agents help and agents generate help", () => {
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        for (const args of [["agents", "--help"], ["agents", "-h"], ["agents", "help"], ["agents", "generate", "--help"], ["agents", "generate", "help"]]) {
+          const proc = Bun.spawnSync(["bun", "run", cliPath, ...args], {
+            env: { ...process.env, BABA_ALIAS: alias }
+          });
+          expect(proc.exitCode).toBe(0);
+          const stdout = proc.stdout.toString();
+          expect(stdout).toContain("--interactive");
+          expect(stdout).toContain("-i");
+          expect(stdout).toContain("--yes");
+          expect(stdout).toContain("-y");
+        }
+      }
+    });
+
+    it("maintains package.json bin script alias parity for baba, bbyg, and matryoshka", () => {
+      for (const binScript of ["baba", "bbyg", "matryoshka"]) {
+        const proc = Bun.spawnSync(["bun", "run", binScript, "agents", "--help"]);
+        expect(proc.exitCode).toBe(0);
+        const stdout = proc.stdout.toString();
+        expect(stdout).toContain("--interactive");
+        expect(stdout).toContain("--yes");
+      }
+    });
+
+    it("maintains protective shell script alias parity in packages/ forwarders", () => {
+      const shells = [
+        path.resolve(__dirname, "../packages/baba/bin/baba.js"),
+        path.resolve(__dirname, "../packages/bbyg/bin/bbyg.js"),
+        path.resolve(__dirname, "../packages/matrioska/bin/matrioska.js"),
+        path.resolve(__dirname, "../packages/matryoska/bin/matryoska.js"),
+      ];
+
+      for (const shellPath of shells) {
+        expect(fs.existsSync(shellPath)).toBe(true);
+        const content = fs.readFileSync(shellPath, "utf-8");
+        expect(content).toContain("resolveCanonicalCli");
+        expect(content).toContain("forwardCli");
+        expect(content).toContain("spawnSync");
+      }
+    });
+  });
+});
+
+
+describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
+  let tempDir: string;
+  const cliPath = path.resolve(__dirname, "../src/cli.ts");
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "matryoshka-spec26-subtask7-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe("AC-1: Flag Parity --interactive & -i Shorthand in Headless Environments", () => {
+    it("falls back to deterministic generation when --interactive is run in non-TTY environment", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "interactive-flag-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--interactive"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Notice: Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-testing.md"))).toBe(true);
+    });
+
+    it("falls back to deterministic generation when -i shorthand is run in non-TTY environment", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "i-shorthand-test", dependencies: { express: "^4.18.2" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-i"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).toContain("Notice: Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-backend.md"))).toBe(true);
+    });
+
+    it("handles implicit generate command when invoked as 'baba agents --interactive' or 'baba agents -i'", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "implicit-agents-interactive", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", tempDir, "-i"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+  });
+
+  describe("AC-2: Flag Precedence and Non-Interactive Batch Modes (--yes, -y, --json)", () => {
+    it("--yes overrides --interactive flag and generates directly without headless notice", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "precedence-yes-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--interactive", "--yes"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).not.toContain("Notice: Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("-y shorthand overrides -i shorthand and generates directly without headless notice", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "precedence-shorty-test", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-i", "-y"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString();
+      expect(stdout).not.toContain("Notice: Headless environment detected");
+      expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("handles implicit generate command with 'baba agents -y' and 'baba agents --yes'", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "implicit-agents-yes", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", tempDir, "-y"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("--json overrides --interactive flag and outputs strictly valid JSON without prompts or notices", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "precedence-json-test", dependencies: { express: "^4.18.2" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "--interactive", "--json"]);
+      expect(proc.exitCode).toBe(0);
+      const stdout = proc.stdout.toString().trim();
+      expect(stdout).not.toContain("Notice: Headless environment detected");
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("success");
+      expect(parsed.rootAgentsPath).toBeDefined();
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+  });
+
+  describe("AC-3: Strict Alias Parity Across baba, bbyg, matryoshka and matrioska", () => {
+    it("produces byte-identical AGENTS.md and skills across baba, bbyg, and matryoshka aliases in batch mode", () => {
+      const aliases = ["baba", "bbyg", "matryoshka"];
+      const generatedArtifacts: Record<string, { agentsMd: string; skills: string[] }> = {};
+
+      for (const alias of aliases) {
+        const subProject = path.join(tempDir, `alias-parity-${alias}`);
+        fs.mkdirSync(subProject, { recursive: true });
+        fs.writeFileSync(
+          path.join(subProject, "package.json"),
+          JSON.stringify({
+            name: `parity-${alias}`,
+            dependencies: { express: "^4.18.2", pg: "^8.11.0" },
+            scripts: { test: "bun test" }
+          })
+        );
+        fs.mkdirSync(path.join(subProject, "src", "routes"), { recursive: true });
+        fs.writeFileSync(path.join(subProject, "src", "routes", "api.ts"), "export const ok = 1;");
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", subProject, "-y"], {
+          env: { ...process.env, BABA_ALIAS: alias }
+        });
+        expect(proc.exitCode).toBe(0);
+
+        const agentsMd = fs.readFileSync(path.join(subProject, "AGENTS.md"), "utf-8");
+        const skillsDir = path.join(subProject, ".agents", "skills");
+        const skills = fs.readdirSync(skillsDir).sort();
+
+        generatedArtifacts[alias] = { agentsMd, skills };
+      }
+
+      // Parity check: baba vs bbyg vs matryoshka
+      expect(generatedArtifacts.bbyg.skills).toEqual(generatedArtifacts.baba.skills);
+      expect(generatedArtifacts.matryoshka.skills).toEqual(generatedArtifacts.baba.skills);
+      expect(generatedArtifacts.bbyg.agentsMd).toBe(generatedArtifacts.baba.agentsMd);
+      expect(generatedArtifacts.matryoshka.agentsMd).toBe(generatedArtifacts.baba.agentsMd);
+    });
+
+    it("supports passing alias as first CLI argument with strict dispatch parity", () => {
+      const aliases = ["baba", "bbyg", "matryoshka", "matrioska"];
+
+      for (const alias of aliases) {
+        const subProject = path.join(tempDir, `direct-arg-${alias}`);
+        fs.mkdirSync(subProject, { recursive: true });
+        fs.writeFileSync(
+          path.join(subProject, "package.json"),
+          JSON.stringify({ name: `direct-${alias}`, scripts: { test: "bun test" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, alias, "agents", "generate", subProject, "-y"]);
+        expect(proc.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(subProject, "AGENTS.md"))).toBe(true);
+      }
+    });
+
+    it("exhibits identical --dry-run behavior across aliases without writing files to disk", () => {
+      for (const alias of ["baba", "bbyg", "matryoshka"]) {
+        const subProject = path.join(tempDir, `dryrun-${alias}`);
+        fs.mkdirSync(subProject, { recursive: true });
+        fs.writeFileSync(
+          path.join(subProject, "package.json"),
+          JSON.stringify({ name: `dryrun-${alias}`, scripts: { test: "bun test" } })
+        );
+
+        const proc = Bun.spawnSync(["bun", "run", cliPath, alias, "agents", "generate", subProject, "--dry-run", "-y"]);
+        expect(proc.exitCode).toBe(0);
+        expect(proc.stdout.toString()).toContain("Matryoshka Adaptive Agents Generator");
+        expect(fs.existsSync(path.join(subProject, "AGENTS.md"))).toBe(false);
+      }
+    });
+  });
+
+  describe("AC-4: Headless CI Auto-Detection & Automated Environment Variables", () => {
+    it("automatically executes in headless batch mode without hanging when CI=true is set", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "ci-auto-true", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir], {
+        env: { ...process.env, CI: "true" }
+      });
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("automatically executes in headless batch mode when GITHUB_ACTIONS=true is set", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "ci-github-actions", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir], {
+        env: { ...process.env, GITHUB_ACTIONS: "true" }
+      });
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+
+    it("automatically executes in headless batch mode when DEBIAN_FRONTEND=noninteractive is set", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "ci-debian-noninteractive", scripts: { test: "bun test" } })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir], {
+        env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" }
+      });
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
+    });
+  });
+});
+
+
 
 
 

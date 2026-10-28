@@ -59,7 +59,7 @@ Concentric Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediati
 Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
-  baba agents generate [path] [--force] [--dry-run] [--json]
+  baba agents generate [path] [--force] [--dry-run] [--interactive] [--yes] [--json]
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents audit [path] [--strict] [--json]
@@ -79,6 +79,8 @@ Commands:
 Options:
   --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
   --dry-run          Simulate execution without modifying files on disk
+  --interactive, -i  Launch interactive terminal UI to review stack and select skills
+  --yes, -y          Bypass interactive prompts and apply recommended defaults non-interactively
   --json             Output strictly valid JSON
   --targets <list>   Comma-separated target environments (cursor, gemini, claude)
   --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
@@ -154,6 +156,9 @@ Options:
   -h, --help         Show help information
 
 Examples:
+  $ baba agents generate --interactive
+  $ baba agents generate --yes
+  $ baba agents generate -y
   $ baba agents generate --dry-run
   $ baba agents generate --force
   $ baba agents check
@@ -288,6 +293,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
   const [command, ...rest] = args;
 
   switch (command) {
+    case "baba":
+    case "bbyg":
+    case "matryoshka":
+    case "matrioska": {
+      return runCli(rest);
+    }
+
     case "audit": {
       return runCli(["agents", "audit", ...rest]);
     }
@@ -429,14 +441,18 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         console.log(AUDIT_HELP);
         process.exit(0);
       }
-      if (rest.includes("--help") || rest.includes("-h") || rest[0] === "help") {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
         console.log(AGENTS_HELP);
         process.exit(0);
       }
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
-      const isYes = rest.includes("--yes") || rest.includes("-y");
+      const isYes =
+        rest.includes("--yes") ||
+        rest.includes("-y") ||
+        rest.includes("--non-interactive") ||
+        rest.includes("--no-interactive");
       const isInteractive = rest.includes("--interactive") || rest.includes("-i");
 
       let maxTokens: number | undefined;
@@ -773,7 +789,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           ci: isCI,
         });
 
-        if (isInteractive && !process.stdin.isTTY && !isJson) {
+        if (isInteractive && !isYes && !process.stdin.isTTY && !isJson) {
           console.log(
             pc.yellow(
               "\nNotice: Headless environment detected (process.stdin.isTTY is false). Falling back to non-interactive mode.\n"
