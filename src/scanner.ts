@@ -9,6 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
+import { isIgnoredFile } from "./ast";
 import type {
   BadgeOptions,
   CodebaseEntities,
@@ -148,6 +149,17 @@ async function executeHarnessScoreSubprocessInternal(
   // Ensure target path is present
   if (!cmdArgs.includes(targetDir)) {
     cmdArgs.push(targetDir);
+  }
+
+  // Pass --include-tests and --exclude if configured
+  if (options?.includeTests && !cmdArgs.includes("--include-tests")) {
+    cmdArgs.push("--include-tests");
+  }
+
+  if (options?.exclude && options.exclude.length > 0) {
+    for (const pat of options.exclude) {
+      cmdArgs.push("--exclude", pat);
+    }
   }
 
   const executionCwd = options?.cwd || targetDir;
@@ -466,7 +478,10 @@ export async function executeHarnessScore(
  * Scans a target repository directory for actual routes, models, and controllers.
  * Operates safely with depth bounds and skips heavy or alien directories.
  */
-export function discoverCodebaseEntities(targetDir: string): CodebaseEntities {
+export function discoverCodebaseEntities(
+  targetDir: string,
+  options?: { includeTests?: boolean; exclude?: string[]; excludePatterns?: string[] }
+): CodebaseEntities {
   const routes: string[] = [];
   const models: string[] = [];
   const controllers: string[] = [];
@@ -493,6 +508,11 @@ export function discoverCodebaseEntities(targetDir: string): CodebaseEntities {
     ".turbo",
   ]);
 
+  const excludePatterns = [
+    ...(options?.exclude ?? []),
+    ...(options?.excludePatterns ?? []),
+  ];
+
   function walk(currentDir: string, depth: number): void {
     if (depth > 5) return;
     let entries: fs.Dirent[] = [];
@@ -504,12 +524,29 @@ export function discoverCodebaseEntities(targetDir: string): CodebaseEntities {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith(".")) {
-          walk(path.join(currentDir, entry.name), depth + 1);
+        const fullDirPath = path.join(currentDir, entry.name);
+        const relDir = path.relative(root, fullDirPath).replace(/\\/g, "/");
+        const isIgnored =
+          ignoreDirs.has(entry.name) ||
+          entry.name.startsWith(".") ||
+          isIgnoredFile(relDir, {
+            includeTests: options?.includeTests,
+            excludePatterns,
+          });
+        if (!isIgnored) {
+          walk(fullDirPath, depth + 1);
         }
       } else if (entry.isFile()) {
         const fullPath = path.join(currentDir, entry.name);
         const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+        if (
+          isIgnoredFile(relPath, {
+            includeTests: options?.includeTests,
+            excludePatterns,
+          })
+        ) {
+          continue;
+        }
         const lowerRel = relPath.toLowerCase();
 
         // Route patterns
@@ -902,10 +939,11 @@ export function generateRemediationIssue(
 export function reconcileGapsWithStack(
   oracleResult: HarnessScoreResult,
   stack: ProjectStack,
-  projectPath?: string
+  projectPath?: string,
+  options?: HarnessScoreOptions
 ): SemanticReconciliation {
   const entities: CodebaseEntities = projectPath
-    ? discoverCodebaseEntities(projectPath)
+    ? discoverCodebaseEntities(projectPath, options)
     : { models: [], routes: [], controllers: [] };
 
   const priorityOrder: Record<RemediationPriority, number> = {
@@ -947,7 +985,7 @@ export async function runMaturityScan(
     allowFallback: true,
     ...options,
   });
-  return reconcileGapsWithStack(oracleResult, stack, resolvedPath);
+  return reconcileGapsWithStack(oracleResult, stack, resolvedPath, options);
 }
 
 /**

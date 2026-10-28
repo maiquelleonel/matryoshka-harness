@@ -74,6 +74,111 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
     });
   });
 
+  describe("Subtask 2: Add `--include-tests` flag across `baba wrap`, `baba scan`, and `baba agents audit`", () => {
+    it("baba scan excludes entities in test suites by default, and includes them with --include-tests", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "src/routes/users.ts"), "export const route = '/users';");
+
+      fs.mkdirSync(path.join(tempDir, "tests/routes"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "tests/routes/test_mock_router.ts"), "export const mockRoute = '/test';");
+
+      fs.mkdirSync(path.join(tempDir, "tests/controllers"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "tests/controllers/test_ctrl.ts"), "export const testCtrl = {};");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "scan-test-app" }, null, 2)
+      );
+
+      // 1. Without --include-tests: tests/ routes and controllers must be excluded
+      const procDefault = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(procDefault.exitCode).toBe(0);
+      const parsedDefault = JSON.parse(procDefault.stdout.toString().trim());
+
+      const defaultRoutes = parsedDefault.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+      const defaultControllers = parsedDefault.entities.controllers.map((c: string) => c.replace(/\\/g, "/"));
+
+      expect(defaultRoutes).toContain("src/routes/users.ts");
+      expect(defaultRoutes).not.toContain("tests/routes/test_mock_router.ts");
+      expect(defaultControllers).not.toContain("tests/controllers/test_ctrl.ts");
+
+      // 2. With --include-tests: tests/ routes and controllers must be included
+      const procWithTests = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--include-tests",
+        "--json",
+      ]);
+      expect(procWithTests.exitCode).toBe(0);
+      const parsedWithTests = JSON.parse(procWithTests.stdout.toString().trim());
+
+      const includedRoutes = parsedWithTests.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+      const includedControllers = parsedWithTests.entities.controllers.map((c: string) => c.replace(/\\/g, "/"));
+
+      expect(includedRoutes).toContain("src/routes/users.ts");
+      expect(includedRoutes).toContain("tests/routes/test_mock_router.ts");
+      expect(includedControllers).toContain("tests/controllers/test_ctrl.ts");
+    });
+
+    it("baba agents audit skips test suite instruction files by default, and audits them with --include-tests", async () => {
+      // Setup a project with a bloated test fixture AGENTS.md inside tests/
+      fs.mkdirSync(path.join(tempDir, "tests/fixtures"), { recursive: true });
+      const bloatedInstructions = [
+        "# Test Instructions",
+        ...Array(400).fill("never do this action always avoid bad patterns"),
+      ].join("\n");
+      fs.writeFileSync(path.join(tempDir, "tests/fixtures/AGENTS.md"), bloatedInstructions, "utf-8");
+
+      // 1. Without --include-tests: auditing inside tests/ directory should skip the test suite instructions
+      const procDefault = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "tests/fixtures"),
+        "--json",
+      ]);
+      expect(procDefault.exitCode).toBe(0);
+      const parsedDefault = JSON.parse(procDefault.stdout.toString().trim());
+      expect(parsedDefault.summary.scannedFiles.length).toBe(0);
+      expect(parsedDefault.violations.length).toBe(0);
+
+      // 2. With --include-tests: auditing inside tests/ directory audits the file and flags violations
+      const procWithTests = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "tests/fixtures"),
+        "--include-tests",
+        "--json",
+      ]);
+      expect(procWithTests.exitCode).toBe(0);
+      const parsedWithTests = JSON.parse(procWithTests.stdout.toString().trim());
+      expect(parsedWithTests.summary.scannedFiles.length).toBe(1);
+      expect(parsedWithTests.violations.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("verifies --include-tests CLI help presence across wrap, scan, and agents audit", async () => {
+      // baba wrap --help
+      const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"]);
+      expect(procWrap.stdout.toString()).toContain("--include-tests");
+
+      // baba scan --help
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", "--help"]);
+      expect(procScan.stdout.toString()).toContain("--include-tests");
+
+      // baba agents audit --help
+      const procAudit = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"]);
+      expect(procAudit.stdout.toString()).toContain("--include-tests");
+    });
+  });
+
   describe("Subtask 3-5: Dedicated Ignore Files (.babaignore & .bbygignore)", () => {
     it("loads .babaignore and skips matching relative paths during walkCodebase", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });

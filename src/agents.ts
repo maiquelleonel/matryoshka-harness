@@ -9,6 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
+import { isIgnoredFile } from "./ast";
 import type {
   ExtractedSkill,
   LegacyMigrationOptions,
@@ -2241,6 +2242,55 @@ export function auditCognitiveContext(
   const maxNegativePhrases = options?.maxNegativePhrases ?? 3;
 
   let targetFile: string | null = null;
+  const includeTests = options?.includeTests ?? false;
+  const excludePatterns = [
+    ...(options?.exclude ?? []),
+    ...(options?.excludePatterns ?? []),
+  ];
+
+  const checkIsIgnored = (p: string): boolean => {
+    const norm = p.replace(/\\/g, "/");
+    if (isIgnoredFile(norm, { includeTests, excludePatterns })) {
+      return true;
+    }
+    const fromCwd = path.relative(process.cwd(), p).replace(/\\/g, "/");
+    if (fromCwd && isIgnoredFile(fromCwd, { includeTests, excludePatterns })) {
+      return true;
+    }
+    return false;
+  };
+
+  if (checkIsIgnored(root)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 0,
+      failed_count: 0,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 5,
+      passed_count: 5,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: [],
+    };
+    return {
+      score: 100,
+      healthScore: 100,
+      health_score: 100,
+      passed: true,
+      passedStrict: true,
+      passed_strict: true,
+      violations: [],
+      summary,
+      durationMs,
+      duration_ms: durationMs,
+    };
+  }
 
   if (fs.existsSync(root)) {
     try {
@@ -2258,6 +2308,38 @@ export function auditCognitiveContext(
         }
       }
     } catch {}
+  }
+
+  if (targetFile && checkIsIgnored(targetFile)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 0,
+      failed_count: 0,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 5,
+      passed_count: 5,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: [],
+    };
+    return {
+      score: 100,
+      healthScore: 100,
+      health_score: 100,
+      passed: true,
+      passedStrict: true,
+      passed_strict: true,
+      violations: [],
+      summary,
+      durationMs,
+      duration_ms: durationMs,
+    };
   }
 
   // Graceful failure when root instruction file does not exist
