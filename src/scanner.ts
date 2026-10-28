@@ -536,6 +536,7 @@ export function discoverCodebaseEntities(
             excludePatterns,
             gitignorePatterns,
             babaIgnorePatterns,
+            isDirectory: true,
           });
         if (!isIgnored) {
           walk(fullDirPath, depth + 1);

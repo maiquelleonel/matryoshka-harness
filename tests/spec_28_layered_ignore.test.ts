@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   walkCodebase,
   isIgnoredFile,
+  matchesPattern,
   loadBabaIgnorePatterns,
   resolveBabaIgnorePath,
 } from "../src/ast";
@@ -237,6 +238,129 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
 
       expect(routes).toContain("src/routes/active.ts");
       expect(routes).not.toContain("ignored_routes/ignored.ts");
+    });
+  });
+
+  describe("Subtask 4: Patterns must follow standard gitignore-style glob semantics", () => {
+    it("handles * wildcard without crossing directory boundaries (/)", () => {
+      expect(matchesPattern("src/index.ts", "src/*.ts")).toBe(true);
+      expect(matchesPattern("src/nested/index.ts", "src/*.ts")).toBe(false);
+      expect(matchesPattern("app.log", "*.log")).toBe(true);
+      expect(matchesPattern("deep/dir/app.log", "*.log")).toBe(true);
+      expect(matchesPattern("app.log.bak", "*.log")).toBe(false);
+    });
+
+    it("handles ? wildcard matching exactly one non-separator character", () => {
+      expect(matchesPattern("file1.ts", "file?.ts")).toBe(true);
+      expect(matchesPattern("fileA.ts", "file?.ts")).toBe(true);
+      expect(matchesPattern("file.ts", "file?.ts")).toBe(false);
+      expect(matchesPattern("file12.ts", "file?.ts")).toBe(false);
+      expect(matchesPattern("file/a.ts", "file?.ts")).toBe(false);
+    });
+
+    it("handles character classes [...] and ranges [0-9], [a-z], and negated [!0-9]", () => {
+      expect(matchesPattern("doc1.txt", "doc[0-9].txt")).toBe(true);
+      expect(matchesPattern("doc9.txt", "doc[0-9].txt")).toBe(true);
+      expect(matchesPattern("docA.txt", "doc[0-9].txt")).toBe(false);
+
+      expect(matchesPattern("docA.txt", "doc[!0-9].txt")).toBe(true);
+      expect(matchesPattern("doc1.txt", "doc[!0-9].txt")).toBe(false);
+
+      expect(matchesPattern("alpha.txt", "[a-z]*.txt")).toBe(true);
+      expect(matchesPattern("123.txt", "[a-z]*.txt")).toBe(false);
+    });
+
+    it("handles ** wildcard in leading, trailing, and middle positions (zero or more directories)", () => {
+      // Leading **/
+      expect(matchesPattern("config.json", "**/config.json")).toBe(true);
+      expect(matchesPattern("sub/config.json", "**/config.json")).toBe(true);
+      expect(matchesPattern("a/b/c/config.json", "**/config.json")).toBe(true);
+
+      // Trailing /**
+      expect(matchesPattern("temp", "temp/**")).toBe(true);
+      expect(matchesPattern("temp/file.txt", "temp/**")).toBe(true);
+      expect(matchesPattern("temp/a/b/file.txt", "temp/**")).toBe(true);
+      expect(matchesPattern("other/temp/file.txt", "temp/**")).toBe(false);
+
+      // Middle /**/ matching zero directories (a/b) and multiple directories (a/x/y/b)
+      expect(matchesPattern("src/util.ts", "src/**/util.ts")).toBe(true);
+      expect(matchesPattern("src/core/util.ts", "src/**/util.ts")).toBe(true);
+      expect(matchesPattern("src/core/nested/util.ts", "src/**/util.ts")).toBe(true);
+      expect(matchesPattern("other/src/util.ts", "src/**/util.ts")).toBe(false);
+    });
+
+    it("distinguishes anchored (/ leading or in middle) from unanchored patterns", () => {
+      // Leading / anchors to root
+      expect(matchesPattern("build", "/build")).toBe(true);
+      expect(matchesPattern("build/output.js", "/build")).toBe(true);
+      expect(matchesPattern("src/build", "/build")).toBe(false);
+      expect(matchesPattern("src/build/output.js", "/build")).toBe(false);
+
+      // Slash in middle anchors to root
+      expect(matchesPattern("docs/api.md", "docs/*.md")).toBe(true);
+      expect(matchesPattern("sub/docs/api.md", "docs/*.md")).toBe(false);
+
+      // Unanchored pattern matches anywhere
+      expect(matchesPattern("build", "build")).toBe(true);
+      expect(matchesPattern("src/build", "build")).toBe(true);
+      expect(matchesPattern("src/build/output.js", "build")).toBe(true);
+    });
+
+    it("handles directory-only trailing slash (dir/)", () => {
+      // Matches directory and files within directory
+      expect(matchesPattern("dist/bundle.js", "dist/")).toBe(true);
+      expect(matchesPattern("sub/dist/bundle.js", "dist/")).toBe(true);
+      expect(matchesPattern("dist", "dist/", true)).toBe(true);
+
+      // Does not match regular file named dist when isDirectory is false
+      expect(matchesPattern("dist", "dist/", false)).toBe(false);
+    });
+
+    it("supports negation (!) to un-ignore files in pattern lists", () => {
+      expect(
+        isIgnoredFile("app.log", {
+          customPatterns: ["*.log", "!important.log"],
+        })
+      ).toBe(true);
+
+      expect(
+        isIgnoredFile("important.log", {
+          customPatterns: ["*.log", "!important.log"],
+        })
+      ).toBe(false);
+
+      expect(
+        isIgnoredFile("docs/api.md", {
+          babaIgnorePatterns: ["docs/**", "!docs/README.md"],
+        })
+      ).toBe(true);
+
+      expect(
+        isIgnoredFile("docs/README.md", {
+          babaIgnorePatterns: ["docs/**", "!docs/README.md"],
+        })
+      ).toBe(false);
+    });
+
+    it("walkCodebase respects .babaignore negation (!) semantics", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const ok = 1;");
+      fs.writeFileSync(path.join(tempDir, "docs/api.ts"), "export const api = 2;");
+      fs.writeFileSync(path.join(tempDir, "docs/keep.ts"), "export const keep = 3;");
+
+      fs.writeFileSync(
+        path.join(tempDir, ".babaignore"),
+        "docs/**\n!docs/keep.ts\n"
+      );
+
+      const result = await walkCodebase(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toContain("src/index.ts");
+      expect(scannedPaths).toContain("docs/keep.ts");
+      expect(scannedPaths).not.toContain("docs/api.ts");
     });
   });
 

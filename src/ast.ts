@@ -103,67 +103,265 @@ export function isBinaryContent(buffer: Buffer | Uint8Array): boolean {
 /**
  * Matches a relative path against an ignore pattern.
  */
-function matchesPattern(relativePath: string, pattern: string): boolean {
-  const normPath = relativePath.replace(/\\/g, "/");
-  let normPattern = pattern.replace(/\\/g, "/").trim();
+/**
+ * Converts a gitignore glob pattern to a RegExp.
+ */
+function compileGlobToRegex(pattern: string): RegExp {
+  let regexStr = "";
+  let i = 0;
+  const len = pattern.length;
 
-  if (!normPattern || normPattern.startsWith("#")) {
+  while (i < len) {
+    const c = pattern[i];
+    if (!c) {
+      i++;
+      continue;
+    }
+
+    if (c === "\\") {
+      if (i + 1 < len) {
+        regexStr += "\\" + pattern[i + 1];
+        i += 2;
+      } else {
+        regexStr += "\\\\";
+        i++;
+      }
+      continue;
+    }
+
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        // Double asterisk **
+        const isLeading = i === 0;
+        const slashAfter = i + 2 < len && pattern[i + 2] === "/";
+        const slashBefore = i > 0 && pattern[i - 1] === "/";
+
+        if (slashBefore && slashAfter) {
+          // e.g. "a/**/b" -> zero or more dirs
+          regexStr += "(?:.+/)?";
+          i += 3;
+          continue;
+        } else if (isLeading && slashAfter) {
+          // e.g. "**/b"
+          regexStr += "(?:.*/)?";
+          i += 3;
+          continue;
+        } else if (slashBefore && i + 2 === len) {
+          // e.g. "a/**" at end of pattern
+          if (regexStr.endsWith("/")) {
+            regexStr = regexStr.slice(0, -1) + "(?:/.*)?";
+          } else {
+            regexStr += "(?:/.*)?";
+          }
+          i += 2;
+          continue;
+        } else {
+          // Standalone **
+          regexStr += ".*";
+          i += 2;
+          continue;
+        }
+      } else {
+        // Single * matches non-slash characters
+        regexStr += "[^/]*";
+        i++;
+        continue;
+      }
+    }
+
+    if (c === "?") {
+      regexStr += "[^/]";
+      i++;
+      continue;
+    }
+
+    if (c === "[") {
+      let j = i + 1;
+      let isNeg = false;
+      if (j < len && (pattern[j] === "!" || pattern[j] === "^")) {
+        isNeg = true;
+        j++;
+      }
+      if (j < len && pattern[j] === "]") {
+        j++;
+      }
+      while (j < len && pattern[j] !== "]") {
+        j++;
+      }
+      if (j < len && pattern[j] === "]") {
+        const content = pattern.slice(i + 1 + (isNeg ? 1 : 0), j);
+        if (isNeg) {
+          regexStr += "[^/" + content + "]";
+        } else {
+          regexStr += "[" + content + "]";
+        }
+        i = j + 1;
+        continue;
+      } else {
+        regexStr += "\\[";
+        i++;
+        continue;
+      }
+    }
+
+    if (/[.+^$(){}|]/.test(c)) {
+      regexStr += "\\" + c;
+    } else {
+      regexStr += c;
+    }
+    i++;
+  }
+
+  return new RegExp(`^${regexStr}$`);
+}
+
+/**
+ * Matches a relative path against an ignore pattern following gitignore glob semantics.
+ */
+export function matchesPattern(
+  relativePath: string,
+  pattern: string,
+  isDirectory?: boolean
+): boolean {
+  let normPath = relativePath.replace(/\\/g, "/").trim();
+  if (normPath.startsWith("./")) {
+    normPath = normPath.slice(2);
+  }
+  if (normPath.startsWith("/")) {
+    normPath = normPath.slice(1);
+  }
+  let pathIsDir = isDirectory ?? false;
+  if (normPath.endsWith("/")) {
+    pathIsDir = true;
+    normPath = normPath.slice(0, -1);
+  }
+
+  let normPattern = pattern.replace(/\\/g, "/").trim();
+  if (!normPattern || (normPattern.startsWith("#") && !normPattern.startsWith("\\#"))) {
+    return false;
+  }
+  if (normPattern.startsWith("\\#")) {
+    normPattern = normPattern.slice(1);
+  }
+  if (normPattern.startsWith("\\!")) {
+    normPattern = normPattern.slice(1);
+  }
+  if (normPattern.startsWith("!")) {
+    normPattern = normPattern.slice(1);
+  }
+  if (!normPattern) {
     return false;
   }
 
-  // Handle directory patterns like "ignored_dir/" or "/dir"
-  const directoryOnly = normPattern.endsWith("/");
-  if (directoryOnly) {
+  const isDirOnly = normPattern.endsWith("/");
+  if (isDirOnly) {
     normPattern = normPattern.slice(0, -1);
   }
 
+  let isAnchored = false;
   if (normPattern.startsWith("/")) {
+    isAnchored = true;
     normPattern = normPattern.slice(1);
+  } else if (normPattern.startsWith("**/")) {
+    isAnchored = false;
+  } else if (normPattern.includes("/")) {
+    isAnchored = true;
+  } else {
+    isAnchored = false;
   }
 
-  // Handle /** suffix (e.g. docs/** or dir/**)
-  if (normPattern.endsWith("/**")) {
-    const base = normPattern.slice(0, -3);
-    if (normPath === base || normPath.startsWith(base + "/")) {
-      return true;
-    }
-  }
+  const regex = compileGlobToRegex(normPattern);
 
-  // Check segments (e.g. tests matches segment in path/to/tests/file)
-  const pathSegments = normPath.split("/");
-  if (pathSegments.includes(normPattern)) {
-    return true;
-  }
-
-  // Exact match or directory prefix match
-  if (normPath === normPattern || normPath.startsWith(normPattern + "/")) {
-    return true;
-  }
-
-  // Glob wildcards e.g. *.tmp, *.test.*, *.spec.*, or generated/**
-  if (normPattern.includes("*")) {
-    const regexPattern = normPattern
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*\*/g, ".*")
-      .replace(/\*/g, "[^/]*");
-    const regex = new RegExp(`(^|/)${regexPattern}($|/)`);
+  // If anchored, it matches either normPath itself, or a parent directory prefix
+  if (isAnchored) {
     if (regex.test(normPath)) {
-      return true;
-    }
-    // Also test directly against the file name if pattern has no '/'
-    if (!normPattern.includes("/")) {
-      const fileName = pathSegments[pathSegments.length - 1];
-      if (fileName && new RegExp(`^${regexPattern}$`).test(fileName)) {
+      if (!isDirOnly || pathIsDir) {
         return true;
       }
+    }
+    const parts = normPath.split("/");
+    let parentPrefix = "";
+    for (let p = 0; p < parts.length - 1; p++) {
+      const part = parts[p];
+      if (part !== undefined) {
+        parentPrefix = parentPrefix ? `${parentPrefix}/${part}` : part;
+        if (regex.test(parentPrefix)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // If unanchored and starts with **/
+  if (normPattern.startsWith("**/")) {
+    if (regex.test(normPath)) {
+      if (!isDirOnly || pathIsDir) {
+        return true;
+      }
+    }
+    const parts = normPath.split("/");
+    let parentPrefix = "";
+    for (let p = 0; p < parts.length - 1; p++) {
+      const part = parts[p];
+      if (part !== undefined) {
+        parentPrefix = parentPrefix ? `${parentPrefix}/${part}` : part;
+        if (regex.test(parentPrefix)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Unanchored pattern without slashes (e.g. *.log, temp, build, doc[0-9].txt)
+  const segments = normPath.split("/");
+  const leaf = segments[segments.length - 1];
+  if (leaf && regex.test(leaf)) {
+    if (!isDirOnly || pathIsDir) {
+      return true;
+    }
+  }
+
+  // Test against any parent directory segment (parent segments are ALWAYS directories)
+  for (let s = 0; s < segments.length - 1; s++) {
+    const seg = segments[s];
+    if (seg !== undefined && regex.test(seg)) {
+      return true;
+    }
+  }
+
+  // Test against the full normPath if single-segment
+  if (segments.length === 1 && regex.test(normPath)) {
+    if (!isDirOnly || pathIsDir) {
+      return true;
     }
   }
 
   return false;
 }
 
+/**
+ * Checks whether any pattern in the list un-ignores a path inside dirPath.
+ */
+function hasNegationUnderDir(dirPath: string, patterns: string[]): boolean {
+  const norm = dirPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  const prefix = norm ? `${norm}/` : "";
+  for (const pat of patterns) {
+    const trimmed = pat.trim();
+    if (trimmed.startsWith("!") && !trimmed.startsWith("\\!")) {
+      const clean = trimmed.slice(1).replace(/^\/+/, "");
+      if (clean.startsWith(prefix) || !clean.includes("/")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export interface IsIgnoredFileOptions {
   includeTests?: boolean;
+  isDirectory?: boolean;
   customPatterns?: string[];
   excludePatterns?: string[];
   gitignorePatterns?: string[];
@@ -185,6 +383,7 @@ export function isIgnoredFile(
   const segments = normPath.split("/");
 
   let includeTests = false;
+  let isDirectory: boolean | undefined = undefined;
   let customList: string[] = [];
   let gitignoreList: string[] = gitignorePatterns || [];
   let babaList: string[] = babaIgnorePatterns || [];
@@ -193,6 +392,7 @@ export function isIgnoredFile(
     customList = customPatternsOrOptions;
   } else if (customPatternsOrOptions && typeof customPatternsOrOptions === "object") {
     includeTests = customPatternsOrOptions.includeTests === true;
+    isDirectory = customPatternsOrOptions.isDirectory;
     customList = [
       ...(customPatternsOrOptions.excludePatterns ?? []),
       ...(customPatternsOrOptions.customPatterns ?? []),
@@ -201,17 +401,30 @@ export function isIgnoredFile(
     babaList = customPatternsOrOptions.babaIgnorePatterns ?? babaList;
   }
 
-  // 1. Built-in Defaults (vendor, cache, tests unless includeTests is true)
+  // 1. Built-in Defaults (vendor, cache directories always ignored)
   for (const seg of segments) {
     if (DEFAULT_IGNORE_PATTERNS.includes(seg)) {
       return true;
     }
   }
 
+  // If checking a directory, check if any negation rule exists within this directory.
+  // If so, do not prune this directory so its contents can be discovered and evaluated.
+  if (isDirectory === true) {
+    const allPatterns = [...customList, ...babaList, ...gitignoreList];
+    if (hasNegationUnderDir(normPath, allPatterns)) {
+      return false;
+    }
+  }
+
+  let ignored = false;
+
+  // 1b. Test suite patterns if !includeTests
   if (!includeTests) {
     for (const pat of DEFAULT_TEST_PATTERNS) {
-      if (matchesPattern(normPath, pat)) {
-        return true;
+      if (matchesPattern(normPath, pat, isDirectory)) {
+        ignored = true;
+        break;
       }
     }
   }
@@ -219,8 +432,16 @@ export function isIgnoredFile(
   // 2. .gitignore patterns
   if (gitignoreList && gitignoreList.length > 0) {
     for (const pat of gitignoreList) {
-      if (matchesPattern(normPath, pat)) {
-        return true;
+      const trimmed = pat.trim();
+      if (!trimmed || (trimmed.startsWith("#") && !trimmed.startsWith("\\#"))) continue;
+      const isNegative = trimmed.startsWith("!") && !trimmed.startsWith("\\!");
+      const cleanPat = isNegative
+        ? trimmed.slice(1)
+        : trimmed.startsWith("\\!") || trimmed.startsWith("\\#")
+        ? trimmed.slice(1)
+        : trimmed;
+      if (matchesPattern(normPath, cleanPat, isDirectory)) {
+        ignored = !isNegative;
       }
     }
   }
@@ -228,8 +449,16 @@ export function isIgnoredFile(
   // 3. .babaignore / .bbygignore patterns
   if (babaList && babaList.length > 0) {
     for (const pat of babaList) {
-      if (matchesPattern(normPath, pat)) {
-        return true;
+      const trimmed = pat.trim();
+      if (!trimmed || (trimmed.startsWith("#") && !trimmed.startsWith("\\#"))) continue;
+      const isNegative = trimmed.startsWith("!") && !trimmed.startsWith("\\!");
+      const cleanPat = isNegative
+        ? trimmed.slice(1)
+        : trimmed.startsWith("\\!") || trimmed.startsWith("\\#")
+        ? trimmed.slice(1)
+        : trimmed;
+      if (matchesPattern(normPath, cleanPat, isDirectory)) {
+        ignored = !isNegative;
       }
     }
   }
@@ -237,13 +466,21 @@ export function isIgnoredFile(
   // 4. CLI --exclude / custom patterns
   if (customList && customList.length > 0) {
     for (const pat of customList) {
-      if (matchesPattern(normPath, pat)) {
-        return true;
+      const trimmed = pat.trim();
+      if (!trimmed || (trimmed.startsWith("#") && !trimmed.startsWith("\\#"))) continue;
+      const isNegative = trimmed.startsWith("!") && !trimmed.startsWith("\\!");
+      const cleanPat = isNegative
+        ? trimmed.slice(1)
+        : trimmed.startsWith("\\!") || trimmed.startsWith("\\#")
+        ? trimmed.slice(1)
+        : trimmed;
+      if (matchesPattern(normPath, cleanPat, isDirectory)) {
+        ignored = !isNegative;
       }
     }
   }
 
-  return false;
+  return ignored;
 }
 
 /**
@@ -724,7 +961,7 @@ export async function walkCodebase(
       const relPath = path.relative(resolvedRoot, fullPath);
 
       if (entry.isDirectory()) {
-        if (!isIgnoredFile(relPath, ignoreOptions)) {
+        if (!isIgnoredFile(relPath, { ...ignoreOptions, isDirectory: true })) {
           const subFiles = await discoverFiles(fullPath);
           discovered.push(...subFiles);
         } else {
