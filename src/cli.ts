@@ -25,6 +25,10 @@ import {
   SKILL_DEFINITIONS,
   type SkillName,
 } from "./agents";
+import {
+  formatArchetypeProfileReview,
+  runInteractiveSkillSelector,
+} from "./agents-tui";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
@@ -137,6 +141,8 @@ Commands:
   baba agents skill <name> [path] Render compiled on-demand skill (backend, frontend, database, security, testing)
 
 Options:
+  --interactive, -i  Launch interactive terminal UI to review stack and select skills
+  --yes, -y          Bypass interactive prompts and apply recommended defaults non-interactively
   --force, -f        Overwrite existing AGENTS.md (creates .bak backup)
   --dry-run          Simulate execution without modifying files on disk
   --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
@@ -427,6 +433,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
+      const isYes = rest.includes("--yes") || rest.includes("-y");
+      const isInteractive = rest.includes("--interactive") || rest.includes("-i");
 
       let maxTokens: number | undefined;
       const positional: string[] = [];
@@ -744,12 +752,34 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       try {
+        const isInteractiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+        const shouldPrompt = !isJson && !isYes && (isInteractive || isInteractiveTerminal);
+
+        let selectedSkills: SkillName[] | undefined;
+        if (shouldPrompt) {
+          const selectorResult = await runInteractiveSkillSelector({
+            profile: profileArchetype(resolvedPath),
+            projectPath: resolvedPath,
+            dryRun: isDryRun,
+            force: isForce,
+            maxTokens,
+            strictTokenGuard: isStrict,
+          });
+
+          if (!selectorResult.confirmed) {
+            console.log(pc.yellow("\nOperation cancelled by user.\n"));
+            process.exit(0);
+          }
+          selectedSkills = selectorResult.selectedSkills;
+        }
+
         const result = generateAgents(resolvedPath, {
           force: isForce,
           dryRun: isDryRun,
           json: isJson,
           maxTokens,
           strictTokenGuard: isStrict,
+          selectedSkills,
         });
 
         if (isJson) {

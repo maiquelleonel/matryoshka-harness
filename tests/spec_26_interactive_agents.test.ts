@@ -12,6 +12,7 @@ import {
 import {
   formatArchetypeProfileReview,
   runInteractiveSkillSelector,
+  MODULAR_SKILLS_CATALOG,
   type InteractiveSelectorOptions
 } from "../src/agents-tui";
 
@@ -72,6 +73,7 @@ dependencies = [
       const review = formatArchetypeProfileReview(profile, tempDir);
 
       expect(review).toContain("custom-instructions");
+      expect(MODULAR_SKILLS_CATALOG.some(s => s.name === "custom-instructions")).toBe(true);
     });
   });
 
@@ -119,6 +121,68 @@ dependencies = [
       expect(result.selectedSkills).toBeArray();
       expect(result.selectedSkills.length).toBeGreaterThan(0);
     });
+
+    it("allows toggling skills and previewing skill content before confirming", async () => {
+      const profile = profileArchetype(tempDir);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let output = "";
+      stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      const selectorPromise = runInteractiveSkillSelector({
+        profile,
+        projectPath: tempDir,
+        stdin,
+        stdout,
+        dryRun: true
+      });
+
+      // Inspect skill ('p'), then exit preview ('\r'), then confirm ('\r')
+      setTimeout(() => {
+        stdin.write("p");
+      }, 30);
+      setTimeout(() => {
+        stdin.write("\r");
+      }, 60);
+      setTimeout(() => {
+        stdin.write("\r");
+      }, 90);
+
+      const result = await selectorPromise;
+      expect(output).toContain("Skill Preview:");
+      expect(output).toContain("Estimated:");
+      expect(result.confirmed).toBe(true);
+    });
+
+    it("persists only selected skills when generateAgents is supplied with selectedSkills", () => {
+      // Given a repository with custom selected skills
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "selective-skills-app",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      const selectedSkills: SkillName[] = ["skill-backend", "custom-instructions"];
+      const result = generateAgents(tempDir, {
+        selectedSkills,
+        force: true
+      });
+
+      expect(result.status).toBe("success");
+      const skillsDir = path.join(tempDir, ".agents", "skills");
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+
+      const customContent = fs.readFileSync(path.join(skillsDir, "custom-instructions.md"), "utf-8");
+      expect(customContent).toContain("name: custom-instructions");
+      expect(customContent).toContain("description:");
+    });
   });
 
   describe("AC-3: Headless & Flag Parity", () => {
@@ -138,6 +202,20 @@ dependencies = [
 
       const agentsPath = path.join(tempDir, "AGENTS.md");
       expect(fs.existsSync(agentsPath)).toBe(true);
+    });
+
+    it("supports -y shorthand flag to bypass interactive prompts in CLI", () => {
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "cli-short-y-test",
+          scripts: { test: "bun test" }
+        })
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir, "-y"]);
+      expect(proc.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
     });
 
     it("displays --interactive and --yes in agents help across baba, bbyg, and matryoshka aliases", () => {
