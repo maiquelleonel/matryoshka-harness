@@ -8,8 +8,10 @@ import {
   matchesPattern,
   loadBabaIgnorePatterns,
   resolveBabaIgnorePath,
+  normalizeExcludePatterns,
   AstEngine,
 } from "../src/ast";
+import { parseExcludeFlags } from "../src/cli";
 import { evaluateCompositeHarness } from "../src/scorer";
 import type { AstWalkResult } from "../src/types";
 
@@ -739,6 +741,331 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
       const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
 
       expect(scannedPaths).toEqual(["src/index.ts"]);
+    });
+  });
+
+  describe("Subtask 7: Accepts comma-separated values or repeated flags (e.g. `--exclude tests,docs` or `--exclude \"tests/**\" --exclude \"docs/**\"`)", () => {
+    describe("parseExcludeFlags helper unit tests", () => {
+      it("parses comma-separated values into a list of glob patterns", () => {
+        const result = parseExcludeFlags(["--exclude", "tests,docs"]);
+        expect(result).toEqual(["tests", "docs"]);
+      });
+
+      it("parses repeated --exclude flags into a combined list of glob patterns", () => {
+        const result = parseExcludeFlags(["--exclude", "tests/**", "--exclude", "docs/**"]);
+        expect(result).toEqual(["tests/**", "docs/**"]);
+      });
+
+      it("parses combined repeated flags and comma-separated values", () => {
+        const result = parseExcludeFlags([
+          "--exclude",
+          "tests,docs",
+          "--exclude",
+          "scripts/**,fixtures/**",
+        ]);
+        expect(result).toEqual(["tests", "docs", "scripts/**", "fixtures/**"]);
+      });
+
+      it("parses --exclude=value syntax with comma-separated values and repeated flags", () => {
+        const result1 = parseExcludeFlags(["--exclude=tests,docs"]);
+        expect(result1).toEqual(["tests", "docs"]);
+
+        const result2 = parseExcludeFlags(["--exclude=tests/**", "--exclude=docs/**"]);
+        expect(result2).toEqual(["tests/**", "docs/**"]);
+
+        const result3 = parseExcludeFlags(["--exclude=tests/**,docs/**", "--exclude", "scripts/**"]);
+        expect(result3).toEqual(["tests/**", "docs/**", "scripts/**"]);
+      });
+
+      it("trims surrounding whitespace and quotes in patterns", () => {
+        const result = parseExcludeFlags(["--exclude", '  "tests/**" , \'docs/**\' ,  scripts/**  ']);
+        expect(result).toEqual(["tests/**", "docs/**", "scripts/**"]);
+      });
+
+      it("handles dangling --exclude or --exclude immediately followed by another flag", () => {
+        expect(parseExcludeFlags(["--exclude"])).toEqual([]);
+        expect(parseExcludeFlags(["--exclude", "--json"])).toEqual([]);
+        expect(parseExcludeFlags(["--dry-run", "--exclude"])).toEqual([]);
+      });
+    });
+
+    describe("normalizeExcludePatterns core utility", () => {
+      it("normalizes a single comma-separated string into discrete patterns", () => {
+        expect(normalizeExcludePatterns("tests,docs")).toEqual(["tests", "docs"]);
+      });
+
+      it("normalizes an array containing comma-separated strings", () => {
+        expect(normalizeExcludePatterns(["tests,docs", "fixtures/**,build/**"])).toEqual([
+          "tests",
+          "docs",
+          "fixtures/**",
+          "build/**",
+        ]);
+      });
+
+      it("normalizes mixed arrays, trims whitespace and filters out empty values", () => {
+        expect(normalizeExcludePatterns([" tests , docs ", "", "  fixtures/** "])).toEqual([
+          "tests",
+          "docs",
+          "fixtures/**",
+        ]);
+        expect(normalizeExcludePatterns(undefined)).toEqual([]);
+      });
+    });
+
+    describe("walkCodebase and isIgnoredFile integration", () => {
+      it("walkCodebase excludes multiple targets when given comma-separated excludePatterns", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(path.join(tempDir, "tests/dummy.ts"), "export const test = 1;");
+        fs.writeFileSync(path.join(tempDir, "docs/doc.ts"), "export const doc = 1;");
+
+        const result = await walkCodebase(tempDir, {
+          excludePatterns: ["tests/**,docs/**"],
+        });
+        const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+        expect(scannedPaths).toContain("src/index.ts");
+        expect(scannedPaths).not.toContain("tests/dummy.ts");
+        expect(scannedPaths).not.toContain("docs/doc.ts");
+      });
+
+      it("walkCodebase accepts exclude parameter as comma-separated or array", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "dirA"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "dirB"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const prod = 1;");
+        fs.writeFileSync(path.join(tempDir, "dirA/a.ts"), "export const a = 1;");
+        fs.writeFileSync(path.join(tempDir, "dirB/b.ts"), "export const b = 1;");
+
+        const result = await walkCodebase(tempDir, {
+          exclude: ["dirA/**", "dirB/**"],
+        });
+        const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+        expect(scannedPaths).toEqual(["src/index.ts"]);
+      });
+
+      it("isIgnoredFile respects comma-separated exclude patterns in options", () => {
+        expect(
+          isIgnoredFile("tests/foo.ts", {
+            excludePatterns: ["tests/**,docs/**"],
+          })
+        ).toBe(true);
+
+        expect(
+          isIgnoredFile("docs/bar.ts", {
+            excludePatterns: ["tests/**,docs/**"],
+          })
+        ).toBe(true);
+
+        expect(
+          isIgnoredFile("src/index.ts", {
+            excludePatterns: ["tests/**,docs/**"],
+          })
+        ).toBe(false);
+      });
+    });
+
+    describe("CLI commands integration with comma-separated and repeated --exclude", () => {
+      it("baba wrap respects repeated --exclude flags across different folders", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "hazards1"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "hazards2"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "wrap-rep-app", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const ok = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "hazards1/sql1.ts"),
+          "export const q1 = (id: string) => `SELECT * FROM t1 WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(
+          path.join(tempDir, "hazards2/sql2.ts"),
+          "export const q2 = (id: string) => `SELECT * FROM t2 WHERE id = ${id}`;"
+        );
+
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "wrap",
+          tempDir,
+          "--dry-run",
+          "--exclude",
+          "hazards1/**",
+          "--exclude",
+          "hazards2/**",
+          "--json",
+        ]);
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        const sqlViolations = (parsed.violations || []).filter(
+          (v: any) => v.ruleId === "sql-interpolation"
+        );
+        expect(sqlViolations.length).toBe(0);
+      });
+
+      it("baba wrap respects comma-separated and repeated --exclude= syntax", async () => {
+        fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "hazards1"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "hazards2"), { recursive: true });
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "wrap-eq-app", scripts: { test: "bun test" } }, null, 2)
+        );
+        fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+        fs.writeFileSync(path.join(tempDir, "README.md"), "# App\n");
+
+        fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const ok = 1;");
+        fs.writeFileSync(
+          path.join(tempDir, "hazards1/sql1.ts"),
+          "export const q1 = (id: string) => `SELECT * FROM t1 WHERE id = ${id}`;"
+        );
+        fs.writeFileSync(
+          path.join(tempDir, "hazards2/sql2.ts"),
+          "export const q2 = (id: string) => `SELECT * FROM t2 WHERE id = ${id}`;"
+        );
+
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "wrap",
+          tempDir,
+          "--dry-run",
+          "--exclude=hazards1/**,hazards2/**",
+          "--json",
+        ]);
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        const sqlViolations = (parsed.violations || []).filter(
+          (v: any) => v.ruleId === "sql-interpolation"
+        );
+        expect(sqlViolations.length).toBe(0);
+      });
+
+      it("baba scan respects comma-separated and repeated --exclude flags", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "legacy_routes1"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "legacy_routes2"), { recursive: true });
+
+        fs.writeFileSync(path.join(tempDir, "src/routes/live.ts"), "export const r = '/live';");
+        fs.writeFileSync(path.join(tempDir, "legacy_routes1/r1.ts"), "export const r1 = '/r1';");
+        fs.writeFileSync(path.join(tempDir, "legacy_routes2/r2.ts"), "export const r2 = '/r2';");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "scan-rep-app" }, null, 2)
+        );
+
+        // 1. Repeated flags
+        const procRepeated = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "scan",
+          tempDir,
+          "--exclude",
+          "legacy_routes1/**",
+          "--exclude",
+          "legacy_routes2/**",
+          "--json",
+        ]);
+        expect(procRepeated.exitCode).toBe(0);
+        const parsedRep = JSON.parse(procRepeated.stdout.toString().trim());
+        expect(parsedRep.entities.routes.some((r: string) => r.includes("legacy_routes1"))).toBe(false);
+        expect(parsedRep.entities.routes.some((r: string) => r.includes("legacy_routes2"))).toBe(false);
+        expect(parsedRep.entities.routes.some((r: string) => r.includes("src/routes/live.ts"))).toBe(true);
+
+        // 2. Comma-separated flag
+        const procComma = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "scan",
+          tempDir,
+          "--exclude",
+          "legacy_routes1/**,legacy_routes2/**",
+          "--json",
+        ]);
+        expect(procComma.exitCode).toBe(0);
+        const parsedComma = JSON.parse(procComma.stdout.toString().trim());
+        expect(parsedComma.entities.routes.some((r: string) => r.includes("legacy_routes1"))).toBe(false);
+        expect(parsedComma.entities.routes.some((r: string) => r.includes("legacy_routes2"))).toBe(false);
+        expect(parsedComma.entities.routes.some((r: string) => r.includes("src/routes/live.ts"))).toBe(true);
+      });
+
+      it("baba agents generate respects comma-separated and repeated --exclude flags", async () => {
+        fs.mkdirSync(path.join(tempDir, "src/controllers"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "src/models"), { recursive: true });
+        fs.writeFileSync(path.join(tempDir, "src/controllers/ctrl.ts"), "export class Ctrl {}");
+        fs.writeFileSync(path.join(tempDir, "src/models/model.ts"), "export class Model {}");
+
+        fs.writeFileSync(
+          path.join(tempDir, "package.json"),
+          JSON.stringify({ name: "agents-rep-app", dependencies: { express: "^4.18.0" } }, null, 2)
+        );
+
+        // Comma-separated --exclude
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "agents",
+          "generate",
+          tempDir,
+          "--dry-run",
+          "--exclude",
+          "src/controllers/**,src/models/**",
+          "--json",
+        ]);
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.seams.controllers.length).toBe(0);
+        expect(parsed.seams.models.length).toBe(0);
+      });
+
+      it("baba agents audit respects comma-separated and repeated --exclude flags", async () => {
+        fs.mkdirSync(path.join(tempDir, "dirA"), { recursive: true });
+        fs.mkdirSync(path.join(tempDir, "dirB"), { recursive: true });
+
+        const bloated = [
+          "# Monolithic Guidelines",
+          ...Array(400).fill("never do bad things always write tests"),
+        ].join("\n");
+        fs.writeFileSync(path.join(tempDir, "dirA/AGENTS.md"), bloated, "utf-8");
+        fs.writeFileSync(path.join(tempDir, "dirB/AGENTS.md"), bloated, "utf-8");
+
+        // Repeated --exclude flags
+        const proc = Bun.spawnSync([
+          "bun",
+          "run",
+          cliPath,
+          "agents",
+          "audit",
+          tempDir,
+          "--exclude",
+          "dirA/AGENTS.md",
+          "--exclude",
+          "dirB/AGENTS.md",
+          "--json",
+        ]);
+        expect(proc.exitCode).toBe(0);
+        const parsed = JSON.parse(proc.stdout.toString().trim());
+        expect(parsed.summary.scannedFiles.length).toBe(0);
+        expect(parsed.violations.length).toBe(0);
+      });
     });
   });
 
