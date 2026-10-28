@@ -9,6 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
+import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns, normalizeExcludePatterns } from "./ast";
 import type {
   ExtractedSkill,
   LegacyMigrationOptions,
@@ -204,6 +205,8 @@ export interface GenerateAgentsOptions {
   selectedSkills?: SkillName[];
   interactive?: boolean;
   yes?: boolean;
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 export interface GenerateAgentsResult {
@@ -283,7 +286,14 @@ export function assertTokenBudget(
 /**
  * Discovers architectural seams across the repository by inspecting directory structures and file markers.
  */
-export function discoverSeams(projectPath: string): DiscoveredSeams {
+export function discoverSeams(
+  projectPath: string,
+  options?: {
+    exclude?: string | string[];
+    excludePatterns?: string | string[];
+    includeTests?: boolean;
+  }
+): DiscoveredSeams {
   const root = path.resolve(projectPath);
   const routes: string[] = [];
   const models: string[] = [];
@@ -326,6 +336,13 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
     ".agents",
   ]);
 
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+  ]);
+  const gitignorePatterns = loadGitignorePatterns(root);
+  const babaIgnorePatterns = loadBabaIgnorePatterns(root);
+
   let totalFiles = 0;
 
   function walk(currentDir: string, depth: number): void {
@@ -339,13 +356,35 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith(".")) {
-          walk(path.join(currentDir, entry.name), depth + 1);
+        const fullDirPath = path.join(currentDir, entry.name);
+        const relDir = path.relative(root, fullDirPath).replace(/\\/g, "/");
+        const isIgnored =
+          ignoreDirs.has(entry.name) ||
+          entry.name.startsWith(".") ||
+          isIgnoredFile(relDir, {
+            includeTests: options?.includeTests ?? true,
+            excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
+            isDirectory: true,
+          });
+        if (!isIgnored) {
+          walk(fullDirPath, depth + 1);
         }
       } else if (entry.isFile()) {
-        totalFiles++;
         const fullPath = path.join(currentDir, entry.name);
         const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+        if (
+          isIgnoredFile(relPath, {
+            includeTests: options?.includeTests ?? true,
+            excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
+          })
+        ) {
+          continue;
+        }
+        totalFiles++;
         const lowerRel = relPath.toLowerCase();
 
         // Testing patterns
@@ -490,10 +529,17 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
 /**
  * Deterministically profiles a repository and classifies it into a canonical archetype.
  */
-export function profileArchetype(projectPath: string): ArchetypeProfile {
+export function profileArchetype(
+  projectPath: string,
+  options?: {
+    exclude?: string | string[];
+    excludePatterns?: string | string[];
+    includeTests?: boolean;
+  }
+): ArchetypeProfile {
   const root = path.resolve(projectPath);
   const stack = detectStack(root);
-  const seams = discoverSeams(root);
+  const seams = discoverSeams(root, options);
 
   let archetype: AgentArchetype = "api_backend";
   let runtime = "unknown";
@@ -2033,7 +2079,7 @@ export function generateAgents(
   options: GenerateAgentsOptions = {}
 ): GenerateAgentsResult {
   const root = path.resolve(projectPath);
-  const profile = profileArchetype(root);
+  const profile = profileArchetype(root, options);
   const effectiveSkills = options.selectedSkills ?? profile.activeSkills;
   const effectiveProfile: ArchetypeProfile = {
     ...profile,
@@ -2219,6 +2265,9 @@ export interface CognitiveAuditOptions {
   maxNegativePhrases?: number; // default: 3
   maxCodeBlockLines?: number; // default: 25
   permissivePhrases?: string[];
+  includeTests?: boolean;
+  exclude?: string | string[];
+  excludePatterns?: string | string[];
 }
 
 /**
@@ -2236,6 +2285,104 @@ export function auditCognitiveContext(
   const maxNegativePhrases = options?.maxNegativePhrases ?? 3;
 
   let targetFile: string | null = null;
+  const includeTests = options?.includeTests ?? false;
+  const excludePatterns = normalizeExcludePatterns([
+    ...(options?.exclude ? (Array.isArray(options.exclude) ? options.exclude : [options.exclude]) : []),
+    ...(options?.excludePatterns ? (Array.isArray(options.excludePatterns) ? options.excludePatterns : [options.excludePatterns]) : []),
+  ]);
+
+  let rootDir = root;
+  try {
+    if (fs.existsSync(root) && !fs.statSync(root).isDirectory()) {
+      rootDir = path.dirname(root);
+    }
+  } catch {}
+
+  const gitignorePatterns = [...loadGitignorePatterns(rootDir)];
+  const babaIgnorePatterns = [...loadBabaIgnorePatterns(rootDir)];
+
+  let pDir = path.dirname(rootDir);
+  for (let depth = 0; depth < 4; depth++) {
+    if (babaIgnorePatterns.length === 0) {
+      babaIgnorePatterns.push(...loadBabaIgnorePatterns(pDir));
+    }
+    if (gitignorePatterns.length === 0) {
+      gitignorePatterns.push(...loadGitignorePatterns(pDir));
+    }
+    const nextP = path.dirname(pDir);
+    if (nextP === pDir) break;
+    pDir = nextP;
+  }
+
+  const checkIsIgnored = (p: string): boolean => {
+    const norm = p.replace(/\\/g, "/");
+    const candidates = new Set<string>();
+    candidates.add(norm);
+    candidates.add(path.basename(p));
+
+    const relToRoot = path.relative(rootDir, p).replace(/\\/g, "/");
+    if (relToRoot) candidates.add(relToRoot);
+
+    const fromCwd = path.relative(process.cwd(), p).replace(/\\/g, "/");
+    if (fromCwd) candidates.add(fromCwd);
+
+    let parentDir = path.dirname(rootDir);
+    for (let depth = 0; depth < 4; depth++) {
+      const relToParent = path.relative(parentDir, p).replace(/\\/g, "/");
+      if (relToParent && !relToParent.startsWith("../")) {
+        candidates.add(relToParent);
+      }
+      const nextParent = path.dirname(parentDir);
+      if (nextParent === parentDir) break;
+      parentDir = nextParent;
+    }
+
+    for (const cand of candidates) {
+      if (
+        isIgnoredFile(cand, {
+          includeTests,
+          excludePatterns,
+          gitignorePatterns,
+          babaIgnorePatterns,
+        })
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (checkIsIgnored(root)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 0,
+      failed_count: 0,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 5,
+      passed_count: 5,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: [],
+    };
+    return {
+      score: 100,
+      healthScore: 100,
+      health_score: 100,
+      passed: true,
+      passedStrict: true,
+      passed_strict: true,
+      violations: [],
+      summary,
+      durationMs,
+      duration_ms: durationMs,
+    };
+  }
 
   if (fs.existsSync(root)) {
     try {
@@ -2253,6 +2400,38 @@ export function auditCognitiveContext(
         }
       }
     } catch {}
+  }
+
+  if (targetFile && checkIsIgnored(targetFile)) {
+    const durationMs = Number((performance.now() - startTime).toFixed(2));
+    const summary: CognitiveAuditSummary = {
+      totalRules: 5,
+      total_rules: 5,
+      failedCount: 0,
+      failed_count: 0,
+      warnCount: 0,
+      warn_count: 0,
+      passedCount: 5,
+      passed_count: 5,
+      estimatedTokens: 0,
+      estimated_tokens: 0,
+      targetPath: root,
+      target_path: root,
+      scannedFiles: [],
+      scanned_files: [],
+    };
+    return {
+      score: 100,
+      healthScore: 100,
+      health_score: 100,
+      passed: true,
+      passedStrict: true,
+      passed_strict: true,
+      violations: [],
+      summary,
+      durationMs,
+      duration_ms: durationMs,
+    };
   }
 
   // Graceful failure when root instruction file does not exist
