@@ -1,0 +1,72 @@
+# 📐 SPEC-26: feat(agents): interactive skill inspector and terminal selector for baba agents generate
+**Módulo:** SDD Engine / Automated Architecture  
+**Status:** ready4dev  
+**Gatilho:** Issue #26  
+
+---
+
+## 🎯 1. Objetivo & Escopo
+Currently, `baba agents generate` executes in a purely headless/deterministic manner, detecting the project archetype and writing `AGENTS.md` and `.agents/skills/` directly to disk (with optional `--dry-run` or `--force`).
+
+---
+
+## 📋 2. Contratos de I/O
+- `POST /v1/agents`
+
+---
+
+## 🧪 3. Acceptance Criteria (BDD / Gherkin)
+```gherkin
+Feature: feat(agents): interactive skill inspector and terminal selector for baba agents generate
+
+  Scenario: AC-1 - Subtask 1: Review the detected archetype and stack profile.
+    Given O ambiente de execução está operacional e pronto para processar 'Subtask 1: Review the detected archetype and stack profile.'
+    When A requisição correspondente a 'Subtask 1: Review the detected archetype and stack profile.' é executada
+    Then O resultado de 'Subtask 1: Review the detected archetype and stack profile.' é processado e persistido em conformidade com o contrato
+  Scenario: AC-2 - Subtask 2: Selectively toggle specialized skills using arrow keys (`↑` / `↓`) and spacebar.
+    Given O ambiente de execução está operacional e pronto para processar 'Subtask 2: Selectively toggle specialized skills using arrow keys (`↑` / `↓`) and spacebar.'
+    When A requisição correspondente a 'Subtask 2: Selectively toggle specialized skills using arrow keys (`↑` / `↓`) and spacebar.' é executada
+    Then O resultado de 'Subtask 2: Selectively toggle specialized skills using arrow keys (`↑` / `↓`) and spacebar.' é processado e persistido em conformidade com o contrato
+  Scenario: AC-3 - Subtask 3: Live-preview the generated `Don't vs Do` guidelines and token footprint before persisting.
+    Given O ambiente de execução está operacional e pronto para processar 'Subtask 3: Live-preview the generated `Don't vs Do` guidelines and token footprint before persisting.'
+    When A requisição correspondente a 'Subtask 3: Live-preview the generated `Don't vs Do` guidelines and token footprint before persisting.' é executada
+    Then O resultado de 'Subtask 3: Live-preview the generated `Don't vs Do` guidelines and token footprint before persisting.' é processado e persistido em conformidade com o contrato
+  Scenario: AC-4 - Subtask 4: Smoothly fallback to non-interactive mode when running in headless/CI environments (when `!process.stdin.isTTY` or when `--yes` / `-y` is supplied).
+    Given O ambiente de execução está operacional e pronto para processar 'Subtask 4: Smoothly fallback to non-interactive mode when running in headless/CI environments (when `!process.stdin.isTTY` or when `--yes` / `-y` is supplied).'
+    When A requisição correspondente a 'Subtask 4: Smoothly fallback to non-interactive mode when running in headless/CI environments (when `!process.stdin.isTTY` or when `--yes` / `-y` is supplied).' é executada
+    Then O resultado de 'Subtask 4: Smoothly fallback to non-interactive mode when running in headless/CI environments (when `!process.stdin.isTTY` or when `--yes` / `-y` is supplied).' é processado e persistido em conformidade com o contrato
+  Scenario: AC-5 - Subtask 5: **Interactive Prompt Interface:**
+    Given O ambiente de execução está operacional e pronto para processar 'Subtask 5: **Interactive Prompt Interface:**'
+    When A requisição correspondente a 'Subtask 5: **Interactive Prompt Interface:**' é executada
+    Then O resultado de 'Subtask 5: **Interactive Prompt Interface:**' é processado e persistido em conformidade com o contrato
+  Scenario: AC-6 - Subtask 6: **Skill Content Preview Modal/Screen:**
+    Given um usuário inspeciona uma skill com 'p' ou 'i' no seletor interativo de terminal
+    When o modal de pré-visualização de skill é acionado
+    Then deve renderizar título, arquivo, status de seleção, recomendação de perfil e paginação [X/Y]
+    And deve exibir o bloco de Frontmatter YAML e as diretrizes categorizadas de DO e DON'T
+    And deve discriminar o custo de tokens do corpo vs cabeçalho e footprint cumulativo vs orçamento
+    And deve permitir alternar a seleção da skill com [Space] e navegar com setas [←/→] ou vim keys dentro do modal
+    And deve retornar ao checklist ao pressionar [Escape], [p], [i] ou [Enter].
+  Scenario: AC-7 - Subtask 7: **Headless & Flag Parity:**
+    Given um desenvolvedor ou pipeline de automação executa o comando de geração de agents
+    When invocado com '--interactive' ou '-i' em ambiente sem TTY (headless)
+    Then deve emitir aviso de ambiente headless e realizar fallback não-interativo determinístico sem travar
+    And quando invocado com '--yes' ou '-y', deve sobrepor qualquer flag interativa e gerar skills recomendadas diretamente em disco
+    And quando invocado com '--json', deve priorizar payload estruturado e suprimir qualquer terminal interativo
+    And deve garantir paridade estrita de comportamento e saída em disco entre os aliases 'baba', 'bbyg' e 'matryoshka'.
+```
+
+---
+
+## 🔒 4. Invariantes & Casos de Borda
+- Invariante de idempotência e validação estrita de schema de entrada
+- Tratamento de exceções com códigos HTTP semânticos (400, 404, 422)
+- Zero efeitos colaterais em caso de falha de validação ou payload malformado
+
+---
+
+## 📁 5. Arquivos Afetados
+- `AGENTS.md`
+- `src/agents-tui.ts`
+- `src/cli.ts`
+- `tests/spec_26_interactive_agents.test.ts`

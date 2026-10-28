@@ -26,6 +26,13 @@ import {
   SKILL_DEFINITIONS,
   type SkillName,
 } from "./agents";
+import {
+  formatArchetypeProfileReview,
+  runInteractiveSkillSelector,
+  promptInteractiveSkillSelection,
+  isHeadlessEnvironment,
+  shouldRunInteractivePrompt,
+} from "./agents-tui";
 import { detectStack } from "./detector";
 import {
   formatScanHumanOutput,
@@ -53,7 +60,7 @@ Concentric Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediati
 Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
-  baba agents generate [path] [--force] [--dry-run] [--json]
+  baba agents generate [path] [--force] [--dry-run] [--interactive] [--yes] [--json]
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents audit [path] [--strict] [--json]
@@ -74,6 +81,8 @@ Commands:
 Options:
   --force, -f        Overwrite existing files (creates .bak of pre-existing AGENTS.md)
   --dry-run          Simulate execution without modifying files on disk
+  --interactive, -i  Launch interactive terminal UI to review stack and select skills
+  --yes, -y          Bypass interactive prompts and apply recommended defaults non-interactively
   --json             Output strictly valid JSON
   --targets <list>   Comma-separated target environments (cursor, gemini, claude)
   --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
@@ -140,6 +149,8 @@ Commands:
   baba agents skill <name> [path] Render compiled on-demand skill (backend, frontend, database, security, testing)
 
 Options:
+  --interactive, -i  Launch interactive terminal UI to review stack and select skills
+  --yes, -y          Bypass interactive prompts and apply recommended defaults non-interactively
   --from <file>      Source legacy instruction file (default: AGENTS.md)
   --force, -f        Overwrite existing AGENTS.md (creates .bak backup)
   --dry-run          Simulate execution without modifying files on disk
@@ -149,6 +160,9 @@ Options:
   -h, --help         Show help information
 
 Examples:
+  $ baba agents generate --interactive
+  $ baba agents generate --yes
+  $ baba agents generate -y
   $ baba agents generate --dry-run
   $ baba agents generate --force
   $ baba agents migrate --from=.cursorrules --dry-run
@@ -310,6 +324,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
   const [command, ...rest] = args;
 
   switch (command) {
+    case "baba":
+    case "bbyg":
+    case "matryoshka":
+    case "matrioska": {
+      return runCli(rest);
+    }
+
     case "audit": {
       return runCli(["agents", "audit", ...rest]);
     }
@@ -455,13 +476,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         console.log(AUDIT_HELP);
         process.exit(0);
       }
-      if (rest.includes("--help") || rest.includes("-h") || rest[0] === "help") {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
         console.log(AGENTS_HELP);
         process.exit(0);
       }
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
+      const isYes =
+        rest.includes("--yes") ||
+        rest.includes("-y") ||
+        rest.includes("--non-interactive") ||
+        rest.includes("--no-interactive");
+      const isInteractive = rest.includes("--interactive") || rest.includes("-i");
 
       let maxTokens: number | undefined;
       let fromFile: string | undefined;
@@ -900,12 +927,62 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
 
       try {
+        const isCI = Boolean(
+          process.env.CI === "true" ||
+          process.env.CI === "1" ||
+          process.env.CONTINUOUS_INTEGRATION === "1" ||
+          process.env.CONTINUOUS_INTEGRATION === "true" ||
+          process.env.GITHUB_ACTIONS ||
+          process.env.DEBIAN_FRONTEND === "noninteractive"
+        );
+
+        const shouldPrompt = shouldRunInteractivePrompt({
+          stdin: process.stdin,
+          stdout: process.stdout,
+          isYes,
+          isInteractive,
+          isJson,
+          ci: isCI,
+        });
+
+        if (isInteractive && !isYes && !process.stdin.isTTY && !isJson) {
+          console.log(
+            pc.yellow(
+              "\nNotice: Headless environment detected (process.stdin.isTTY is false). Falling back to non-interactive mode.\n"
+            )
+          );
+        }
+
+        let selectedSkills: SkillName[] | undefined;
+        if (shouldPrompt) {
+          const selectorResult = await promptInteractiveSkillSelection({
+            profile: profileArchetype(resolvedPath),
+            projectPath: resolvedPath,
+            stdin: process.stdin,
+            stdout: process.stdout,
+            dryRun: isDryRun,
+            force: isForce,
+            maxTokens,
+            strictTokenGuard: isStrict,
+            isInteractive,
+            isYes,
+            isJson,
+          });
+
+          if (!selectorResult.confirmed) {
+            console.log(pc.yellow("\nOperation cancelled by user.\n"));
+            process.exit(0);
+          }
+          selectedSkills = selectorResult.selectedSkills;
+        }
+
         const result = generateAgents(resolvedPath, {
           force: isForce,
           dryRun: isDryRun,
           json: isJson,
           maxTokens,
           strictTokenGuard: isStrict,
+          selectedSkills,
         });
 
         if (isJson) {

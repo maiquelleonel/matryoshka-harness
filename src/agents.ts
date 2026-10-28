@@ -33,7 +33,8 @@ export type SkillName =
   | "skill-frontend"
   | "skill-database"
   | "skill-security"
-  | "skill-testing";
+  | "skill-testing"
+  | "custom-instructions";
 
 export interface DiscoveredSeams {
   hasBackend: boolean;
@@ -200,6 +201,9 @@ export interface GenerateAgentsOptions {
   json?: boolean;
   maxTokens?: number;
   strictTokenGuard?: boolean;
+  selectedSkills?: SkillName[];
+  interactive?: boolean;
+  yes?: boolean;
 }
 
 export interface GenerateAgentsResult {
@@ -1698,6 +1702,22 @@ export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
     description:
       "The Seam contract, Red-to-Green TDD discipline, deterministic test fixtures, and mock isolation boundaries. Use when writing tests, refactoring, or verifying bugfixes.",
     content: compileTestingSkill()
+  },
+  "custom-instructions": {
+    name: "custom-instructions",
+    fileName: "custom-instructions.md",
+    description:
+      "Repository-specific overrides, domain rules, bespoke workflows, and developer guidelines.",
+    content: `---
+name: custom-instructions
+description: Repository-specific overrides, domain rules, bespoke workflows, and developer guidelines.
+---
+
+# Custom Instructions & Repository Rules
+
+- Document project-specific rules, invariants, or domain constraints here.
+- Maintain deterministic code patterns and adherence to team conventions.
+`
   }
 };
 
@@ -1706,7 +1726,8 @@ const SKILL_TITLE_MAP: Record<SkillName, string> = {
   "skill-frontend": "Frontend & UI",
   "skill-database": "Database & Migrations",
   "skill-security": "Security & DLP",
-  "skill-testing": "Testing & TDD"
+  "skill-testing": "Testing & TDD",
+  "custom-instructions": "Custom Instructions"
 };
 
 /**
@@ -1964,6 +1985,47 @@ ${skillsList}
 }
 
 /**
+ * Resolves the rendered markdown content for a modular skill given optional project context.
+ */
+export function resolveSkillContent(
+  skillName: SkillName,
+  options?: {
+    projectPath?: string;
+    profile?: ArchetypeProfile;
+  }
+): string {
+  const root = options?.projectPath ? path.resolve(options.projectPath) : undefined;
+  const profile = options?.profile;
+  switch (skillName) {
+    case "skill-backend":
+      return compileBackendSkill({ projectPath: root, profile });
+    case "skill-database":
+      return compileDatabaseSkill({ projectPath: root, profile });
+    case "skill-frontend":
+      return compileFrontendSkill({ projectPath: root, profile });
+    case "skill-security":
+      return compileSecuritySkill({ projectPath: root, profile });
+    case "skill-testing":
+      return compileTestingSkill({ projectPath: root, profile });
+    case "custom-instructions": {
+      if (root) {
+        const customPath = path.join(root, ".agents", "skills", "custom-instructions.md");
+        if (fs.existsSync(customPath)) {
+          try {
+            return fs.readFileSync(customPath, "utf-8");
+          } catch {
+            // fallback
+          }
+        }
+      }
+      return SKILL_DEFINITIONS["custom-instructions"]?.content || "";
+    }
+    default:
+      return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
+  }
+}
+
+/**
  * Main engine to generate adaptive AGENTS.md and modular skills.
  */
 export function generateAgents(
@@ -1972,8 +2034,13 @@ export function generateAgents(
 ): GenerateAgentsResult {
   const root = path.resolve(projectPath);
   const profile = profileArchetype(root);
+  const effectiveSkills = options.selectedSkills ?? profile.activeSkills;
+  const effectiveProfile: ArchetypeProfile = {
+    ...profile,
+    activeSkills: effectiveSkills,
+  };
   const maxTokens = options.maxTokens ?? MAX_ROOT_AGENTS_TOKENS;
-  const rootAgentsContent = compileRootAgents(profile, {
+  const rootAgentsContent = compileRootAgents(effectiveProfile, {
     maxTokens,
     strictTokenGuard: options.strictTokenGuard,
   });
@@ -1992,26 +2059,9 @@ export function generateAgents(
     }
   ];
 
-  const resolveSkillContent = (skillName: SkillName): string => {
-    switch (skillName) {
-      case "skill-backend":
-        return compileBackendSkill({ projectPath: root, profile });
-      case "skill-database":
-        return compileDatabaseSkill({ projectPath: root, profile });
-      case "skill-frontend":
-        return compileFrontendSkill({ projectPath: root, profile });
-      case "skill-security":
-        return compileSecuritySkill({ projectPath: root, profile });
-      case "skill-testing":
-        return compileTestingSkill({ projectPath: root, profile });
-      default:
-        return (SKILL_DEFINITIONS[skillName as SkillName] as SkillDefinition | undefined)?.content || "";
-    }
-  };
-
-  for (const skillName of profile.activeSkills) {
+  for (const skillName of effectiveSkills) {
     const def = SKILL_DEFINITIONS[skillName];
-    const skillContent = resolveSkillContent(skillName);
+    const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     plannedFiles.push({
       path: path.join(".agents", "skills", def.fileName),
       tokens: estimateTokens(skillContent),
@@ -2030,13 +2080,13 @@ export function generateAgents(
     savingsPercentage
   };
 
-  const skillsIndex = buildSkillsMetadataIndex(root, profile.activeSkills);
+  const skillsIndex = buildSkillsMetadataIndex(root, effectiveSkills);
 
   // Dry-run mode: do not touch disk
   if (options.dryRun) {
     return {
       status: "success",
-      archetype: profile.archetype,
+      archetype: effectiveProfile.archetype,
       dryRun: true,
       rootAgentsPath: agentsPath,
       rootTokens,
@@ -2046,8 +2096,8 @@ export function generateAgents(
       estimatedTokenSavings: estimatedSavings,
       estimated_token_savings: estimatedSavings,
       skillsIndex,
-      seams: profile.seams,
-      profile,
+      seams: effectiveProfile.seams,
+      profile: effectiveProfile,
       tokenGuard,
       token_guard: tokenGuard,
       backupCreated: false,
@@ -2074,16 +2124,16 @@ export function generateAgents(
   fs.writeFileSync(agentsPath, rootAgentsContent, "utf-8");
 
   // Write active skills
-  for (const skillName of profile.activeSkills) {
+  for (const skillName of effectiveSkills) {
     const def = SKILL_DEFINITIONS[skillName];
     const skillFilePath = path.join(skillsDir, def.fileName);
-    const skillContent = resolveSkillContent(skillName);
+    const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     fs.writeFileSync(skillFilePath, skillContent, "utf-8");
   }
 
   return {
     status: "success",
-    archetype: profile.archetype,
+    archetype: effectiveProfile.archetype,
     dryRun: false,
     rootAgentsPath: agentsPath,
     rootTokens,
@@ -2093,8 +2143,8 @@ export function generateAgents(
     estimatedTokenSavings: estimatedSavings,
     estimated_token_savings: estimatedSavings,
     skillsIndex,
-    seams: profile.seams,
-    profile,
+    seams: effectiveProfile.seams,
+    profile: effectiveProfile,
     tokenGuard,
     token_guard: tokenGuard,
     backupCreated,
