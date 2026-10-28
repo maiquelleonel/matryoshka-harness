@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
-import { isIgnoredFile } from "./ast";
+import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns } from "./ast";
 import type {
   ExtractedSkill,
   LegacyMigrationOptions,
@@ -2248,13 +2248,38 @@ export function auditCognitiveContext(
     ...(options?.excludePatterns ?? []),
   ];
 
+  let rootDir = root;
+  try {
+    if (fs.existsSync(root) && !fs.statSync(root).isDirectory()) {
+      rootDir = path.dirname(root);
+    }
+  } catch {}
+
+  const gitignorePatterns = loadGitignorePatterns(rootDir);
+  const babaIgnorePatterns = loadBabaIgnorePatterns(rootDir);
+
   const checkIsIgnored = (p: string): boolean => {
     const norm = p.replace(/\\/g, "/");
-    if (isIgnoredFile(norm, { includeTests, excludePatterns })) {
+    if (
+      isIgnoredFile(norm, {
+        includeTests,
+        excludePatterns,
+        gitignorePatterns,
+        babaIgnorePatterns,
+      })
+    ) {
       return true;
     }
     const fromCwd = path.relative(process.cwd(), p).replace(/\\/g, "/");
-    if (fromCwd && isIgnoredFile(fromCwd, { includeTests, excludePatterns })) {
+    if (
+      fromCwd &&
+      isIgnoredFile(fromCwd, {
+        includeTests,
+        excludePatterns,
+        gitignorePatterns,
+        babaIgnorePatterns,
+      })
+    ) {
       return true;
     }
     return false;

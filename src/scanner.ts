@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import pc from "picocolors";
 import { detectStack } from "./detector";
-import { isIgnoredFile } from "./ast";
+import { isIgnoredFile, loadBabaIgnorePatterns, loadGitignorePatterns } from "./ast";
 import type {
   BadgeOptions,
   CodebaseEntities,
@@ -512,6 +512,8 @@ export function discoverCodebaseEntities(
     ...(options?.exclude ?? []),
     ...(options?.excludePatterns ?? []),
   ];
+  const gitignorePatterns = loadGitignorePatterns(root);
+  const babaIgnorePatterns = loadBabaIgnorePatterns(root);
 
   function walk(currentDir: string, depth: number): void {
     if (depth > 5) return;
@@ -532,6 +534,8 @@ export function discoverCodebaseEntities(
           isIgnoredFile(relDir, {
             includeTests: options?.includeTests,
             excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
           });
         if (!isIgnored) {
           walk(fullDirPath, depth + 1);
@@ -543,6 +547,8 @@ export function discoverCodebaseEntities(
           isIgnoredFile(relPath, {
             includeTests: options?.includeTests,
             excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
           })
         ) {
           continue;

@@ -266,19 +266,29 @@ export function loadGitignorePatterns(dirPath: string): string[] {
 }
 
 /**
+ * Resolves the path to .babaignore (or .bbygignore fallback) from directory if present.
+ */
+export function resolveBabaIgnorePath(dirPath: string): string | null {
+  try {
+    const babaIgnorePath = path.join(dirPath, ".babaignore");
+    if (fs.existsSync(babaIgnorePath)) {
+      return babaIgnorePath;
+    }
+    const bbygIgnorePath = path.join(dirPath, ".bbygignore");
+    if (fs.existsSync(bbygIgnorePath)) {
+      return bbygIgnorePath;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Reads .babaignore (with .bbygignore fallback) from directory if present.
  */
 export function loadBabaIgnorePatterns(dirPath: string): string[] {
-  const babaIgnorePath = path.join(dirPath, ".babaignore");
-  const bbygIgnorePath = path.join(dirPath, ".bbygignore");
-
-  let targetPath: string | null = null;
-  if (fs.existsSync(babaIgnorePath)) {
-    targetPath = babaIgnorePath;
-  } else if (fs.existsSync(bbygIgnorePath)) {
-    targetPath = bbygIgnorePath;
-  }
-
+  const targetPath = resolveBabaIgnorePath(dirPath);
   if (!targetPath) {
     return [];
   }
