@@ -19,6 +19,12 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
   let tempDir: string;
   const cliPath = path.resolve(__dirname, "../src/cli.ts");
 
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "baba-ignore-test-"));
   });
@@ -1145,7 +1151,7 @@ export function testQuery(name: string) {
       expect(stdout).not.toContain("Unparameterized SQL Query");
 
       // Verify AST health reports 0 violations detected
-      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+      expect(stripAnsi(stdout)).toContain("AST Health:       100 / 100 (0 violation(s))");
       expect(stdout).toContain("No AST context-fencing violations detected. Repository is clean!");
 
       // Verify the Step-by-Step Surgical Action Plan checklist is present but contains NO SQL injection items
@@ -1369,7 +1375,7 @@ export function testSql(id: string) {
       const stdout = proc.stdout.toString();
       expect(stdout).not.toContain("docs/vulnerable.ts");
       expect(stdout).not.toContain("Fix SQL injection");
-      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+      expect(stripAnsi(stdout)).toContain("AST Health:       100 / 100 (0 violation(s))");
     });
 
     it("AC-3: Adding docs/** to .babaignore skips scanning docs directory and nested subdirectories in walkCodebase", async () => {
@@ -1595,7 +1601,7 @@ export function testSql(id: string) {
       const stdout = proc.stdout.toString();
       expect(stdout).not.toContain("scripts/danger.ts");
       expect(stdout).not.toContain("Fix SQL injection");
-      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+      expect(stripAnsi(stdout)).toContain("AST Health:       100 / 100 (0 violation(s))");
     });
 
     it("AC-4: Passing --exclude <pattern> prunes directories and records skipped files in walkCodebase when no ignore files exist", async () => {
@@ -1998,7 +2004,7 @@ export function testSql(id: string) {
           const stdoutHuman = procHuman.stdout.toString();
           expect(stdoutHuman).not.toContain("tests/ast_rules.test.ts");
           expect(stdoutHuman).not.toContain("Fix SQL injection");
-          expect(stdoutHuman).toContain("AST Health:       100 / 100 (0 violation(s))");
+          expect(stripAnsi(stdoutHuman)).toContain("AST Health:       100 / 100 (0 violation(s))");
         }
       });
 
