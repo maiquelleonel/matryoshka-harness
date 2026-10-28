@@ -286,7 +286,14 @@ export function assertTokenBudget(
 /**
  * Discovers architectural seams across the repository by inspecting directory structures and file markers.
  */
-export function discoverSeams(projectPath: string): DiscoveredSeams {
+export function discoverSeams(
+  projectPath: string,
+  options?: {
+    exclude?: string[];
+    excludePatterns?: string[];
+    includeTests?: boolean;
+  }
+): DiscoveredSeams {
   const root = path.resolve(projectPath);
   const routes: string[] = [];
   const models: string[] = [];
@@ -329,6 +336,13 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
     ".agents",
   ]);
 
+  const excludePatterns = [
+    ...(options?.exclude ?? []),
+    ...(options?.excludePatterns ?? []),
+  ];
+  const gitignorePatterns = loadGitignorePatterns(root);
+  const babaIgnorePatterns = loadBabaIgnorePatterns(root);
+
   let totalFiles = 0;
 
   function walk(currentDir: string, depth: number): void {
@@ -342,13 +356,35 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith(".")) {
-          walk(path.join(currentDir, entry.name), depth + 1);
+        const fullDirPath = path.join(currentDir, entry.name);
+        const relDir = path.relative(root, fullDirPath).replace(/\\/g, "/");
+        const isIgnored =
+          ignoreDirs.has(entry.name) ||
+          entry.name.startsWith(".") ||
+          isIgnoredFile(relDir, {
+            includeTests: options?.includeTests ?? true,
+            excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
+            isDirectory: true,
+          });
+        if (!isIgnored) {
+          walk(fullDirPath, depth + 1);
         }
       } else if (entry.isFile()) {
-        totalFiles++;
         const fullPath = path.join(currentDir, entry.name);
         const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+        if (
+          isIgnoredFile(relPath, {
+            includeTests: options?.includeTests ?? true,
+            excludePatterns,
+            gitignorePatterns,
+            babaIgnorePatterns,
+          })
+        ) {
+          continue;
+        }
+        totalFiles++;
         const lowerRel = relPath.toLowerCase();
 
         // Testing patterns
@@ -493,10 +529,17 @@ export function discoverSeams(projectPath: string): DiscoveredSeams {
 /**
  * Deterministically profiles a repository and classifies it into a canonical archetype.
  */
-export function profileArchetype(projectPath: string): ArchetypeProfile {
+export function profileArchetype(
+  projectPath: string,
+  options?: {
+    exclude?: string[];
+    excludePatterns?: string[];
+    includeTests?: boolean;
+  }
+): ArchetypeProfile {
   const root = path.resolve(projectPath);
   const stack = detectStack(root);
-  const seams = discoverSeams(root);
+  const seams = discoverSeams(root, options);
 
   let archetype: AgentArchetype = "api_backend";
   let runtime = "unknown";
@@ -2036,7 +2079,7 @@ export function generateAgents(
   options: GenerateAgentsOptions = {}
 ): GenerateAgentsResult {
   const root = path.resolve(projectPath);
-  const profile = profileArchetype(root);
+  const profile = profileArchetype(root, options);
   const effectiveSkills = options.selectedSkills ?? profile.activeSkills;
   const effectiveProfile: ArchetypeProfile = {
     ...profile,
@@ -2260,27 +2303,38 @@ export function auditCognitiveContext(
 
   const checkIsIgnored = (p: string): boolean => {
     const norm = p.replace(/\\/g, "/");
-    if (
-      isIgnoredFile(norm, {
-        includeTests,
-        excludePatterns,
-        gitignorePatterns,
-        babaIgnorePatterns,
-      })
-    ) {
-      return true;
-    }
+    const candidates = new Set<string>();
+    candidates.add(norm);
+    candidates.add(path.basename(p));
+
+    const relToRoot = path.relative(rootDir, p).replace(/\\/g, "/");
+    if (relToRoot) candidates.add(relToRoot);
+
     const fromCwd = path.relative(process.cwd(), p).replace(/\\/g, "/");
-    if (
-      fromCwd &&
-      isIgnoredFile(fromCwd, {
-        includeTests,
-        excludePatterns,
-        gitignorePatterns,
-        babaIgnorePatterns,
-      })
-    ) {
-      return true;
+    if (fromCwd) candidates.add(fromCwd);
+
+    let parentDir = path.dirname(rootDir);
+    for (let depth = 0; depth < 4; depth++) {
+      const relToParent = path.relative(parentDir, p).replace(/\\/g, "/");
+      if (relToParent && !relToParent.startsWith("../")) {
+        candidates.add(relToParent);
+      }
+      const nextParent = path.dirname(parentDir);
+      if (nextParent === parentDir) break;
+      parentDir = nextParent;
+    }
+
+    for (const cand of candidates) {
+      if (
+        isIgnoredFile(cand, {
+          includeTests,
+          excludePatterns,
+          gitignorePatterns,
+          babaIgnorePatterns,
+        })
+      ) {
+        return true;
+      }
     }
     return false;
   };

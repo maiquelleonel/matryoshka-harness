@@ -516,7 +516,216 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
     });
   });
 
-  describe("Subtask 6-7: Ad-hoc CLI Flag (--exclude) and Layered Filtering Precedence", () => {
+  describe("Subtask 6: Add `--exclude` option to `baba wrap`, `baba scan`, `baba agents generate`, and `baba agents audit`", () => {
+    it("baba wrap respects --exclude to skip evaluating matching files and paths", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "legacy_hazards"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "wrap-exclude-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Wrap Exclude App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const ok = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "legacy_hazards/sql.ts"),
+        "export function q(id: string) { return `SELECT * FROM tbl WHERE id = ${id}`; }"
+      );
+
+      // Without --exclude: flags sql-interpolation
+      const procWithout = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        tempDir,
+        "--dry-run",
+        "--json",
+      ]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      const sqlWithout = (parsedWithout.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWithout.length).toBeGreaterThanOrEqual(1);
+
+      // With --exclude: skips legacy_hazards/**
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "legacy_hazards/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      const sqlWith = (parsedWith.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWith.length).toBe(0);
+    });
+
+    it("baba scan respects --exclude to skip discovering routes/controllers/models in matching paths", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "ignored_routes"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/routes/active.ts"), "export const route = '/active';");
+      fs.writeFileSync(path.join(tempDir, "ignored_routes/legacy.route.ts"), "export const route = '/legacy';");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "scan-exclude-app" }, null, 2)
+      );
+
+      // Without --exclude
+      const procWithout = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.entities.routes.some((r: string) => r.includes("ignored_routes"))).toBe(true);
+
+      // With --exclude
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--exclude",
+        "ignored_routes/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.entities.routes.some((r: string) => r.includes("ignored_routes"))).toBe(false);
+      expect(parsedWith.entities.routes.some((r: string) => r.includes("src/routes/active.ts"))).toBe(true);
+    });
+
+    it("baba agents generate respects --exclude during seam discovery and archetype profiling", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/controllers"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "src/controllers/user_ctrl.ts"), "export class UserController {}");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "agents-exclude-app", dependencies: { express: "^4.18.0" } }, null, 2)
+      );
+
+      // Without --exclude: controllers seam is detected
+      const procWithout = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "generate",
+        tempDir,
+        "--dry-run",
+        "--json",
+      ]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.seams.controllers.length).toBeGreaterThanOrEqual(1);
+
+      // With --exclude: controllers matching pattern are omitted from discovered seams
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "generate",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "src/controllers/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.seams.controllers.length).toBe(0);
+    });
+
+    it("baba agents audit respects --exclude to skip auditing matching instruction files", async () => {
+      fs.mkdirSync(path.join(tempDir, "custom"), { recursive: true });
+      const bloated = [
+        "# Monolithic Guidelines",
+        ...Array(400).fill("never do bad things always write tests"),
+      ].join("\n");
+      fs.writeFileSync(path.join(tempDir, "custom/AGENTS.md"), bloated, "utf-8");
+
+      // Without --exclude: flags bloated file
+      const procWithout = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "custom"),
+        "--json",
+      ]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.summary.scannedFiles.length).toBe(1);
+
+      // With --exclude: skips the instruction file entirely
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "custom"),
+        "--exclude",
+        "custom/AGENTS.md",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.summary.scannedFiles.length).toBe(0);
+      expect(parsedWith.violations.length).toBe(0);
+    });
+
+    it("verifies --exclude CLI option presence in --help across wrap, scan, agents generate, and agents audit", async () => {
+      const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"]);
+      expect(procWrap.stdout.toString()).toContain("--exclude");
+
+      const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", "--help"]);
+      expect(procScan.stdout.toString()).toContain("--exclude");
+
+      const procGenerate = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", "--help"]);
+      expect(procGenerate.stdout.toString()).toContain("--exclude");
+
+      const procAudit = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"]);
+      expect(procAudit.stdout.toString()).toContain("--exclude");
+    });
+
+    it("ensures strict parity across aliases (baba, bbyg, matryoshka, matrioska) for --exclude", async () => {
+      for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
+        const procWrap = Bun.spawnSync(["bun", "run", cliPath, "wrap", "--help"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(procWrap.stdout.toString()).toContain("--exclude");
+
+        const procScan = Bun.spawnSync(["bun", "run", cliPath, "scan", "--help"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(procScan.stdout.toString()).toContain("--exclude");
+
+        const procGenerate = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", "--help"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(procGenerate.stdout.toString()).toContain("--exclude");
+
+        const procAudit = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(procAudit.stdout.toString()).toContain("--exclude");
+      }
+    });
+
     it("skips files matching --exclude patterns", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });

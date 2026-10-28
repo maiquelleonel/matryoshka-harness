@@ -944,7 +944,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
       if (subcommand === "profile" || subcommand === "seams") {
         try {
-          const profile = profileArchetype(resolvedPath);
+          const profile = profileArchetype(resolvedPath, {
+            exclude: excludePatterns,
+            excludePatterns,
+            includeTests: isIncludeTests,
+          });
           if (isJson) {
             console.log(JSON.stringify(profile, null, 2));
           } else {
@@ -1024,7 +1028,11 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         let selectedSkills: SkillName[] | undefined;
         if (shouldPrompt) {
           const selectorResult = await promptInteractiveSkillSelection({
-            profile: profileArchetype(resolvedPath),
+            profile: profileArchetype(resolvedPath, {
+              exclude: excludePatterns,
+              excludePatterns,
+              includeTests: isIncludeTests,
+            }),
             projectPath: resolvedPath,
             stdin: process.stdin,
             stdout: process.stdout,
