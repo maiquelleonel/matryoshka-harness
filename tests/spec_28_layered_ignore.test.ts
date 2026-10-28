@@ -1300,7 +1300,52 @@ export function testSql(id: string) {
   });
 
   describe("Subtask 10: **AC-3:** Adding `docs/**` to `.babaignore` successfully skips scanning the `docs` directory", () => {
-    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory", async () => {
+    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory in wrap --dry-run (JSON output)", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "docs/vulnerable.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+
+      // 1. Without .babaignore: docs/vulnerable.ts is scanned and triggers SQL injection
+      const procWithout = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--json"]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      const sqlWithout = (parsedWithout.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWithout.length).toBeGreaterThanOrEqual(1);
+
+      // 2. With docs/** in .babaignore: docs directory is completely skipped
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+      const procWith = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--json"]);
+      expect(procWith.exitCode).toBe(0);
+
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      const sqlWith = (parsedWith.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWith.length).toBe(0);
+      expect(parsedWith.ast.score).toBe(100);
+
+      const sqlActionPlan = (parsedWith.actionPlan || []).filter(
+        (item: any) => item.target?.includes("docs") || item.action?.toLowerCase().includes("sql")
+      );
+      expect(sqlActionPlan.length).toBe(0);
+    });
+
+    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory in wrap --dry-run (Human output)", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
 
@@ -1318,6 +1363,103 @@ export function testSql(id: string) {
       );
       fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
 
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run"]);
+      expect(proc.exitCode).toBe(0);
+
+      const stdout = proc.stdout.toString();
+      expect(stdout).not.toContain("docs/vulnerable.ts");
+      expect(stdout).not.toContain("Fix SQL injection");
+      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+    });
+
+    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory and nested subdirectories in walkCodebase", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs/guide/deep"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(path.join(tempDir, "docs/overview.ts"), "export const doc1 = 1;");
+      fs.writeFileSync(path.join(tempDir, "docs/guide/deep/nested.ts"), "export const doc2 = 2;");
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+      const result = await walkCodebase(tempDir);
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toEqual(["src/index.ts"]);
+      expect(scannedPaths).not.toContain("docs/overview.ts");
+      expect(scannedPaths).not.toContain("docs/guide/deep/nested.ts");
+
+      // Verify docs directory was registered as skipped with reason "ignored"
+      const skippedRelPaths = result.skippedFiles.map((s) => s.relativePath.replace(/\\/g, "/"));
+      expect(skippedRelPaths).toContain("docs");
+    });
+
+    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory in baba scan", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs/routes"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/routes/api.ts"), "export const route = '/api';");
+      fs.writeFileSync(path.join(tempDir, "docs/routes/example.route.ts"), "export const exampleRoute = '/example';");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-scan-app" }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(proc.exitCode).toBe(0);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+
+      expect(routes).toContain("src/routes/api.ts");
+      expect(routes).not.toContain("docs/routes/example.route.ts");
+    });
+
+    it("AC-3: Adding docs/** to .babaignore skips scanning docs directory in baba agents audit", async () => {
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+      const bloated = [
+        "# Bloated Documentation Guidelines",
+        ...Array(400).fill("never do bad things always write tests"),
+      ].join("\n");
+      fs.writeFileSync(path.join(tempDir, "docs/AGENTS.md"), bloated, "utf-8");
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "docs"),
+        "--json",
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      expect(parsed.summary.scannedFiles.length).toBe(0);
+      expect(parsed.violations.length).toBe(0);
+    });
+
+    it("AC-3: Adding docs/** to .bbygignore fallback successfully skips scanning docs directory", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "docs/vulnerable.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+      // Use .bbygignore fallback instead of .babaignore
+      fs.writeFileSync(path.join(tempDir, ".bbygignore"), "docs/**\n");
+
       const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--json"]);
       expect(proc.exitCode).toBe(0);
 
@@ -1326,6 +1468,36 @@ export function testSql(id: string) {
         (v: any) => v.ruleId === "sql-interpolation"
       );
       expect(sqlViolations.length).toBe(0);
+      expect(parsed.ast.score).toBe(100);
+    });
+
+    it("AC-3: Parity across all command aliases (baba, bbyg, matryoshka, matrioska) for .babaignore docs/**", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "docs/vulnerable.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "docs/**\n");
+
+      for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
+        const proc = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run"], {
+          env: { ...process.env, BABA_ALIAS: alias },
+        });
+        expect(proc.exitCode).toBe(0);
+        const output = proc.stdout.toString();
+        expect(output).not.toContain("docs/vulnerable.ts");
+        expect(output).not.toContain("Fix SQL injection");
+      }
     });
   });
 

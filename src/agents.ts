@@ -2298,8 +2298,21 @@ export function auditCognitiveContext(
     }
   } catch {}
 
-  const gitignorePatterns = loadGitignorePatterns(rootDir);
-  const babaIgnorePatterns = loadBabaIgnorePatterns(rootDir);
+  const gitignorePatterns = [...loadGitignorePatterns(rootDir)];
+  const babaIgnorePatterns = [...loadBabaIgnorePatterns(rootDir)];
+
+  let pDir = path.dirname(rootDir);
+  for (let depth = 0; depth < 4; depth++) {
+    if (babaIgnorePatterns.length === 0) {
+      babaIgnorePatterns.push(...loadBabaIgnorePatterns(pDir));
+    }
+    if (gitignorePatterns.length === 0) {
+      gitignorePatterns.push(...loadGitignorePatterns(pDir));
+    }
+    const nextP = path.dirname(pDir);
+    if (nextP === pDir) break;
+    pDir = nextP;
+  }
 
   const checkIsIgnored = (p: string): boolean => {
     const norm = p.replace(/\\/g, "/");
