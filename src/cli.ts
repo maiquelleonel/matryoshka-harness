@@ -90,6 +90,8 @@ Options:
   --strict           Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
   --threshold <num>  Minimum acceptable Harness² composite score for strict gate (default: 80)
   --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
+  --include-tests    Include test suites and test files in AST and scan evaluations
+  --exclude <list>   Comma-separated or repeated glob patterns to exclude from evaluation
   -h, --help         Show help information
   -v, --version      Show version
 
@@ -126,6 +128,8 @@ Arguments:
 
 Options:
   --badge [path]     Generate maturity SVG badge (default: ./harness-badge.svg)
+  --include-tests    Include test suites in scan evaluation
+  --exclude <list>   Exclude files or directories matching comma-separated glob patterns
   --json             Output strictly valid JSON
   -h, --help         Show help information
 
@@ -156,6 +160,8 @@ Options:
   --dry-run          Simulate execution without modifying files on disk
   --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
   --max-tokens <num> Maximum token limit for check / audit (default: 250)
+  --include-tests    Include test files in cognitive context audit
+  --exclude <list>   Exclude files or directories matching comma-separated glob patterns
   --json             Output strictly valid JSON
   -h, --help         Show help information
 
@@ -209,6 +215,8 @@ Arguments:
 
 Options:
   --strict           Enforce strict CI quality gate (exit 1 on FAIL violation or score < 80)
+  --include-tests    Include test files in cognitive context audit
+  --exclude <list>   Exclude files or directories matching comma-separated glob patterns
   --json             Output strictly valid JSON
   --max-tokens <num> Maximum token limit for budget rule (default: 250)
   -h, --help         Show help information
@@ -239,6 +247,8 @@ Options:
   --strict           Enforce strict CI quality gate (exit 1 on score < threshold or critical violations)
   --threshold <num>  Minimum acceptable Harness² composite score for strict gate (default: 80)
   --max-file-size    Maximum file size in KB to parse for AST traversal (default: 500)
+  --include-tests    Include test directories and test files in AST evaluation
+  --exclude <list>   Exclude files or directories matching comma-separated glob patterns
   --dry-run          Simulate execution without writing report to disk
   --json             Output strictly valid JSON
   -h, --help         Show help information
@@ -295,6 +305,30 @@ Examples:
   $ baba mcp wire --targets cursor,claude
   $ baba mcp wire --dry-run --json
 `.trim();
+
+/**
+ * Parses comma-separated and repeated --exclude flags into a list of glob patterns.
+ */
+export function parseExcludeFlags(args: string[]): string[] {
+  const patterns: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
+    if (arg === "--exclude") {
+      const next = args[i + 1];
+      if (next && !next.startsWith("-")) {
+        const parts = next.split(",").map((s) => s.trim()).filter(Boolean);
+        patterns.push(...parts);
+        i++;
+      }
+    } else if (arg.startsWith("--exclude=")) {
+      const val = arg.slice("--exclude=".length);
+      const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+      patterns.push(...parts);
+    }
+  }
+  return patterns;
+}
 
 export async function runCli(args: string[] = process.argv.slice(2)): Promise<void> {
   const isHelp = args.includes("--help") || args.includes("-h");
@@ -388,12 +422,25 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       let targetDir: string | undefined;
       let badgePath: string | null = null;
       let isBadge = false;
+      let includeTests = rest.includes("--include-tests");
+      const excludePatterns: string[] = [];
 
       for (let i = 0; i < rest.length; i++) {
         const arg = rest[i];
         if (!arg) continue;
-        if (arg === "--json") {
-          // Handled via isJson flag
+        if (arg === "--json" || arg === "--include-tests") {
+          // Handled via flags
+        } else if (arg === "--exclude") {
+          const next = rest[i + 1];
+          if (next && !next.startsWith("-")) {
+            const parts = next.split(",").map((s) => s.trim()).filter(Boolean);
+            excludePatterns.push(...parts);
+            i++;
+          }
+        } else if (arg.startsWith("--exclude=")) {
+          const val = arg.slice("--exclude=".length);
+          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          excludePatterns.push(...parts);
         } else if (arg === "--badge") {
           isBadge = true;
           const next = rest[i + 1];
@@ -418,6 +465,9 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       try {
         const reconciliation = await runMaturityScan(resolvedPath, {
           allowFallback: true,
+          includeTests,
+          exclude: excludePatterns,
+          excludePatterns,
         });
 
         let resolvedBadgePath: string | undefined;
@@ -483,6 +533,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
+      const isIncludeTests = rest.includes("--include-tests");
       const isYes =
         rest.includes("--yes") ||
         rest.includes("-y") ||
@@ -492,6 +543,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
 
       let maxTokens: number | undefined;
       let fromFile: string | undefined;
+      const excludePatterns: string[] = [];
       const positional: string[] = [];
       for (let i = 0; i < rest.length; i++) {
         const arg = rest[i];
@@ -512,6 +564,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           }
         } else if (arg.startsWith("--from=")) {
           fromFile = arg.slice("--from=".length);
+        } else if (arg === "--exclude") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            const parts = nextVal.split(",").map((s) => s.trim()).filter(Boolean);
+            excludePatterns.push(...parts);
+            i++;
+          }
+        } else if (arg.startsWith("--exclude=")) {
+          const val = arg.slice("--exclude=".length);
+          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          excludePatterns.push(...parts);
+        } else if (arg === "--include-tests") {
+          // Handled via isIncludeTests flag
         } else if (arg.startsWith("-")) {
           // flag, ignore
         } else {
@@ -823,6 +888,9 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
             strict: isStrict,
             json: isJson,
             maxTokens,
+            includeTests: isIncludeTests,
+            exclude: excludePatterns,
+            excludePatterns,
           });
 
           if (isJson) {
@@ -983,6 +1051,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           maxTokens,
           strictTokenGuard: isStrict,
           selectedSkills,
+          exclude: excludePatterns,
+          excludePatterns,
         });
 
         if (isJson) {
@@ -1040,6 +1110,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
       let isStrict = rest.includes("--strict");
       let isDryRun = rest.includes("--dry-run");
+      let includeTests = rest.includes("--include-tests");
+      const excludePatterns: string[] = [];
       let targetDir: string | undefined;
       let outputPath: string | undefined;
       let threshold: number | undefined;
@@ -1049,8 +1121,19 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         const arg = rest[i];
         if (!arg) continue;
 
-        if (arg === "--json" || arg === "--strict" || arg === "--dry-run") {
+        if (arg === "--json" || arg === "--strict" || arg === "--dry-run" || arg === "--include-tests") {
           // Handled via flags
+        } else if (arg === "--exclude") {
+          const nextVal = rest[i + 1];
+          if (nextVal && !nextVal.startsWith("-")) {
+            const parts = nextVal.split(",").map((s) => s.trim()).filter(Boolean);
+            excludePatterns.push(...parts);
+            i++;
+          }
+        } else if (arg.startsWith("--exclude=")) {
+          const val = arg.slice("--exclude=".length);
+          const parts = val.split(",").map((s) => s.trim()).filter(Boolean);
+          excludePatterns.push(...parts);
         } else if (arg === "--output" || arg === "-o") {
           const nextVal = rest[i + 1];
           if (nextVal && !nextVal.startsWith("-")) {
@@ -1095,8 +1178,13 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       try {
         const evaluationResult = await evaluateCompositeHarness(resolvedPath, {
           threshold: threshold ?? 80,
+          includeTests,
+          exclude: excludePatterns,
+          excludePatterns,
           astOptions: {
             maxFileSizeKb: maxFileSizeKb ?? 500,
+            includeTests,
+            excludePatterns,
           },
         });
 

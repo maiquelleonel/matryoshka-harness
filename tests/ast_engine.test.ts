@@ -191,13 +191,13 @@ func GetUser(id string) {
   describe("Scenario 5: Codebase Walking (walkCodebase)", () => {
     it("recursively traverses and indexes polyglot files", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
-      fs.mkdirSync(path.join(tempDir, "tests"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "lib"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "pkg"), { recursive: true });
 
       fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const a = 1;");
       fs.writeFileSync(path.join(tempDir, "src/worker.py"), "def work(): pass");
       fs.writeFileSync(path.join(tempDir, "pkg/util.go"), "package pkg\nfunc Util() {}");
-      fs.writeFileSync(path.join(tempDir, "tests/test.ts"), "test('ok', () => {});");
+      fs.writeFileSync(path.join(tempDir, "lib/app.ts"), "export const ok = () => {};");
       fs.writeFileSync(path.join(tempDir, "README.md"), "# Hello");
 
       const result: AstWalkResult = await walkCodebase(tempDir);

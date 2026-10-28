@@ -404,9 +404,18 @@ export async function evaluateCompositeHarness(
   }
 
   // 2. Run Polyglot AST Walker
+  const includeTests = options?.includeTests ?? options?.astOptions?.includeTests;
+  const excludePatterns = [
+    ...(options?.exclude ?? []),
+    ...(options?.excludePatterns ?? []),
+    ...(options?.astOptions?.excludePatterns ?? []),
+  ];
+
   const walkResult = await walkCodebase(resolvedPath, {
     cwd: resolvedPath,
     ...options?.astOptions,
+    ...(includeTests !== undefined ? { includeTests } : {}),
+    ...(excludePatterns.length > 0 ? { excludePatterns } : {}),
   });
 
   // 3. Run Contextual AST Antipattern Rule Suite

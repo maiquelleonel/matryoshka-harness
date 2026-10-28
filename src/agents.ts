@@ -204,6 +204,8 @@ export interface GenerateAgentsOptions {
   selectedSkills?: SkillName[];
   interactive?: boolean;
   yes?: boolean;
+  exclude?: string[];
+  excludePatterns?: string[];
 }
 
 export interface GenerateAgentsResult {
@@ -2219,6 +2221,9 @@ export interface CognitiveAuditOptions {
   maxNegativePhrases?: number; // default: 3
   maxCodeBlockLines?: number; // default: 25
   permissivePhrases?: string[];
+  includeTests?: boolean;
+  exclude?: string[];
+  excludePatterns?: string[];
 }
 
 /**

@@ -45,6 +45,17 @@ export const DEFAULT_IGNORE_PATTERNS: string[] = [
 ];
 
 /**
+ * Default test directory and test file patterns skipped by default during AST walks.
+ */
+export const DEFAULT_TEST_PATTERNS: string[] = [
+  "tests",
+  "test",
+  "__tests__",
+  "*.test.*",
+  "*.spec.*",
+];
+
+/**
  * File extension mapping to canonical AstLanguage.
  */
 const EXTENSION_MAP: Record<string, AstLanguage> = {
@@ -110,60 +121,122 @@ function matchesPattern(relativePath: string, pattern: string): boolean {
     normPattern = normPattern.slice(1);
   }
 
-  // Check segments
+  // Handle /** suffix (e.g. docs/** or dir/**)
+  if (normPattern.endsWith("/**")) {
+    const base = normPattern.slice(0, -3);
+    if (normPath === base || normPath.startsWith(base + "/")) {
+      return true;
+    }
+  }
+
+  // Check segments (e.g. tests matches segment in path/to/tests/file)
   const pathSegments = normPath.split("/");
   if (pathSegments.includes(normPattern)) {
     return true;
   }
 
-  // Exact match
+  // Exact match or directory prefix match
   if (normPath === normPattern || normPath.startsWith(normPattern + "/")) {
     return true;
   }
 
-  // Glob wildcards e.g. *.tmp or generated/**
+  // Glob wildcards e.g. *.tmp, *.test.*, *.spec.*, or generated/**
   if (normPattern.includes("*")) {
     const regexPattern = normPattern
       .replace(/[.+^${}()|[\]\\]/g, "\\$&")
       .replace(/\*\*/g, ".*")
       .replace(/\*/g, "[^/]*");
     const regex = new RegExp(`(^|/)${regexPattern}($|/)`);
-    return regex.test(normPath);
+    if (regex.test(normPath)) {
+      return true;
+    }
+    // Also test directly against the file name if pattern has no '/'
+    if (!normPattern.includes("/")) {
+      const fileName = pathSegments[pathSegments.length - 1];
+      if (fileName && new RegExp(`^${regexPattern}$`).test(fileName)) {
+        return true;
+      }
+    }
   }
 
   return false;
 }
 
+export interface IsIgnoredFileOptions {
+  includeTests?: boolean;
+  customPatterns?: string[];
+  excludePatterns?: string[];
+  gitignorePatterns?: string[];
+  babaIgnorePatterns?: string[];
+}
+
 /**
- * Checks whether a given relative file path should be ignored.
+ * Checks whether a given relative file path should be ignored according to layered precedence:
+ * Built-in Defaults (vendor, cache, tests) -> .gitignore -> .babaignore / .bbygignore -> CLI --exclude.
+ * When includeTests is true, test patterns are excluded from the built-in defaults.
  */
 export function isIgnoredFile(
   relativePath: string,
-  customPatterns?: string[],
-  gitignorePatterns?: string[]
+  customPatternsOrOptions?: string[] | IsIgnoredFileOptions,
+  gitignorePatterns?: string[],
+  babaIgnorePatterns?: string[]
 ): boolean {
   const normPath = relativePath.replace(/\\/g, "/");
   const segments = normPath.split("/");
 
-  // Check default ignore patterns (segment match)
+  let includeTests = false;
+  let customList: string[] = [];
+  let gitignoreList: string[] = gitignorePatterns || [];
+  let babaList: string[] = babaIgnorePatterns || [];
+
+  if (Array.isArray(customPatternsOrOptions)) {
+    customList = customPatternsOrOptions;
+  } else if (customPatternsOrOptions && typeof customPatternsOrOptions === "object") {
+    includeTests = customPatternsOrOptions.includeTests === true;
+    customList = [
+      ...(customPatternsOrOptions.excludePatterns ?? []),
+      ...(customPatternsOrOptions.customPatterns ?? []),
+    ];
+    gitignoreList = customPatternsOrOptions.gitignorePatterns ?? gitignoreList;
+    babaList = customPatternsOrOptions.babaIgnorePatterns ?? babaList;
+  }
+
+  // 1. Built-in Defaults (vendor, cache, tests unless includeTests is true)
   for (const seg of segments) {
     if (DEFAULT_IGNORE_PATTERNS.includes(seg)) {
       return true;
     }
   }
 
-  // Check custom patterns
-  if (customPatterns && customPatterns.length > 0) {
-    for (const pat of customPatterns) {
+  if (!includeTests) {
+    for (const pat of DEFAULT_TEST_PATTERNS) {
       if (matchesPattern(normPath, pat)) {
         return true;
       }
     }
   }
 
-  // Check .gitignore patterns
-  if (gitignorePatterns && gitignorePatterns.length > 0) {
-    for (const pat of gitignorePatterns) {
+  // 2. .gitignore patterns
+  if (gitignoreList && gitignoreList.length > 0) {
+    for (const pat of gitignoreList) {
+      if (matchesPattern(normPath, pat)) {
+        return true;
+      }
+    }
+  }
+
+  // 3. .babaignore / .bbygignore patterns
+  if (babaList && babaList.length > 0) {
+    for (const pat of babaList) {
+      if (matchesPattern(normPath, pat)) {
+        return true;
+      }
+    }
+  }
+
+  // 4. CLI --exclude / custom patterns
+  if (customList && customList.length > 0) {
+    for (const pat of customList) {
       if (matchesPattern(normPath, pat)) {
         return true;
       }
@@ -183,6 +256,35 @@ export function loadGitignorePatterns(dirPath: string): string[] {
   }
   try {
     const content = fs.readFileSync(gitignorePath, "utf-8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Reads .babaignore (with .bbygignore fallback) from directory if present.
+ */
+export function loadBabaIgnorePatterns(dirPath: string): string[] {
+  const babaIgnorePath = path.join(dirPath, ".babaignore");
+  const bbygIgnorePath = path.join(dirPath, ".bbygignore");
+
+  let targetPath: string | null = null;
+  if (fs.existsSync(babaIgnorePath)) {
+    targetPath = babaIgnorePath;
+  } else if (fs.existsSync(bbygIgnorePath)) {
+    targetPath = bbygIgnorePath;
+  }
+
+  if (!targetPath) {
+    return [];
+  }
+
+  try {
+    const content = fs.readFileSync(targetPath, "utf-8");
     return content
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -574,6 +676,21 @@ export async function walkCodebase(
   }
 
   const gitignorePatterns = loadGitignorePatterns(resolvedRoot);
+  const babaIgnorePatterns =
+    options?.babaIgnorePatterns ?? loadBabaIgnorePatterns(resolvedRoot);
+  const excludePatterns = [
+    ...(options?.excludePatterns ?? []),
+    ...(options?.ignorePatterns ?? []),
+  ];
+  const includeTests = options?.includeTests ?? false;
+
+  const ignoreOptions: IsIgnoredFileOptions = {
+    includeTests,
+    gitignorePatterns,
+    babaIgnorePatterns,
+    excludePatterns,
+  };
+
   const scannedFiles: ParsedFileAst[] = [];
   const skippedFiles: AstSkippedFile[] = [];
 
@@ -597,7 +714,7 @@ export async function walkCodebase(
       const relPath = path.relative(resolvedRoot, fullPath);
 
       if (entry.isDirectory()) {
-        if (!isIgnoredFile(relPath, options?.ignorePatterns, gitignorePatterns)) {
+        if (!isIgnoredFile(relPath, ignoreOptions)) {
           const subFiles = await discoverFiles(fullPath);
           discovered.push(...subFiles);
         } else {
@@ -626,7 +743,7 @@ export async function walkCodebase(
     const relativePath = path.relative(resolvedRoot, filePath);
 
     // Check ignore filters
-    if (isIgnoredFile(relativePath, options?.ignorePatterns, gitignorePatterns)) {
+    if (isIgnoredFile(relativePath, ignoreOptions)) {
       skippedFiles.push({
         filePath,
         relativePath,

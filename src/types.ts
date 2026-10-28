@@ -63,6 +63,9 @@ export interface HarnessScoreOptions {
   env?: Record<string, string>;
   timeoutMs?: number;
   allowFallback?: boolean;
+  includeTests?: boolean;
+  exclude?: string[];
+  excludePatterns?: string[];
 }
 
 export interface HarnessScoreResult {
@@ -192,6 +195,9 @@ export interface AstWalkerOptions {
   ignorePatterns?: string[];
   wasmGrammarPaths?: Partial<Record<AstLanguage, string>>;
   concurrency?: number;
+  includeTests?: boolean;
+  excludePatterns?: string[];
+  babaIgnorePatterns?: string[];
 }
 
 export interface AstSkippedFile {
@@ -339,6 +345,9 @@ export interface CompositeEvaluationOptions extends CompositeScorerOptions {
   oracleOptions?: HarnessScoreOptions;
   astOptions?: AstWalkerOptions;
   ruleOptions?: AstRuleSuiteOptions;
+  includeTests?: boolean;
+  exclude?: string[];
+  excludePatterns?: string[];
 }
 
 export interface Harness2EvaluationResult extends CompositeScoreResult {
