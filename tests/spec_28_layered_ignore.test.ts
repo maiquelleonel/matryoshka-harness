@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { walkCodebase, isIgnoredFile, loadBabaIgnorePatterns } from "../src/ast";
+import {
+  walkCodebase,
+  isIgnoredFile,
+  loadBabaIgnorePatterns,
+  resolveBabaIgnorePath,
+} from "../src/ast";
 import type { AstWalkResult } from "../src/types";
 
 describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => {
@@ -176,6 +181,62 @@ describe("SPEC-28: Layered Ignore Engine & Default Test Suite Exclusion", () => 
       // baba agents audit --help
       const procAudit = Bun.spawnSync(["bun", "run", cliPath, "agents", "audit", "--help"]);
       expect(procAudit.stdout.toString()).toContain("--include-tests");
+    });
+  });
+
+  describe("Subtask 3: Support loading .babaignore (with .bbygignore fallback) from the project root", () => {
+    it("resolveBabaIgnorePath resolves .babaignore when present, .bbygignore when fallback, or null when neither exists", () => {
+      // 1. Neither exists
+      expect(resolveBabaIgnorePath(tempDir)).toBeNull();
+      expect(loadBabaIgnorePatterns(tempDir)).toEqual([]);
+
+      // 2. Only .bbygignore exists
+      const bbygFile = path.join(tempDir, ".bbygignore");
+      fs.writeFileSync(bbygFile, "dist/**\n*.log\n");
+      expect(resolveBabaIgnorePath(tempDir)).toBe(bbygFile);
+      expect(loadBabaIgnorePatterns(tempDir)).toEqual(["dist/**", "*.log"]);
+
+      // 3. Both .babaignore and .bbygignore exist -> .babaignore takes precedence
+      const babaFile = path.join(tempDir, ".babaignore");
+      fs.writeFileSync(babaFile, "build/**\n# comment\n   temp/*  \n\r\n");
+      expect(resolveBabaIgnorePath(tempDir)).toBe(babaFile);
+      expect(loadBabaIgnorePatterns(tempDir)).toEqual(["build/**", "temp/*"]);
+
+      // 4. Directory does not exist -> gracefully returns null and empty array
+      const nonExistentDir = path.join(tempDir, "does-not-exist");
+      expect(resolveBabaIgnorePath(nonExistentDir)).toBeNull();
+      expect(loadBabaIgnorePatterns(nonExistentDir)).toEqual([]);
+    });
+
+    it("parses .babaignore with CRLF line endings, trims whitespace, and strips comments", () => {
+      const babaFile = path.join(tempDir, ".babaignore");
+      fs.writeFileSync(
+        babaFile,
+        "# Header comment\r\n  docs/**   \r\n\r\n# Another comment\r\nvendor/legacy  \r\n\r\n"
+      );
+      expect(loadBabaIgnorePatterns(tempDir)).toEqual(["docs/**", "vendor/legacy"]);
+    });
+
+    it("ensures discoverCodebaseEntities in scanner honors .babaignore and .bbygignore fallback", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "ignored_routes"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/routes/active.ts"), "export const route = '/active';");
+      fs.writeFileSync(path.join(tempDir, "ignored_routes/ignored.ts"), "export const route = '/ignored';");
+      fs.writeFileSync(path.join(tempDir, ".babaignore"), "ignored_routes/**\n");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "scan-ignore-app" }, null, 2)
+      );
+
+      const proc = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(proc.exitCode).toBe(0);
+      const parsed = JSON.parse(proc.stdout.toString().trim());
+      const routes = parsed.entities.routes.map((r: string) => r.replace(/\\/g, "/"));
+
+      expect(routes).toContain("src/routes/active.ts");
+      expect(routes).not.toContain("ignored_routes/ignored.ts");
     });
   });
 
