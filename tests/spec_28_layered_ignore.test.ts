@@ -1502,7 +1502,7 @@ export function testSql(id: string) {
   });
 
   describe("Subtask 11: **AC-4:** Passing `--exclude <pattern>` skips matched files even if absent from ignore files", () => {
-    it("AC-4: Passing --exclude <pattern> skips matched files", async () => {
+    it("AC-4: Passing --exclude <pattern> skips matched files in baba wrap --dry-run when no ignore files exist (JSON output)", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
 
@@ -1519,8 +1519,22 @@ export function testSql(id: string) {
         "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
       );
 
-      // Pass --exclude scripts/**
-      const proc = Bun.spawnSync([
+      // Verify no ignore files exist in tempDir
+      expect(fs.existsSync(path.join(tempDir, ".gitignore"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, ".bbygignore"))).toBe(false);
+
+      // 1. Without --exclude: scripts/danger.ts is scanned and triggers SQL injection
+      const procWithout = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--json"]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      const sqlWithout = (parsedWithout.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWithout.length).toBeGreaterThanOrEqual(1);
+
+      // 2. Pass --exclude scripts/**: scripts/danger.ts is skipped even though absent from ignore files
+      const procWith = Bun.spawnSync([
         "bun",
         "run",
         cliPath,
@@ -1531,16 +1545,257 @@ export function testSql(id: string) {
         "scripts/**",
         "--json",
       ]);
-      expect(proc.exitCode).toBe(0);
+      expect(procWith.exitCode).toBe(0);
 
-      const parsed = JSON.parse(proc.stdout.toString().trim());
-      const sqlViolations = (parsed.violations || []).filter(
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      const sqlWith = (parsedWith.violations || []).filter(
         (v: any) => v.ruleId === "sql-interpolation"
       );
-      expect(sqlViolations.length).toBe(0);
+      expect(sqlWith.length).toBe(0);
+      expect(parsedWith.ast.score).toBe(100);
+
+      const sqlActionPlan = (parsedWith.actionPlan || []).filter(
+        (item: any) => item.target?.includes("scripts") || item.action?.toLowerCase().includes("sql")
+      );
+      expect(sqlActionPlan.length).toBe(0);
     });
 
-    it("supports comma-separated and repeated --exclude flags", async () => {
+    it("AC-4: Passing --exclude <pattern> skips matched files in baba wrap --dry-run when no ignore files exist (Human output)", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "scripts/danger.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+
+      // Verify no ignore files exist
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      const proc = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "scripts/**",
+      ]);
+      expect(proc.exitCode).toBe(0);
+
+      const stdout = proc.stdout.toString();
+      expect(stdout).not.toContain("scripts/danger.ts");
+      expect(stdout).not.toContain("Fix SQL injection");
+      expect(stdout).toContain("AST Health:       100 / 100 (0 violation(s))");
+    });
+
+    it("AC-4: Passing --exclude <pattern> prunes directories and records skipped files in walkCodebase when no ignore files exist", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "scripts/nested"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(path.join(tempDir, "scripts/nested/tool.ts"), "export const tool = 2;");
+
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      const result = await walkCodebase(tempDir, {
+        excludePatterns: ["scripts/**"],
+      });
+      const scannedPaths = result.scannedFiles.map((f) => f.relativePath.replace(/\\/g, "/"));
+
+      expect(scannedPaths).toEqual(["src/index.ts"]);
+      expect(scannedPaths).not.toContain("scripts/nested/tool.ts");
+
+      // Verify directory was pruned and registered as skipped with reason "ignored"
+      const skippedRelPaths = result.skippedFiles.map((s) => s.relativePath.replace(/\\/g, "/"));
+      expect(skippedRelPaths).toContain("scripts");
+    });
+
+    it("AC-4: Passing --exclude overrides negation rules in ignore files respecting layered precedence", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "docs/unignored_danger.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+
+      // .babaignore ignores docs/** but has negation !docs/unignored_danger.ts
+      fs.writeFileSync(
+        path.join(tempDir, ".babaignore"),
+        "docs/**\n!docs/unignored_danger.ts\n"
+      );
+
+      // 1. Without --exclude: docs/unignored_danger.ts is unignored by negation and evaluated
+      const procWithout = Bun.spawnSync(["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--json"]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      const sqlWithout = (parsedWithout.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWithout.length).toBeGreaterThanOrEqual(1);
+
+      // 2. With CLI --exclude: CLI --exclude takes precedence over .babaignore negation and excludes it
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "docs/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      const sqlWith = (parsedWith.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlWith.length).toBe(0);
+    });
+
+    it("AC-4: Passing --exclude skips matched files in baba scan even if absent from ignore files", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/routes"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "custom_routes"), { recursive: true });
+
+      fs.writeFileSync(path.join(tempDir, "src/routes/active.ts"), "export const route = '/active';");
+      fs.writeFileSync(path.join(tempDir, "custom_routes/temp.route.ts"), "export const route = '/temp';");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "scan-app" }, null, 2)
+      );
+
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      // 1. Without --exclude
+      const procWithout = Bun.spawnSync(["bun", "run", cliPath, "scan", tempDir, "--json"]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.entities.routes.some((r: string) => r.includes("custom_routes"))).toBe(true);
+
+      // 2. With --exclude
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "scan",
+        tempDir,
+        "--exclude",
+        "custom_routes/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.entities.routes.some((r: string) => r.includes("custom_routes"))).toBe(false);
+      expect(parsedWith.entities.routes.some((r: string) => r.includes("src/routes/active.ts"))).toBe(true);
+    });
+
+    it("AC-4: Passing --exclude skips matched files in baba agents audit even if absent from ignore files", async () => {
+      fs.mkdirSync(path.join(tempDir, "custom_agents"), { recursive: true });
+      const bloated = [
+        "# Bloated Guidelines",
+        ...Array(400).fill("never do bad things always write tests"),
+      ].join("\n");
+      fs.writeFileSync(path.join(tempDir, "custom_agents/AGENTS.md"), bloated, "utf-8");
+
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      // 1. Without --exclude: fails audit
+      const procWithout = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "custom_agents"),
+        "--json",
+      ]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.summary.scannedFiles.length).toBe(1);
+
+      // 2. With --exclude: skips the instruction file entirely
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "audit",
+        path.join(tempDir, "custom_agents"),
+        "--exclude",
+        "custom_agents/AGENTS.md",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.summary.scannedFiles.length).toBe(0);
+      expect(parsedWith.violations.length).toBe(0);
+    });
+
+    it("AC-4: Passing --exclude skips matched files in baba agents generate even if absent from ignore files", async () => {
+      fs.mkdirSync(path.join(tempDir, "src/controllers"), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, "src/controllers/user_ctrl.ts"), "export class UserController {}");
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "agents-gen-app", dependencies: { express: "^4.18.0" } }, null, 2)
+      );
+
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      // 1. Without --exclude
+      const procWithout = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "generate",
+        tempDir,
+        "--dry-run",
+        "--json",
+      ]);
+      expect(procWithout.exitCode).toBe(0);
+      const parsedWithout = JSON.parse(procWithout.stdout.toString().trim());
+      expect(parsedWithout.seams.controllers.length).toBeGreaterThanOrEqual(1);
+
+      // 2. With --exclude
+      const procWith = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "agents",
+        "generate",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "src/controllers/**",
+        "--json",
+      ]);
+      expect(procWith.exitCode).toBe(0);
+      const parsedWith = JSON.parse(procWith.stdout.toString().trim());
+      expect(parsedWith.seams.controllers.length).toBe(0);
+    });
+
+    it("AC-4: Supports comma-separated and repeated --exclude flags when ignore files are absent", async () => {
       fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "dirA"), { recursive: true });
       fs.mkdirSync(path.join(tempDir, "dirB"), { recursive: true });
@@ -1562,8 +1817,10 @@ export function testSql(id: string) {
         "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
       );
 
-      // Comma-separated or repeated --exclude
-      const proc = Bun.spawnSync([
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      // 1. Comma-separated --exclude
+      const procComma = Bun.spawnSync([
         "bun",
         "run",
         cliPath,
@@ -1574,13 +1831,64 @@ export function testSql(id: string) {
         "dirA/**,dirB/**",
         "--json",
       ]);
-      expect(proc.exitCode).toBe(0);
-
-      const parsed = JSON.parse(proc.stdout.toString().trim());
-      const sqlViolations = (parsed.violations || []).filter(
+      expect(procComma.exitCode).toBe(0);
+      const parsedComma = JSON.parse(procComma.stdout.toString().trim());
+      const sqlComma = (parsedComma.violations || []).filter(
         (v: any) => v.ruleId === "sql-interpolation"
       );
-      expect(sqlViolations.length).toBe(0);
+      expect(sqlComma.length).toBe(0);
+
+      // 2. Repeated --exclude flags
+      const procRep = Bun.spawnSync([
+        "bun",
+        "run",
+        cliPath,
+        "wrap",
+        tempDir,
+        "--dry-run",
+        "--exclude",
+        "dirA/**",
+        "--exclude",
+        "dirB/**",
+        "--json",
+      ]);
+      expect(procRep.exitCode).toBe(0);
+      const parsedRep = JSON.parse(procRep.stdout.toString().trim());
+      const sqlRep = (parsedRep.violations || []).filter(
+        (v: any) => v.ruleId === "sql-interpolation"
+      );
+      expect(sqlRep.length).toBe(0);
+    });
+
+    it("AC-4: Parity across all command aliases (baba, bbyg, matryoshka, matrioska) for AC-4 when ignore files are absent", async () => {
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, "scripts"), { recursive: true });
+
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify({ name: "demo-app", scripts: { test: "bun test" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(tempDir, "bun.lock"), "");
+      fs.writeFileSync(path.join(tempDir, "README.md"), "# Demo App\n");
+
+      fs.writeFileSync(path.join(tempDir, "src/index.ts"), "export const clean = 1;");
+      fs.writeFileSync(
+        path.join(tempDir, "scripts/danger.ts"),
+        "export const q = (id: string) => `SELECT * FROM x WHERE id = ${id}`;"
+      );
+
+      expect(fs.existsSync(path.join(tempDir, ".babaignore"))).toBe(false);
+
+      for (const alias of ["baba", "bbyg", "matryoshka", "matrioska"]) {
+        const proc = Bun.spawnSync(
+          ["bun", "run", cliPath, "wrap", tempDir, "--dry-run", "--exclude", "scripts/**"],
+          { env: { ...process.env, BABA_ALIAS: alias } }
+        );
+        expect(proc.exitCode).toBe(0);
+        const output = proc.stdout.toString();
+        expect(output).not.toContain("scripts/danger.ts");
+        expect(output).not.toContain("Fix SQL injection");
+      }
     });
   });
 
