@@ -293,6 +293,51 @@ export function createGitTag(
   return result.status === 0;
 }
 
+
+/**
+ * Synchronizes package.json in repository root and all protective shells in packages/*
+ * with the new release version before npm publishing.
+ */
+export function syncPackageVersions(
+  version: string,
+  cwd: string = process.cwd(),
+): void {
+  const rootPkgPath = path.join(cwd, "package.json");
+  if (fs.existsSync(rootPkgPath)) {
+    try {
+      const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf-8"));
+      rootPkg.version = version;
+      fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + "\n", "utf-8");
+      console.log(`📦 Synchronized root package.json to version ${version}`);
+    } catch (err) {
+      console.warn("⚠️ Failed to update root package.json:", err);
+    }
+  }
+
+  const packagesDir = path.join(cwd, "packages");
+  if (fs.existsSync(packagesDir)) {
+    const entries = fs.readdirSync(packagesDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const shellPkgPath = path.join(packagesDir, entry.name, "package.json");
+        if (fs.existsSync(shellPkgPath)) {
+          try {
+            const shellPkg = JSON.parse(fs.readFileSync(shellPkgPath, "utf-8"));
+            shellPkg.version = version;
+            if (shellPkg.dependencies && shellPkg.dependencies["@maiquelleonel/matryoshka"]) {
+              shellPkg.dependencies["@maiquelleonel/matryoshka"] = `^${version}`;
+            }
+            fs.writeFileSync(shellPkgPath, JSON.stringify(shellPkg, null, 2) + "\n", "utf-8");
+            console.log(`📦 Synchronized ${entry.name} package.json to version ${version}`);
+          } catch (err) {
+            console.warn(`⚠️ Failed to update ${entry.name}/package.json:`, err);
+          }
+        }
+      }
+    }
+  }
+}
+
 /**
  * Main release automation runner.
  */
@@ -337,6 +382,8 @@ export async function runRelease(
     console.log("🧪 Dry-run mode enabled. Skipping Git tag creation and GitHub Release.");
     return;
   }
+
+  syncPackageVersions(nextVersion, cwd);
 
   console.log(`🏷️ Creating Git tag ${nextTag}...`);
   const tagCreated = createGitTag(nextTag, `Release ${nextTag}`, cwd);
