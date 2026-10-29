@@ -77,6 +77,38 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
+      - name: Synchronize package.json versions to release tag
+        run: |
+          RELEASE_TAG="${{ github.ref_name }}"
+          if [[ "$RELEASE_TAG" != v* ]]; then
+            RELEASE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+          VERSION="${RELEASE_TAG#v}"
+          if [ -n "$VERSION" ]; then
+            echo "Synchronizing package.json files to version $VERSION..."
+            bun -e '
+              const fs = require("node:fs");
+              const path = require("node:path");
+              const ver = process.argv[1];
+              const root = JSON.parse(fs.readFileSync("package.json", "utf8"));
+              root.version = ver;
+              fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
+              if (fs.existsSync("packages")) {
+                for (const dir of fs.readdirSync("packages")) {
+                  const pkgPath = path.join("packages", dir, "package.json");
+                  if (fs.existsSync(pkgPath)) {
+                    const p = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+                    p.version = ver;
+                    if (p.dependencies && p.dependencies["@maiquelleonel/matryoshka"]) {
+                      p.dependencies["@maiquelleonel/matryoshka"] = "^" + ver;
+                    }
+                    fs.writeFileSync(pkgPath, JSON.stringify(p, null, 2) + "\n");
+                  }
+                }
+              }
+            ' "$VERSION"
+          fi
+
       - name: Publish canonical package to NPM
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
