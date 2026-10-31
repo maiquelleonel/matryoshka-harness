@@ -347,9 +347,47 @@
     .terminal-chrome {
       background: #e6dacd;
       border-bottom: 2px solid var(--border-strong);
-      padding: 9px 14px;
+      padding: 8px 14px;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .btn-term-tab {
+      background: rgba(0, 0, 0, 0.08);
+      border: 1px solid var(--border-strong);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+
+    .btn-term-tab:hover {
+      background: #faeee9;
+    }
+
+    .btn-term-tab.active {
+      background: var(--red-constructivist);
+      color: #fff;
+      border-color: var(--border-strong);
+    }
+
+    .cursor-blink {
+      display: inline-block;
+      color: var(--gold-cyrillic);
+      animation: blink 0.8s infinite;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+ms: center;
       gap: 8px;
     }
 
@@ -849,7 +887,7 @@
         <a href="#" class="brand">
           <span class="brand-icon">🪆</span>
           <span class="brand-text">MATRYOSHKA</span>
-          <span class="brand-badge">v0.4.0</span>
+          <span class="brand-badge">v0.21.7</span>
         </a>
         <div class="nav-links">
           <div class="lang-switch">
@@ -1333,6 +1371,101 @@
 
     // Checagem imediata no carregamento
     updateScrollTrigger();
-  </script>
+  
+    // --- Terminal Animado Interativo (One-Shot Demo) ---
+    const termTabs = [
+      {
+        title: "terminal: bbyg fix --yes (One-Shot L4 Remediation)",
+        cmd: "bunx @maiquelleonel/matryoshka fix",
+        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</span>
+  • Target Path:     /home/dev/workspace/app
+  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span>
+
+<span style="color: #4cd964;">✨ Codebase Fortified for Coding Agents (L4 Ready):</span>
+  ✓ AGENTS.md:         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)
+  ✓ ARCHITECTURE:      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)
+  ✓ Modular Skills:    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)
+  ✓ CI Workflow:       <span style="color: #e5c07b;">.github/workflows/ci.yml</span>
+  ✓ IDE MCP Wiring:    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code
+  ✓ Harness Maturity:  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span>
+
+<span style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</span>`
+      },
+      {
+        title: "terminal: baba wrap . (Anti-Slop AST & Composite Scorer)",
+        cmd: "bunx @maiquelleonel/matryoshka wrap .",
+        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Harness² Remediation (baba wrap)</span>
+  • Target Path:      /home/dev/workspace/app
+  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)
+  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))
+  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))
+  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)
+  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)
+
+<span style="color: #5c6370;">No AST context-fencing violations detected. Repository is clean!</span>`
+      },
+      {
+        title: "terminal: baba scan . (Paladini Maturity Oracle & AST)",
+        cmd: "bunx @maiquelleonel/matryoshka scan .",
+        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</span>
+  • Root Path:   /home/dev/workspace/app
+  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span>
+  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)
+
+<span style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</span>
+  • Routes:      src/routes/api.ts
+  • Models:      src/models/user.ts
+  • Controllers: src/controllers/auth.ts
+
+<span style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</span>`
+      }
+    ];
+
+    let currentTermTab = 0;
+    let typingTimer = null;
+
+    function runTerminalAnimation(tabIndex) {
+      if (typingTimer) clearTimeout(typingTimer);
+      const data = termTabs[tabIndex];
+      const cmdEl = document.getElementById("termCmdText");
+      const outEl = document.getElementById("termOutputBody");
+      const titleEl = document.getElementById("terminalTitle");
+
+      if (!cmdEl || !outEl) return;
+
+      titleEl.textContent = data.title;
+      cmdEl.textContent = "";
+      outEl.style.display = "none";
+      outEl.innerHTML = "";
+
+      let charIdx = 0;
+      function typeChar() {
+        if (charIdx < data.cmd.length) {
+          cmdEl.textContent += data.cmd.charAt(charIdx);
+          charIdx++;
+          typingTimer = setTimeout(typeChar, 28);
+        } else {
+          typingTimer = setTimeout(() => {
+            outEl.innerHTML = data.output;
+            outEl.style.display = "block";
+          }, 350);
+        }
+      }
+      typeChar();
+    }
+
+    function switchTermTab(idx) {
+      currentTermTab = idx;
+      document.querySelectorAll(".btn-term-tab").forEach((btn, i) => {
+        btn.classList.toggle("active", i === idx);
+      });
+      runTerminalAnimation(idx);
+    }
+
+    // Inicia a animação na carga da página
+    document.addEventListener("DOMContentLoaded", () => {
+      runTerminalAnimation(0);
+    });
+</script>
 </body>
 </html>

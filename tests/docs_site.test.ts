@@ -774,6 +774,7 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
       }
 
       const validSubcommands = new Set([
+        "fix",
         "detect",
         "scan",
         "wrap",
