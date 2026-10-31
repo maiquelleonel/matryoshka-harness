@@ -238,10 +238,31 @@ async function executeHarnessScoreSubprocessInternal(
 
     const executionTimeMs = Math.round(performance.now() - startTime);
 
+    // Suporta tanto inteiros simples quanto o schema moderno de objeto do harness-score 1.8+ ({ earned: 105, max: 105 })
+    let computedScore = 0;
+    let computedMax = 105;
+    if (typeof parsed.score === "number") {
+      computedScore = parsed.score;
+    } else if (typeof parsed.score === "object" && parsed.score !== null) {
+      computedScore = Number(parsed.score.earned ?? parsed.score.score ?? 0);
+      if (typeof parsed.score.max === "number") {
+        computedMax = parsed.score.max;
+      }
+    }
+
+    // Suporta tanto string "L4" quanto o schema de objeto ({ index: 4, name: "Self-correcting" })
+    let computedLevel = "L0";
+    if (typeof parsed.level === "string") {
+      computedLevel = normalizeMaturityLevel(parsed.level);
+    } else if (typeof parsed.level === "object" && parsed.level !== null) {
+      const idx = parsed.level.index ?? 0;
+      computedLevel = normalizeMaturityLevel(`L${idx}`);
+    }
+
     return {
-      score: typeof parsed.score === "number" ? parsed.score : 0,
-      maxScore: typeof parsed.maxScore === "number" ? parsed.maxScore : 105,
-      level: normalizeMaturityLevel(parsed.level),
+      score: computedScore,
+      maxScore: typeof parsed.maxScore === "number" ? parsed.maxScore : computedMax,
+      level: normalizeMaturityLevel(computedLevel),
       gaps,
       passed,
       rawOutput: stdoutText,
@@ -571,7 +592,7 @@ export function discoverCodebaseEntities(
           routes.push(relPath);
         }
 
-        // Model patterns
+        // Model patterns (inclui Django models.py, Pydantic schemas e ORM entities)
         if (
           lowerRel.includes("/models/") ||
           lowerRel.startsWith("models/") ||
@@ -579,6 +600,10 @@ export function discoverCodebaseEntities(
           lowerRel.startsWith("entities/") ||
           lowerRel.includes("/schemas/") ||
           lowerRel.startsWith("schemas/") ||
+          lowerRel.endsWith("/models.py") ||
+          lowerRel.endsWith("models.py") ||
+          lowerRel.endsWith("/model.py") ||
+          lowerRel.endsWith("model.py") ||
           lowerRel.includes("model.") ||
           lowerRel.includes("entity.") ||
           lowerRel.includes("schema.")
@@ -586,14 +611,19 @@ export function discoverCodebaseEntities(
           models.push(relPath);
         }
 
-        // Controller patterns
+        // Controller patterns (inclui Django views.py, handlers e endpoints)
         if (
           lowerRel.includes("/controllers/") ||
           lowerRel.startsWith("controllers/") ||
           lowerRel.includes("/handlers/") ||
           lowerRel.startsWith("handlers/") ||
+          lowerRel.includes("/views/") ||
+          lowerRel.startsWith("views/") ||
+          lowerRel.endsWith("/views.py") ||
+          lowerRel.endsWith("views.py") ||
           lowerRel.includes("controller.") ||
-          lowerRel.includes("handler.")
+          lowerRel.includes("handler.") ||
+          lowerRel.includes("views.")
         ) {
           controllers.push(relPath);
         }
