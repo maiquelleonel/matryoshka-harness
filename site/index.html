@@ -930,19 +930,21 @@ ms: center;
       <div class="hero-evidence-wrapper">
         <div class="hero-evidence-card">
           <div class="terminal-chrome">
-            <span class="chrome-dot red"></span>
-            <span class="chrome-dot yellow"></span>
-            <span class="chrome-dot green"></span>
-            <span class="chrome-title">// EVIDÊNCIA REAL DE PRODUÇÃO — 88% DE ECONOMIA DE TOKENS</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="chrome-dot red"></span>
+              <span class="chrome-dot yellow"></span>
+              <span class="chrome-dot green"></span>
+              <span class="chrome-title" id="terminalTitle">terminal: bbyg fix --yes (One-Shot L4 Remediation)</span>
+            </div>
+            <div class="terminal-actions" style="display: flex; gap: 6px;">
+              <button class="btn-term-tab active" onclick="switchTermTab(0)">bbyg fix</button>
+              <button class="btn-term-tab" onclick="switchTermTab(1)">baba wrap</button>
+              <button class="btn-term-tab" onclick="switchTermTab(2)">baba scan</button>
+            </div>
           </div>
-          <div class="terminal-body-full">
-            <div class="term-line prompt"><span class="term-ps1">$</span> bunx @maiquelleonel/matryoshka agents generate --dry-run</div>
-            <div class="term-line header">🪆 Matryoshka Adaptive Agents Generator</div>
-            <div class="term-line">  • Target Stack:    <span class="val-green">FastAPI / Python (uv)</span></div>
-            <div class="term-line">  • Archetype:       <span class="val-green">api_backend</span></div>
-            <div class="term-line">  • Root AGENTS:     <span class="val-pink">176 tokens</span> <span class="val-tag">[PASS &lt; 200]</span></div>
-            <div class="term-line">  • On-Demand:       <span class="val-blue">4 modular skills in .agents/</span></div>
-            <div class="term-line footer">✓ Economia: 1.324 tokens por turno de sessão (88% de redução)</div>
+          <div class="terminal-body-full" style="min-height: 280px;">
+            <div class="term-line prompt"><span class="term-ps1">$</span> <span id="termCmdText" style="color: #61afef; font-weight: bold;"></span><span class="cursor-blink">▋</span></div>
+            <div id="termOutputBody" style="display: none; margin-top: 10px; font-family: var(--font-mono); line-height: 1.55;"></div>
           </div>
         </div>
       </div>
