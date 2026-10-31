@@ -271,7 +271,7 @@ Options:
 
 Anti-Pattern Rules Enforced:
   • raw-sql             Detects unparameterized SQL interpolation / injection (CWE-89)
-  • assertionless-test  Detects test functions missing behavioral assertions
+  • assertionless-test  Detects test functions missing behavioral assertions (requires --include-tests)
   • hardcoded-credential Detects plaintext secrets, private keys, and tokens
 
 Examples:

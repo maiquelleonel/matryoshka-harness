@@ -53,6 +53,7 @@ Identifies unparameterized string interpolations, template literals, and concate
 
 ### 2. `assertionless-test` (False-Green Hazard)
 Identifies automated test functions (`it`, `test`, `def test_*`, `func Test*`) that invoke production code but lack behavioral assertions (`expect`, `assert`, `t.Fatal`).
+* **Requirement:** Requires `--include-tests` flag, since test suites are excluded by default during production AST walks.
 * **Severity:** High (-8 points)
 * **Remediation:** Introduce deterministic assertions validating returned data and state invariants.
 
