@@ -975,18 +975,24 @@ export function generateRemediationIssue(
     };
   }
 
-  // 6. Agent Skills: SKL-01
+  // 6. Agent Skills: SKL-01 (Desacoplamento de conhecimento em skills modulares sob demanda)
   if (gapUpper === "SKL-01") {
+    const defaultSkillName = stack.testRunner && stack.testRunner !== "none" ? "run-tests" : "domain-expert";
     return {
       id: `REM-${gap.id}`,
       gapId: gap.id,
       axis,
-      title: "Scaffold Agent Skills Manifests",
+      title: "Scaffold Modular Agent Skills",
       description: gap.description || "No modular skills or slash command configurations detected.",
-      targetFiles: ["skills/matryoshka/SKILL.md", "gemini-extension.json", ".claude-plugin/plugin.json"],
+      targetFiles: [
+        `skills/${defaultSkillName}/SKILL.md`,
+        ".cursor/skills/",
+        "gemini-extension.json",
+        ".claude-plugin/plugin.json",
+      ],
       stack: stack.primary,
       priority: "medium",
-      suggestedAction: `Scaffold agent skills directory and dual manifest (Claude & Gemini CLI) with ${stack.primary} execution commands.`,
+      suggestedAction: `Scaffold modular skills directory (skills/${defaultSkillName}/SKILL.md) isolating verbose domain knowledge and ${stack.primary} toolchains outside the canonical AGENTS.md.`,
     };
   }
 
