@@ -2256,6 +2256,25 @@ export function generateAgents(
     const skillFilePath = path.join(skillsDir, def.fileName);
     const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     fs.writeFileSync(skillFilePath, skillContent, "utf-8");
+
+    // Compatibilidade com oráculos L4 e padrão Anthropic: gera subpasta com SKILL.md
+    const subSkillDir = path.join(skillsDir, skillName.replace(/^skill-/, ""));
+    if (!fs.existsSync(subSkillDir)) {
+      fs.mkdirSync(subSkillDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(subSkillDir, "SKILL.md"), skillContent, "utf-8");
+  }
+
+  // Cria um SKILL.md mestre na raiz de skillsDir se houver skills ativas
+  if (effectiveSkills.length > 0) {
+    const rootSkillMd = path.join(skillsDir, "SKILL.md");
+    if (!fs.existsSync(rootSkillMd)) {
+      fs.writeFileSync(
+        rootSkillMd,
+        "# Agent Skills Registry\n\nModular skills inventory for coding agents. See subdirectories for procedural guidelines.\n",
+        "utf-8"
+      );
+    }
   }
 
   // Gera o boilerplate de CI não-restritivo (.github/workflows/ci.yml) se solicitado via --ci
