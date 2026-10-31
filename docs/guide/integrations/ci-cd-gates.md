@@ -42,7 +42,7 @@ baba wrap --strict --threshold 80
 ```
 
 ### Deterministic Exit Codes
-* **`exit code 0` (Clean Build):** The composite Harness² score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
+* **`exit code 0` (Clean Build):** The composite Composite score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
 * **`exit code 1` (Gate Failed):** The pipeline aborts immediately if:
   1. The composite score falls below `--threshold` (e.g. `< 80`).
   2. Any **Critical** AST anti-pattern violation is detected, regardless of overall score.

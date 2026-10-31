@@ -791,6 +791,7 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         "check",
         "profile",
         "skill",
+        "migrate",
         "--dry-run",
         "--force",
         "-f",

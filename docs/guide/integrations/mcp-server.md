@@ -93,7 +93,7 @@ Compiles an ultra-lean, token-bounded root `AGENTS.md` (< 200 tokens) and genera
   * `strictTokenGuard` *(boolean, optional)*: Fail if token count exceeds budget.
 
 ### 4. `wrap_context`
-Executes deep, in-memory Abstract Syntax Tree (AST) scanning using Tree-sitter WebAssembly (WASM), identifies antipatterns (`raw-sql`, `assertionless-test`, `hardcoded-credential`), computes the Harness² Composite Score, and compiles the `DIAGNOSTIC.md` remediation plan.
+Executes deep, in-memory Abstract Syntax Tree (AST) scanning using Tree-sitter WebAssembly (WASM), identifies antipatterns (`raw-sql`, `assertionless-test`, `hardcoded-credential`), computes the Composite Composite Score, and compiles the `DIAGNOSTIC.md` remediation plan.
 
 * **Parameters:**
   * `path` *(string, optional)*: Target directory to parse and evaluate.
