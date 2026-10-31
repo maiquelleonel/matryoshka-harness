@@ -198,6 +198,7 @@ export interface TestingSkillCompilerOptions {
 
 export interface GenerateAgentsOptions {
   ci?: boolean;
+  architecture?: boolean;
   force?: boolean;
   dryRun?: boolean;
   json?: boolean;
@@ -2079,6 +2080,65 @@ export function resolveSkillContent(
  * Produz um workflow básico e não-restritivo de GitHub Actions (.github/workflows/ci.yml)
  * baseado na stack detectada, apenas para satisfazer o oráculo e garantir a esteira inicial.
  */
+/**
+ * Produz um rascunho determinístico e estruturado de ARCHITECTURE.md
+ * baseado na stack detectada e nas entidades descobertas (rotas, models, controllers),
+ * satisfazendo o gap CTX-02 para que o desenvolvedor precise apenas revisar.
+ */
+export function renderArchitectureBlueprint(
+  profile: ArchetypeProfile,
+  entities?: { routes?: string[]; models?: string[]; controllers?: string[] }
+): string {
+  const primary = (profile.runtime || "Polyglot").toUpperCase();
+  const testRunner = profile.testCommand || "none";
+  const archetypeTitle = profile.archetype.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const routesList =
+    entities?.routes && entities.routes.length > 0
+      ? entities.routes.map((r) => `* \`${r}\``).join("\n")
+      : "* Modular entrypoints and API endpoints.";
+
+  const modelsList =
+    entities?.models && entities.models.length > 0
+      ? entities.models.map((m) => `* \`${m}\``).join("\n")
+      : "* Domain models, entities, and data contracts.";
+
+  const controllersList =
+    entities?.controllers && entities.controllers.length > 0
+      ? entities.controllers.map((c) => `* \`${c}\``).join("\n")
+      : "* Application controllers, services, and business handlers.";
+
+  return `# 🏛️ Architecture Blueprint & System Boundaries
+
+## 1. System Overview
+* **Primary Ecosystem:** ${primary}
+* **System Archetype:** ${archetypeTitle}
+* **Test Harness:** \`${testRunner}\`
+* **Build / Lint:** \`${profile.buildCommand}\` | \`${profile.lintCommand}\`
+
+---
+
+## 2. Component Boundaries & Core Seams
+
+### 2.1 Interface & Route Layer
+${routesList}
+
+### 2.2 Domain Entities & Data Models
+${modelsList}
+
+### 2.3 Application Controllers & Business Logic
+${controllersList}
+
+---
+
+## 3. Operational Invariants for AI Agents
+1. **The Seam Preservation:** Do not bypass boundary contracts defined in route handlers and model schemas.
+2. **Deterministic Verification:** Always execute \`${testRunner}\` before proposing commits.
+3. **Hermetic Modularity:** Keep modifications strictly confined to relevant domain components.
+`;
+}
+
+
 export function renderCiWorkflowBoilerplate(primary: string, testRunner?: string): string {
   if (primary === "python") {
     const runCmd = testRunner && testRunner !== "none" ? `uv run ${testRunner}` : "uv run pytest";
@@ -2274,6 +2334,20 @@ export function generateAgents(
         "# Agent Skills Registry\n\nModular skills inventory for coding agents. See subdirectories for procedural guidelines.\n",
         "utf-8"
       );
+    }
+  }
+
+  // Gera o rascunho de ARCHITECTURE.md se solicitado via --architecture ou bbyg fix
+  if (options.architecture) {
+    const archPath = path.join(root, "ARCHITECTURE.md");
+    if (!fs.existsSync(archPath) || options.force) {
+      const archContent = renderArchitectureBlueprint(effectiveProfile, undefined);
+      fs.writeFileSync(archPath, archContent, "utf-8");
+      plannedFiles.push({
+        path: "ARCHITECTURE.md",
+        type: "skill",
+        tokens: 150,
+      });
     }
   }
 
