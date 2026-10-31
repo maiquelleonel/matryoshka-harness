@@ -80,6 +80,7 @@ Flags dynamic string interpolations, template literals, and runtime string conca
   ```
 
 ### Rule 2: `assertionless-test` (False-Green Hazard)
+> ⚠️ **Flag Requirement:** Test directories (`tests/`, `__tests__/`, `*_test.go`) are excluded from default AST passes to ensure sub-200ms speed. You **must pass `--include-tests`** to activate this rule (e.g., `baba wrap --include-tests`).
 LLMs frequently hallucinate tests that invoke application logic and mock return values, but never assert that anything actually succeeded. These tests pass trivially even when core business logic breaks.
 
 * **Target Function Identifiers:**

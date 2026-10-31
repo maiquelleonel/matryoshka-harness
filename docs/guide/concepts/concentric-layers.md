@@ -137,7 +137,7 @@ Regex search and superficial text linters cannot understand code structure. Laye
 * **Sub-200ms Execution:** Parses polyglot source trees (TypeScript, JavaScript, Python, Go, Rust) in memory without requiring host C/C++ or language toolchains.
 * **The 3 Canonical Antipattern Rules:**
   1. **`raw-sql` (CWE-89):** Identifies dynamic string concatenations, template literals, and f-strings fed into database query expressions.
-  2. **`assertionless-test`:** Detects empty test functions or test suites that mock dependencies without executing real behavioral assertions (`expect`, `assert`, `t.Fatal`).
+  2. **`assertionless-test`:** Detects empty test functions or test suites that mock dependencies without executing real behavioral assertions (`expect`, `assert`, `t.Fatal`). *(Note: Test suites are excluded by default to optimize latency; pass `--include-tests` to scan test files)*.
   3. **`hardcoded-credential`:** Detects high-entropy string literals (Shannon entropy $H(S) > 3.0$) and recognized secret tokens (`sk_live_`, `ghp_`, `AKIA`) embedded in source nodes.
 * **Composite Composite Scoring:** Combines Layer 1 hygiene with Layer 4 AST health:
   ```text
