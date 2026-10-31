@@ -34,7 +34,7 @@ Like traditional nested nesting dolls (*matryoshkas*), each concentric governanc
 | | +-----------------------------------------------------------------+ | |
 | | | LAYER 3: Adaptive AGENTS.md & Modular Skills (baba agents)      | | |
 | | | - Root AGENTS.md strictly under 200 tokens (Token Guard < 250)  | | |
-| | | - On-demand .agents/skills/*.md with strict YAML frontmatter    | | |
+| | | - On-demand .agents/skills/<domain>/SKILL.md with strict YAML frontmatter    | | |
 | | | +-------------------------------------------------------------+ | | |
 | | | | LAYER 2: Semantic Code Graph Integration (codebase-memory)  | | | |
 | | | | - Cross-references static file paths with codebase memory   | | | |

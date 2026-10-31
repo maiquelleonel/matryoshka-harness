@@ -1074,7 +1074,7 @@ ms: center;
             <span class="step-badge" data-i18n="step3_badge">Terceira Casca • Camada 3</span>
             <h3 class="step-title" data-i18n="step3_title">AGENTS.md Adaptativo &amp; Skills Modulares</h3>
             <p class="step-desc">
-              <span data-i18n="step3_desc">Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.</span>
+              <span data-i18n="step3_desc">Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/<domain>/SKILL.md</code> sob demanda com YAML frontmatter.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Compile lean boundary without touching disk:</span>
 <span class="keyword">baba</span> agents generate --dry-run</code></pre>
@@ -1215,7 +1215,7 @@ ms: center;
         step4_desc: "Parser sintático em WebAssembly Tree-sitter varrendo TypeScript, Python e Go em &lt; 200ms. Elimina testes falsos sem asserção, injeção dinâmica de SQL e credenciais hardcoded antes do push.",
         step3_badge: "Terceira Casca • Camada 3",
         step3_title: "AGENTS.md Adaptativo & Skills Modulares",
-        step3_desc: "Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.",
+        step3_desc: "Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/<domain>/SKILL.md</code> sob demanda com YAML frontmatter.",
         step2_badge: "Quarta Casca • Camada 2",
         step2_title: "Integração com o Grafo Semântico de Código",
         step2_desc: "Cruza caminhos estáticos de arquivos com o grafo de conhecimento da base de código (codebase-memory-mcp). Mapeia rotas, serviços e fluxo de chamadas antes de qualquer alteração cirúrgica do agente.",
@@ -1260,7 +1260,7 @@ ms: center;
         step4_desc: "WebAssembly Tree-sitter parser scanning TypeScript, Python, and Go in &lt; 200ms. Eliminates false-green tests without assertions, uncaught dynamic SQL injection, and hardcoded secrets before git push.",
         step3_badge: "Third Shell • Layer 3",
         step3_title: "Adaptive AGENTS.md & Modular Skills",
-        step3_desc: "Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/*.md</code> with strict YAML frontmatter.",
+        step3_desc: "Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/<domain>/SKILL.md</code> with strict YAML frontmatter.",
         step2_badge: "Fourth Shell • Layer 2",
         step2_title: "Semantic Code Graph Integration",
         step2_desc: "Crosses static filesystem paths with the codebase knowledge graph (codebase-memory-mcp). Maps routes, services, and call flows before an agent initiates a surgical change.",
