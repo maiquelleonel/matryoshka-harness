@@ -36,7 +36,7 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
                 └───────────────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
-                        │   Composite Scorer   │
+                        │  Remediation Engine  │
                         │   Score = Base*0.4 + AST*0.6  │
                         └───────────────┬───────────────┘
                                         ▼
@@ -117,28 +117,11 @@ Identifies plaintext credentials, tokens, and private keys embedded in source co
      Strings with entropy > 3.0 and length $\ge 16$ characters are flagged as potential high-entropy credentials.
 * **Exempt Patterns:** Environment variable readings (`process.env.KEY`, `os.environ.get("KEY")`, `os.Getenv("KEY")`) and trivial configuration placeholders are exempt.
 
----
 
-## 📊 3. Composite Scoring Model (`baba wrap`)
-
-Rather than evaluating code quality in isolation, Matryoshka computes a unified **Composite Score** combining repository hygiene with deep AST context health:
-
-```text
-Composite Score = (Base Oracle Score × 0.4) + (AST Context Health × 0.6)
-```
-
-### AST Context Health Calculation:
-Starting from a baseline of 100 points, deductions are calculated by violation severity:
-* **Critical (`raw-sql`, hardcoded secrets):** -15 points per occurrence
-* **High (`assertionless-test`):** -8 points per occurrence
-* **Medium (structural boundary leaks):** -4 points per occurrence
-* **Low (code smell / anti-slop warning):** -2 points per occurrence
-
-The resulting AST health score is strictly clamped to the interval 0 to 100.
 
 ---
 
-## 📝 4. Actionable Remediation: `DIAGNOSTIC.md`
+## 📝 3. Actionable Remediation: `DIAGNOSTIC.md`
 
 When violations are detected, developers and AI agents do not need to parse obscure terminal logs. `baba wrap` compiles an anti-slop, human- and machine-readable remediation plan to **`DIAGNOSTIC.md`**:
 
@@ -151,7 +134,7 @@ To prevent downstream context window exhaustion when feeding the diagnostic repo
 # 🛡️ Matryoshka Diagnostic & Harness² Remediation Report
 
 **Target:** `/workspace/my-project`  
-**Composite Score:** **78 / 100** [Status: NEEDS REMEDIATION]
+**Status:** [NEEDS REMEDIATION]
 
 ---
 

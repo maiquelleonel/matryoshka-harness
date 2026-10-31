@@ -437,10 +437,8 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         expect(content).toContain("hardcoded-credential");
       });
 
-      it("documents Harness² composite score calculation and DIAGNOSTIC.md report generation", () => {
+      it("documents DIAGNOSTIC.md report generation and token ceiling bounds", () => {
         const content = fs.readFileSync(wrapPath, "utf-8");
-        expect(content).toContain("0.4");
-        expect(content).toContain("0.6");
         expect(content).toContain("DIAGNOSTIC.md");
         expect(content).toContain("1,500");
       });

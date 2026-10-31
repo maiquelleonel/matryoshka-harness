@@ -140,10 +140,7 @@ Regex search and superficial text linters cannot understand code structure. Laye
   1. **`raw-sql` (CWE-89):** Identifies dynamic string concatenations, template literals, and f-strings fed into database query expressions.
   2. **`assertionless-test`:** Detects empty test functions or test suites that mock dependencies without executing real behavioral assertions (`expect`, `assert`, `t.Fatal`). *(Note: Test suites are excluded by default to optimize latency; pass `--include-tests` to scan test files)*.
   3. **`hardcoded-credential`:** Detects high-entropy string literals (Shannon entropy $H(S) > 3.0$) and recognized secret tokens (`sk_live_`, `ghp_`, `AKIA`) embedded in source nodes.
-* **Composite Composite Scoring:** Combines Layer 1 hygiene with Layer 4 AST health:
-  ```text
-Composite Score = (Base Oracle × 0.4) + (AST Health × 0.6)
-```
+
 * **Remediation Compiler (`DIAGNOSTIC.md`):** Deterministically compiles a surgical remediation plan capped strictly under 1,500 tokens.
 
 For complete rule schemas and AST traversal mechanics, read the [Polyglot AST Engine Guide](ast-engine.md).
