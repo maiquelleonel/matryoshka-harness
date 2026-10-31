@@ -115,6 +115,7 @@ jobs:
         run: |
           # Remove standalone binaries from dist before packaging for NPM (they are already attached to GitHub Release)
           rm -rf dist/bin
+          npm whoami
           npm publish --access public
 
       - name: Publish protective typosquatting shells to NPM
