@@ -1210,6 +1210,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         // 2. Generate Agents & Modular Skills & CI workflow
         const agentsResult = generateAgents(resolvedPath, {
           ci: isCi,
+          architecture: true,
           force: isForce,
           dryRun: isDryRun,
           yes: true,
@@ -1250,6 +1251,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         } else {
           console.log(pc.bold(pc.green("\n✨ Codebase Fortified for Coding Agents:")));
           console.log(`  ${pc.dim("✓")} ${pc.bold("AGENTS.md:")}         ${pc.green(agentsResult.rootAgentsPath)} (~${agentsResult.rootTokens} tokens)`);
+          console.log(`  ${pc.dim("✓")} ${pc.bold("ARCHITECTURE:")}      ${pc.green("ARCHITECTURE.md")} (Blueprint draft ready for review)`);
           console.log(`  ${pc.dim("✓")} ${pc.bold("Modular Skills:")}    ${pc.blue(agentsResult.skillsDir)} (${agentsResult.plannedFiles.filter(f => f.type === "skill").length} active)`);
           if (isCi) {
             console.log(`  ${pc.dim("✓")} ${pc.bold("CI Workflow:")}       ${pc.cyan(".github/workflows/ci.yml")}`);

@@ -348,7 +348,7 @@ export function evaluateInMemoryFallback(targetDir: string): HarnessScoreResult 
   }
 
   // 2. Skills Axis (15 pts max)
-  if (exists("skills") || exists(".claude-plugin") || exists("gemini-extension.json")) {
+  if (exists("skills") || exists(".agents/skills") || exists(".cursor/skills") || exists(".claude-plugin") || exists("gemini-extension.json")) {
     score += 15;
     passed.push("SKL-01");
   } else {
