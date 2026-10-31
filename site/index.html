@@ -332,7 +332,8 @@
     }
 
     .hero-evidence-wrapper {
-      max-width: 760px;
+      max-width: 980px;
+      width: 100%;
       margin: 0 auto;
     }
 
@@ -393,14 +394,16 @@ ms: center;
     }
 
     .chrome-dot {
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      border: 1px solid var(--border-strong);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      display: inline-block;
+      flex-shrink: 0;
     }
-    .chrome-dot.red { background: #e05244; }
-    .chrome-dot.yellow { background: #f3a615; }
-    .chrome-dot.green { background: #52c462; }
+    .chrome-dot.red { background: #e05244 !important; }
+    .chrome-dot.yellow { background: #f3a615 !important; }
+    .chrome-dot.green { background: #52c462 !important; }
 
     .chrome-title {
       font-family: var(--font-mono);
@@ -412,12 +415,36 @@ ms: center;
     }
 
     .terminal-body-full {
-      background: var(--terminal-bg);
+      background: #12100f;
       color: var(--terminal-text);
       font-family: var(--font-mono);
-      font-size: 0.86rem;
-      padding: 20px 24px;
+      font-size: 0.88rem;
+      padding: 22px 28px;
       line-height: 1.6;
+      max-height: 380px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+
+    /* Scrollbar retrô estilizada */
+    .terminal-body-full::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .terminal-body-full::-webkit-scrollbar-track {
+      background: #1a1716;
+    }
+    .terminal-body-full::-webkit-scrollbar-thumb {
+      background: #3d3733;
+      border: 1px solid var(--border-strong);
+    }
+    .terminal-body-full::-webkit-scrollbar-thumb:hover {
+      background: var(--gold-cyrillic);
+    }
+
+    #termOutputBody {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .term-line.prompt {
@@ -1380,47 +1407,17 @@ ms: center;
       {
         title: "terminal: bbyg fix --yes (One-Shot L4 Remediation)",
         cmd: "bunx @maiquelleonel/matryoshka fix",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</span>
-  • Target Path:     /home/dev/workspace/app
-  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span>
-
-<span style="color: #4cd964;">✨ Codebase Fortified for Coding Agents (L4 Ready):</span>
-  ✓ AGENTS.md:         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)
-  ✓ ARCHITECTURE:      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)
-  ✓ Modular Skills:    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)
-  ✓ CI Workflow:       <span style="color: #e5c07b;">.github/workflows/ci.yml</span>
-  ✓ IDE MCP Wiring:    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code
-  ✓ Harness Maturity:  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span>
-
-<span style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</div><div style="color: #928b81;">  • Target Path:     /home/dev/workspace/app</div><div style="color: #928b81;">  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span></div><br><div style="color: #4cd964; font-weight: bold; margin-bottom: 4px;">✨ Codebase Fortified for Coding Agents (L4 Ready):</div><div>  <span style="color: #4cd964;">✓</span> <b>AGENTS.md:</b>         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)</div><div>  <span style="color: #4cd964;">✓</span> <b>ARCHITECTURE:</b>      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)</div><div>  <span style="color: #4cd964;">✓</span> <b>Modular Skills:</b>    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)</div><div>  <span style="color: #4cd964;">✓</span> <b>CI Workflow:</b>       <span style="color: #e5c07b;">.github/workflows/ci.yml</span></div><div>  <span style="color: #4cd964;">✓</span> <b>IDE MCP Wiring:</b>    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code</div><div>  <span style="color: #4cd964;">✓</span> <b>Harness Maturity:</b>  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span></div><br><div style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</div>`
       },
       {
         title: "terminal: baba wrap . (Anti-Slop AST & Composite Scorer)",
         cmd: "bunx @maiquelleonel/matryoshka wrap .",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Harness² Remediation (baba wrap)</span>
-  • Target Path:      /home/dev/workspace/app
-  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)
-  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))
-  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))
-  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)
-  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)
-
-<span style="color: #5c6370;">No AST context-fencing violations detected. Repository is clean!</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Harness² Remediation (baba wrap)</div><div style="color: #928b81;">  • Target Path:      /home/dev/workspace/app</div><div>  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)</div><div>  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))</div><div>  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))</div><div>  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)</div><div>  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)</div><br><div style="color: #52c462;">✔ No AST context-fencing violations detected. Repository is clean!</div>`
       },
       {
         title: "terminal: baba scan . (Paladini Maturity Oracle & AST)",
         cmd: "bunx @maiquelleonel/matryoshka scan .",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</span>
-  • Root Path:   /home/dev/workspace/app
-  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span>
-  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)
-
-<span style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</span>
-  • Routes:      src/routes/api.ts
-  • Models:      src/models/user.ts
-  • Controllers: src/controllers/auth.ts
-
-<span style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</div><div style="color: #928b81;">  • Root Path:   /home/dev/workspace/app</div><div>  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span></div><div>  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)</div><br><div style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</div><div>  • Routes:      src/routes/api.ts</div><div>  • Models:      src/models/user.ts</div><div>  • Controllers: src/controllers/auth.ts</div><br><div style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</div>`
       }
     ];
 
