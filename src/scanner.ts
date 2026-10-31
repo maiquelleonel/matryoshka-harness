@@ -238,10 +238,31 @@ async function executeHarnessScoreSubprocessInternal(
 
     const executionTimeMs = Math.round(performance.now() - startTime);
 
+    // Suporta tanto inteiros simples quanto o schema moderno de objeto do harness-score 1.8+ ({ earned: 105, max: 105 })
+    let computedScore = 0;
+    let computedMax = 105;
+    if (typeof parsed.score === "number") {
+      computedScore = parsed.score;
+    } else if (typeof parsed.score === "object" && parsed.score !== null) {
+      computedScore = Number(parsed.score.earned ?? parsed.score.score ?? 0);
+      if (typeof parsed.score.max === "number") {
+        computedMax = parsed.score.max;
+      }
+    }
+
+    // Suporta tanto string "L4" quanto o schema de objeto ({ index: 4, name: "Self-correcting" })
+    let computedLevel = "L0";
+    if (typeof parsed.level === "string") {
+      computedLevel = normalizeMaturityLevel(parsed.level);
+    } else if (typeof parsed.level === "object" && parsed.level !== null) {
+      const idx = parsed.level.index ?? 0;
+      computedLevel = normalizeMaturityLevel(`L${idx}`);
+    }
+
     return {
-      score: typeof parsed.score === "number" ? parsed.score : 0,
-      maxScore: typeof parsed.maxScore === "number" ? parsed.maxScore : 105,
-      level: normalizeMaturityLevel(parsed.level),
+      score: computedScore,
+      maxScore: typeof parsed.maxScore === "number" ? parsed.maxScore : computedMax,
+      level: normalizeMaturityLevel(computedLevel),
       gaps,
       passed,
       rawOutput: stdoutText,
@@ -295,7 +316,7 @@ export function evaluateInMemoryFallback(targetDir: string): HarnessScoreResult 
       axis: "context",
       title: "Missing root AGENTS.md context fence",
       description: "Codebase lacks root operational guidelines for coding agents.",
-      remediation: "Run 'baba wrap .' to generate tailored AGENTS.md.",
+      remediation: "Run 'bbyg agents generate --ci --yes' to scaffold tailored AGENTS.md, modular skills, and baseline CI workflow.",
       weight: 15,
     });
   }
@@ -478,6 +499,83 @@ export async function executeHarnessScore(
  * Scans a target repository directory for actual routes, models, and controllers.
  * Operates safely with depth bounds and skips heavy or alien directories.
  */
+/**
+ * Validação semântica em nível de AST/código para confirmar se um arquivo
+ * realmente define modelos de dados e entidades ORM (Django models.Model,
+ * SQLAlchemy DeclarativeBase, Pydantic BaseModel, ActiveRecord, TypeORM @Entity, Prisma, etc).
+ */
+export function isSemanticModelSource(content: string, filePath: string): boolean {
+  if (!content || typeof content !== "string") return false;
+
+  // 1. Python: Django models.Model, SQLAlchemy, Pydantic, Peewee, Tortoise
+  if (filePath.endsWith(".py")) {
+    const pyClassInheritance = /class\s+[A-Za-z0-9_]+\s*\(([^)]+)\)\s*:/g;
+    let match: RegExpExecArray | null;
+    while ((match = pyClassInheritance.exec(content)) !== null) {
+      const bases = match[1] || "";
+      if (
+        /\b(?:models\.)?Model\b/.test(bases) ||
+        /\b(?:sa\.)?DeclarativeBase\b/.test(bases) ||
+        /\bBaseModel\b/.test(bases) ||
+        /\bAbstract(?:Base)?User\b/.test(bases) ||
+        /\b(?:sa\.)?declarative_base\b/.test(bases) ||
+        /\bpeewee\.Model\b/.test(bases) ||
+        /\btortoise\.models\.Model\b/.test(bases)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // 2. TypeScript / JavaScript: TypeORM (@Entity), Prisma, Drizzle, Mongoose, Zod schemas, Sequelize, interfaces/types de entidade
+  if (filePath.endsWith(".ts") || filePath.endsWith(".js") || filePath.endsWith(".tsx")) {
+    if (
+      /@Entity\s*\(/.test(content) ||
+      /@Table\s*\(/.test(content) ||
+      /new\s+(?:mongoose\.)?Schema\s*\(/.test(content) ||
+      /z\.object\s*\(/.test(content) ||
+      /defineTable\s*\(/.test(content) ||
+      /pgTable\s*\(/.test(content) ||
+      /sqliteTable\s*\(/.test(content) ||
+      /class\s+[A-Za-z0-9_]+\s+extends\s+(?:Sequelize\.)?Model\b/.test(content) ||
+      /export\s+(?:interface|type)\s+[A-Za-z0-9_]+/.test(content)
+    ) {
+      return true;
+    }
+  }
+
+  // 1b. Python fallback para arquivos dentro de pastas models/ ou classes em models/
+  if (filePath.endsWith(".py") && (filePath.includes("/models/") || filePath.startsWith("models/"))) {
+    if (/class\s+[A-Za-z0-9_]+/.test(content) || content.trim().length <= 50) {
+      return true;
+    }
+  }
+
+  // 3. Ruby: ActiveRecord::Base, ApplicationRecord
+  if (filePath.endsWith(".rb")) {
+    if (/class\s+[A-Za-z0-9_]+\s*<\s*(?:ActiveRecord::Base|ApplicationRecord)\b/.test(content)) {
+      return true;
+    }
+  }
+
+  // 4. Go: Structs com tags db:, json:, gorm:
+  if (filePath.endsWith(".go")) {
+    if (/type\s+[A-Za-z0-9_]+\s+struct\s*\{[^}]*`(?:gorm|db|bson):/.test(content)) {
+      return true;
+    }
+  }
+
+  // 5. Rust: Diesel, SeaORM, SQLx derives
+  if (filePath.endsWith(".rs")) {
+    if (/#\[derive\([^)]*\b(?:Model|Entity|DeriveEntityModel|FromRow)\b[^)]*\)\]/.test(content)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
 export function discoverCodebaseEntities(
   targetDir: string,
   options?: { includeTests?: boolean; exclude?: string | string[]; excludePatterns?: string | string[] }
@@ -571,29 +669,55 @@ export function discoverCodebaseEntities(
           routes.push(relPath);
         }
 
-        // Model patterns
-        if (
+        // Model patterns: Primeiro filtra candidatos por convenção de arquivo
+        const isCandidateModelFile =
           lowerRel.includes("/models/") ||
           lowerRel.startsWith("models/") ||
           lowerRel.includes("/entities/") ||
           lowerRel.startsWith("entities/") ||
           lowerRel.includes("/schemas/") ||
           lowerRel.startsWith("schemas/") ||
+          lowerRel.endsWith("/models.py") ||
+          lowerRel.endsWith("models.py") ||
+          lowerRel.endsWith("/model.py") ||
+          lowerRel.endsWith("model.py") ||
           lowerRel.includes("model.") ||
           lowerRel.includes("entity.") ||
-          lowerRel.includes("schema.")
-        ) {
-          models.push(relPath);
+          lowerRel.includes("schema.");
+
+        if (isCandidateModelFile) {
+          // Validação em nível de AST/código: confirma se realmente herda de models.Model, DeclarativeBase, etc.
+          let isTrueModel = false;
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.size <= 200 * 1024) {
+              const fileContent = fs.readFileSync(fullPath, "utf-8");
+              isTrueModel = isSemanticModelSource(fileContent, fullPath);
+            } else {
+              isTrueModel = true; // Arquivos gigantes mantém como candidato defensivo
+            }
+          } catch {
+            isTrueModel = false;
+          }
+
+          if (isTrueModel) {
+            models.push(relPath);
+          }
         }
 
-        // Controller patterns
+        // Controller patterns (inclui Django views.py, handlers e endpoints)
         if (
           lowerRel.includes("/controllers/") ||
           lowerRel.startsWith("controllers/") ||
           lowerRel.includes("/handlers/") ||
           lowerRel.startsWith("handlers/") ||
+          lowerRel.includes("/views/") ||
+          lowerRel.startsWith("views/") ||
+          lowerRel.endsWith("/views.py") ||
+          lowerRel.endsWith("views.py") ||
           lowerRel.includes("controller.") ||
-          lowerRel.includes("handler.")
+          lowerRel.includes("handler.") ||
+          lowerRel.includes("views.")
         ) {
           controllers.push(relPath);
         }
@@ -851,18 +975,24 @@ export function generateRemediationIssue(
     };
   }
 
-  // 6. Agent Skills: SKL-01
+  // 6. Agent Skills: SKL-01 (Desacoplamento de conhecimento em skills modulares sob demanda)
   if (gapUpper === "SKL-01") {
+    const defaultSkillName = stack.testRunner && stack.testRunner !== "none" ? "run-tests" : "domain-expert";
     return {
       id: `REM-${gap.id}`,
       gapId: gap.id,
       axis,
-      title: "Scaffold Agent Skills Manifests",
+      title: "Scaffold Modular Agent Skills",
       description: gap.description || "No modular skills or slash command configurations detected.",
-      targetFiles: ["skills/matryoshka/SKILL.md", "gemini-extension.json", ".claude-plugin/plugin.json"],
+      targetFiles: [
+        `skills/${defaultSkillName}/SKILL.md`,
+        ".cursor/skills/",
+        "gemini-extension.json",
+        ".claude-plugin/plugin.json",
+      ],
       stack: stack.primary,
       priority: "medium",
-      suggestedAction: `Scaffold agent skills directory and dual manifest (Claude & Gemini CLI) with ${stack.primary} execution commands.`,
+      suggestedAction: `Scaffold modular skills directory (skills/${defaultSkillName}/SKILL.md) isolating verbose domain knowledge and ${stack.primary} toolchains outside the canonical AGENTS.md.`,
     };
   }
 
