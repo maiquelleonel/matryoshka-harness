@@ -1,3 +1,4 @@
+site_url: https://matryoshka.leonellabshq.dev/docs/
 site_name: Matryoshka-Harness
 site_description: "Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for Coding Agents"
 site_author: "Maiquel Leonel"
@@ -68,6 +69,7 @@ nav:
       - Polyglot AST Engine: concepts/ast-engine.md
       - Adaptive Agents: concepts/adaptive-agents.md
   - CLI Reference:
+      - bbyg fix (One-Shot): cli/fix.md
       - baba detect: cli/detect.md
       - baba scan: cli/scan.md
       - baba wrap: cli/wrap.md
