@@ -499,6 +499,83 @@ export async function executeHarnessScore(
  * Scans a target repository directory for actual routes, models, and controllers.
  * Operates safely with depth bounds and skips heavy or alien directories.
  */
+/**
+ * Validação semântica em nível de AST/código para confirmar se um arquivo
+ * realmente define modelos de dados e entidades ORM (Django models.Model,
+ * SQLAlchemy DeclarativeBase, Pydantic BaseModel, ActiveRecord, TypeORM @Entity, Prisma, etc).
+ */
+export function isSemanticModelSource(content: string, filePath: string): boolean {
+  if (!content || typeof content !== "string") return false;
+
+  // 1. Python: Django models.Model, SQLAlchemy, Pydantic, Peewee, Tortoise
+  if (filePath.endsWith(".py")) {
+    const pyClassInheritance = /class\s+[A-Za-z0-9_]+\s*\(([^)]+)\)\s*:/g;
+    let match: RegExpExecArray | null;
+    while ((match = pyClassInheritance.exec(content)) !== null) {
+      const bases = match[1] || "";
+      if (
+        /\b(?:models\.)?Model\b/.test(bases) ||
+        /\b(?:sa\.)?DeclarativeBase\b/.test(bases) ||
+        /\bBaseModel\b/.test(bases) ||
+        /\bAbstract(?:Base)?User\b/.test(bases) ||
+        /\b(?:sa\.)?declarative_base\b/.test(bases) ||
+        /\bpeewee\.Model\b/.test(bases) ||
+        /\btortoise\.models\.Model\b/.test(bases)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // 2. TypeScript / JavaScript: TypeORM (@Entity), Prisma, Drizzle, Mongoose, Zod schemas, Sequelize, interfaces/types de entidade
+  if (filePath.endsWith(".ts") || filePath.endsWith(".js") || filePath.endsWith(".tsx")) {
+    if (
+      /@Entity\s*\(/.test(content) ||
+      /@Table\s*\(/.test(content) ||
+      /new\s+(?:mongoose\.)?Schema\s*\(/.test(content) ||
+      /z\.object\s*\(/.test(content) ||
+      /defineTable\s*\(/.test(content) ||
+      /pgTable\s*\(/.test(content) ||
+      /sqliteTable\s*\(/.test(content) ||
+      /class\s+[A-Za-z0-9_]+\s+extends\s+(?:Sequelize\.)?Model\b/.test(content) ||
+      /export\s+(?:interface|type)\s+[A-Za-z0-9_]+/.test(content)
+    ) {
+      return true;
+    }
+  }
+
+  // 1b. Python fallback para arquivos dentro de pastas models/ ou classes em models/
+  if (filePath.endsWith(".py") && (filePath.includes("/models/") || filePath.startsWith("models/"))) {
+    if (/class\s+[A-Za-z0-9_]+/.test(content) || content.trim().length <= 50) {
+      return true;
+    }
+  }
+
+  // 3. Ruby: ActiveRecord::Base, ApplicationRecord
+  if (filePath.endsWith(".rb")) {
+    if (/class\s+[A-Za-z0-9_]+\s*<\s*(?:ActiveRecord::Base|ApplicationRecord)\b/.test(content)) {
+      return true;
+    }
+  }
+
+  // 4. Go: Structs com tags db:, json:, gorm:
+  if (filePath.endsWith(".go")) {
+    if (/type\s+[A-Za-z0-9_]+\s+struct\s*\{[^}]*`(?:gorm|db|bson):/.test(content)) {
+      return true;
+    }
+  }
+
+  // 5. Rust: Diesel, SeaORM, SQLx derives
+  if (filePath.endsWith(".rs")) {
+    if (/#\[derive\([^)]*\b(?:Model|Entity|DeriveEntityModel|FromRow)\b[^)]*\)\]/.test(content)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
 export function discoverCodebaseEntities(
   targetDir: string,
   options?: { includeTests?: boolean; exclude?: string | string[]; excludePatterns?: string | string[] }
@@ -592,8 +669,8 @@ export function discoverCodebaseEntities(
           routes.push(relPath);
         }
 
-        // Model patterns (inclui Django models.py, Pydantic schemas e ORM entities)
-        if (
+        // Model patterns: Primeiro filtra candidatos por convenção de arquivo
+        const isCandidateModelFile =
           lowerRel.includes("/models/") ||
           lowerRel.startsWith("models/") ||
           lowerRel.includes("/entities/") ||
@@ -606,9 +683,26 @@ export function discoverCodebaseEntities(
           lowerRel.endsWith("model.py") ||
           lowerRel.includes("model.") ||
           lowerRel.includes("entity.") ||
-          lowerRel.includes("schema.")
-        ) {
-          models.push(relPath);
+          lowerRel.includes("schema.");
+
+        if (isCandidateModelFile) {
+          // Validação em nível de AST/código: confirma se realmente herda de models.Model, DeclarativeBase, etc.
+          let isTrueModel = false;
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.size <= 200 * 1024) {
+              const fileContent = fs.readFileSync(fullPath, "utf-8");
+              isTrueModel = isSemanticModelSource(fileContent, fullPath);
+            } else {
+              isTrueModel = true; // Arquivos gigantes mantém como candidato defensivo
+            }
+          } catch {
+            isTrueModel = false;
+          }
+
+          if (isTrueModel) {
+            models.push(relPath);
+          }
         }
 
         // Controller patterns (inclui Django views.py, handlers e endpoints)
