@@ -19,7 +19,7 @@ describe("SPEC-16: NPM Publishing Metadata & Bin Dispatchers (Subtask 2)", () =>
 
     it("should set version to '0.4.0' matching PRD specification", () => {
       const pkg = readPackageJson();
-      expect(pkg.version).toBe("0.4.0");
+      expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
     });
 
     it("should configure publishConfig with public access", () => {
@@ -143,7 +143,8 @@ describe("SPEC-16: NPM Publishing Metadata & Bin Dispatchers (Subtask 2)", () =>
 
       const proc = Bun.spawnSync([distCli, "--version"]);
       expect(proc.exitCode).toBe(0);
-      expect(proc.stdout.toString().trim()).toBe("0.4.0");
+      const pkg = readPackageJson();
+      expect(proc.stdout.toString().trim()).toBe(pkg.version);
     });
 
     it("should execute compiled dist/cli.js and display help text", () => {

@@ -50,7 +50,23 @@ import {
 } from "./report";
 import type { DetectResult, McpTargetName, ProjectStack } from "./types";
 
-const VERSION = "0.4.0";
+function resolveCliVersion(): string {
+  try {
+    // Procura o package.json relativo ao dist ou src
+    for (const relPath of ["../package.json", "../../package.json", "./package.json"]) {
+      const target = path.resolve(__dirname, relPath);
+      if (fs.existsSync(target)) {
+        const pkg = JSON.parse(fs.readFileSync(target, "utf-8"));
+        if (pkg.name === "@maiquelleonel/matryoshka" && pkg.version) {
+          return pkg.version;
+        }
+      }
+    }
+  } catch {}
+  return "0.21.1";
+}
+
+const VERSION = resolveCliVersion();
 
 const HELP_TEXT = `
 Matryoshka-Harness CLI (baba / bbyg / matryoshka)
