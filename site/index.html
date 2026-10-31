@@ -1462,10 +1462,12 @@ ms: center;
       runTerminalAnimation(idx);
     }
 
-    // Inicia a animação na carga da página
-    document.addEventListener("DOMContentLoaded", () => {
+    // Inicia a animação imediatamente (robusto para file:// e HTTP)
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => runTerminalAnimation(0));
+    } else {
       runTerminalAnimation(0);
-    });
+    }
 </script>
 </body>
 </html>
