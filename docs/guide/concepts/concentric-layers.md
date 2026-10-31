@@ -115,12 +115,13 @@ Static files on disk do not tell the whole story. Layer 2 integrates with **`cod
 Layer 3 solves the **Token Bloat** crisis. Dumping a 1,500-line monolithic rules document into every agent prompt wastes budget and guarantees that models disregard instructions:
 
 * **Hyper-Lean Master Fence:** Generates a root `AGENTS.md` strictly under 200 tokens (with a strict Token Guard hard limit of < 250 tokens). It defines archetype identity, canonical test/build/lint commands, and non-negotiable anti-slop rules (YAGNI, DRY, no unprompted refactoring).
-* **On-Demand Scoped Skills (`.agents/skills/`):** Decomposes deep domain rules into modular files:
-  * `skill-backend.md`: ORM patterns, transaction boundaries, anti-N+1 query rules.
-  * `skill-frontend.md`: A11y, Cumulative Layout Shift (CLS) prevention, pure state rendering.
-  * `skill-database.md`: Zero-downtime migrations, concurrent index creation, lock timeouts.
-  * `skill-security.md`: OWASP Top 10, input sanitization, zero secret leakage.
-  * `skill-testing.md`: The Seam Contract (Red-to-Green TDD discipline and mock boundaries).
+* **On-Demand Scoped Skills (`.agents/skills/`):** Decomposes deep domain rules and historical human context into canonical subdirectories following the Anthropic & Cursor specification:
+  * `backend/SKILL.md`: ORM patterns, transaction boundaries, anti-N+1 query rules.
+  * `frontend/SKILL.md`: A11y, Cumulative Layout Shift (CLS) prevention, pure state rendering.
+  * `database/SKILL.md`: Zero-downtime migrations, concurrent index creation, lock timeouts.
+  * `security/SKILL.md`: OWASP Top 10, input sanitization, zero secret leakage.
+  * `testing/SKILL.md`: The Seam Contract (Red-to-Green TDD discipline and mock boundaries).
+  * `<project-name>/SKILL.md`: Preserved legacy knowledge and project-specific business rules extracted seamlessly during migration without discarding human decisions.
 * **Mandatory YAML Frontmatter:** Every skill embeds `name` and `description` frontmatter. AI assistants index only metadata until a specific skill is needed, reducing token consumption per conversation turn by over 85%.
 
 For a thorough exploration, read the [Adaptive Agents Concept Guide](adaptive-agents.md).
@@ -138,7 +139,8 @@ Regex search and superficial text linters cannot understand code structure. Laye
 * **Sub-200ms Execution:** Parses polyglot source trees (TypeScript, JavaScript, Python, Go, Rust) in memory without requiring host C/C++ or language toolchains.
 * **The 3 Canonical Antipattern Rules:**
   1. **`raw-sql` (CWE-89):** Identifies dynamic string concatenations, template literals, and f-strings fed into database query expressions.
-  2. **`assertionless-test`:** Detects empty test functions or test suites that mock dependencies without executing real behavioral assertions (`expect`, `assert`, `t.Fatal`). *(Note: Test suites are excluded by default to optimize latency; pass `--include-tests` to scan test files)*.
+  2. **`assertionless-test`:** Detects empty test functions or test suites that mock dependencies without executing real behavioral assertions (`expect`, `assert`, `t.Fatal`).
+> 💡 **Important Flag Note:** Test directories (`tests/`, `__tests__/`, `*_test.go`) are excluded by default during production AST walks to optimize latency. You **must pass `--include-tests`** to activate this rule across test files (e.g., `baba wrap --include-tests`).
   3. **`hardcoded-credential`:** Detects high-entropy string literals (Shannon entropy $H(S) > 3.0$) and recognized secret tokens (`sk_live_`, `ghp_`, `AKIA`) embedded in source nodes.
 
 * **Remediation Compiler (`DIAGNOSTIC.md`):** Deterministically compiles a surgical remediation plan capped strictly under 1,500 tokens.
