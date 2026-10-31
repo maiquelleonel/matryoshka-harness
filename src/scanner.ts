@@ -316,7 +316,7 @@ export function evaluateInMemoryFallback(targetDir: string): HarnessScoreResult 
       axis: "context",
       title: "Missing root AGENTS.md context fence",
       description: "Codebase lacks root operational guidelines for coding agents.",
-      remediation: "Run 'baba agents generate --yes' to scaffold tailored AGENTS.md and modular skills.",
+      remediation: "Run 'bbyg agents generate --ci --yes' to scaffold tailored AGENTS.md, modular skills, and baseline CI workflow.",
       weight: 15,
     });
   }

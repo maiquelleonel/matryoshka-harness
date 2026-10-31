@@ -76,7 +76,7 @@ Concentric Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediati
 Usage:
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
-  baba agents generate [path] [--force] [--dry-run] [--interactive] [--yes] [--json]
+  baba agents generate [path] [--ci] [--force] [--dry-run] [--interactive] [--yes] [--json]
   baba agents profile [path] [--json]
   baba agents check [path] [--json] [--max-tokens <num>]
   baba agents audit [path] [--strict] [--json]
@@ -561,6 +561,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
       }
       const isForce = rest.includes("--force") || rest.includes("-f");
       const isDryRun = rest.includes("--dry-run");
+      const isCi = rest.includes("--ci");
       const isStrict = rest.includes("--strict") || rest.includes("--strict-token-guard");
       const isIncludeTests = rest.includes("--include-tests");
       const isYes =
@@ -1088,6 +1089,7 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
         }
 
         const result = generateAgents(resolvedPath, {
+          ci: isCi,
           force: isForce,
           dryRun: isDryRun,
           json: isJson,
