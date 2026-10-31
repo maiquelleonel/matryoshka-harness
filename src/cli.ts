@@ -1124,6 +1124,8 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
               `${result.estimatedTokenSavings.savedTokens} tokens (${result.estimatedTokenSavings.savingsPercentage}%)`
             )}\n`
           );
+          console.log(pc.bold(pc.green("✨ Context and skills scaffolded successfully!")));
+          console.log(`Run ${pc.cyan("baba wrap .")} to inspect the result and compute your updated Harness² score.\n`);
         }
         process.exit(0);
       } catch (error: any) {
