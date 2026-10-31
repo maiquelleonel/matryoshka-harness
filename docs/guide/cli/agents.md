@@ -157,3 +157,22 @@ Output:
   }
 }
 ```
+
+
+---
+
+## 🔄 Non-Destructive Legacy Migration (`baba agents migrate`)
+
+The `baba agents migrate` command safely migrates pre-existing monolithic instruction files into modular skills.
+
+### Zero-Loss Guarantee:
+* **Byte-for-byte Backup:** Snapshots original file to `AGENTS.md.bak`.
+* **Domain Extraction:** Extracts customized business rules into `.agents/skills/<project-name>/SKILL.md`.
+* **Lean Root Index:** Compiles an ultra-lean root `AGENTS.md` (< 200 tokens) referencing the project custom skill.
+
+### Examples:
+```bash
+baba agents migrate
+baba agents migrate --from .cursorrules
+baba agents migrate --dry-run
+```

@@ -40,35 +40,35 @@ Each binary embeds Tree-sitter WebAssembly grammar runtimes and executes with ze
 
 | Target OS & Architecture | Binary Artifact Name | Direct Download URL |
 | :--- | :--- | :--- |
-| **Linux x86_64** | `baba-linux-x64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-linux-x64` |
-| **Linux ARM64 / AArch64** | `baba-linux-arm64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-linux-arm64` |
-| **macOS Apple Silicon (M1/M2/M3/M4)** | `baba-darwin-arm64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-darwin-arm64` |
-| **macOS Intel (x86_64)** | `baba-darwin-x64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-darwin-x64` |
-| **Windows x86_64** | `baba-windows-x64.exe` | `https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-windows-x64.exe` |
+| **Linux x86_64** | `baba-linux-x64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-linux-x64` |
+| **Linux ARM64 / AArch64** | `baba-linux-arm64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-linux-arm64` |
+| **macOS Apple Silicon (M1/M2/M3/M4)** | `baba-darwin-arm64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-darwin-arm64` |
+| **macOS Intel (x86_64)** | `baba-darwin-x64` | `https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-darwin-x64` |
+| **Windows x86_64** | `baba-windows-x64.exe` | `https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-windows-x64.exe` |
 
 ### Installation via cURL
 
 #### Linux (x64)
 ```bash
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-linux-x64 -o /usr/local/bin/baba
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-linux-x64 -o /usr/local/bin/baba
 chmod +x /usr/local/bin/baba
 ```
 
 #### Linux (ARM64)
 ```bash
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-linux-arm64 -o /usr/local/bin/baba
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-linux-arm64 -o /usr/local/bin/baba
 chmod +x /usr/local/bin/baba
 ```
 
 #### macOS Apple Silicon (ARM64)
 ```bash
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-darwin-arm64 -o /usr/local/bin/baba
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-darwin-arm64 -o /usr/local/bin/baba
 chmod +x /usr/local/bin/baba
 ```
 
 #### macOS Intel (x64)
 ```bash
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-darwin-x64 -o /usr/local/bin/baba
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-darwin-x64 -o /usr/local/bin/baba
 chmod +x /usr/local/bin/baba
 ```
 
@@ -78,8 +78,8 @@ Every release publishes a `checksums.txt` file containing SHA-256 hashes generat
 
 ```bash
 # Download binary and official checksums:
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/checksums.txt -o checksums.txt
-curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/download/v0.4.0/baba-linux-x64 -o baba-linux-x64
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/checksums.txt -o checksums.txt
+curl -sSL https://github.com/maiquelleonel/matryoshka-harness/releases/latest/download/baba-linux-x64 -o baba-linux-x64
 
 # Verify cryptographic hash:
 sha256sum --check checksums.txt --ignore-missing

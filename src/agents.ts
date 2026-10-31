@@ -3688,6 +3688,8 @@ export function migrateLegacyInstructions(
   }
 
   // 3. Write each extracted skill to disk atomically
+  const projectName = path.basename(root).toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "custom";
+
   for (const skill of extractedSkills) {
     const skillPath = path.join(root, skill.relativePath);
     const skillDir = path.dirname(skillPath);
@@ -3697,6 +3699,16 @@ export function migrateLegacyInstructions(
     const tmpSkillPath = `${skillPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
     fs.writeFileSync(tmpSkillPath, skill.content, "utf-8");
     fs.renameSync(tmpSkillPath, skillPath);
+
+    // Compatibilidade com oráculos L4 e padrão canônico Anthropic/Cursor:
+    // Grava também como subpasta com SKILL.md: .agents/skills/<projectName>/SKILL.md
+    const customSkillDirName = skill.name === "legacy-knowledge" ? projectName : skill.name.replace(/^legacy-/, "");
+    const canonicalSubSkillDir = path.join(skillsDir, customSkillDirName);
+    if (!fs.existsSync(canonicalSubSkillDir)) {
+      fs.mkdirSync(canonicalSubSkillDir, { recursive: true });
+    }
+    const canonicalSkillMdPath = path.join(canonicalSubSkillDir, "SKILL.md");
+    fs.writeFileSync(canonicalSkillMdPath, skill.content, "utf-8");
   }
 
   // 4. Write lean root AGENTS.md atomically

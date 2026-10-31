@@ -58,11 +58,11 @@ If a customized root `AGENTS.md` exceeds 250 tokens, `baba agents check` fails i
 
 ## 🧭 On-Demand Specialized Skills
 Load specialized guidelines only when touching respective domains:
-* Backend & ORM: `.agents/skills/skill-backend.md`
-* Frontend & UI: `.agents/skills/skill-frontend.md`
-* Database & Migrations: `.agents/skills/skill-database.md`
-* Security & DLP: `.agents/skills/skill-security.md`
-* Testing & TDD: `.agents/skills/skill-testing.md`
+* Backend & ORM: `.agents/skills/backend/SKILL.md`
+* Frontend & UI: `.agents/skills/frontend/SKILL.md`
+* Database & Migrations: `.agents/skills/database/SKILL.md`
+* Security & DLP: `.agents/skills/security/SKILL.md`
+* Testing & TDD: `.agents/skills/testing/SKILL.md`
 ```
 
 ---
@@ -174,3 +174,20 @@ To protect custom instructions created by human engineers from accidental deleti
 * [Concentric Layers](concentric-layers.md) — The 5-layer nesting doll architecture.
 * [Polyglot AST Engine](ast-engine.md) — Tree-sitter WASM antipattern detection in < 200ms.
 * [CLI Reference: baba agents](../cli/agents.md) — Complete parameter and flag reference.
+
+---
+
+## 🏛️ Specialized Repository Agent Skill (`.agents/skills/<project-name>/SKILL.md`)
+
+When Matryoshka initializes or migrates an existing codebase, it does **not** discard pre-existing human rules, conventions, or domain knowledge (`AGENTS.md`, `.cursorrules`, `CLAUDE.md`).
+
+Instead of polluting the root instruction prompt, Matryoshka encapsulates the entire institutional memory into a dedicated **Repository Specialist Skill**:
+
+```text
+.agents/skills/<project-name>/SKILL.md
+```
+
+### Architectural Properties:
+1. **Canonical Directory Naming:** Subdirectory is derived directly from the project directory name (e.g., `.agents/skills/wpp-agent-checker/SKILL.md` or `.agents/skills/billing-api/SKILL.md`).
+2. **On-Demand Activation:** The root `AGENTS.md` indexes this skill under its operational directives. Coding agents load the comprehensive project-specific rules *strictly on-demand*, saving over 85% of token budget during general tasks.
+3. **Anthropic & Cursor Canonical Standards:** Conforms to the standard Agent Skills specification with YAML frontmatter metadata (`name`, `description`, `origin: legacy_migration`).

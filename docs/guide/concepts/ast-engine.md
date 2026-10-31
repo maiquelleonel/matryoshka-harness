@@ -36,7 +36,7 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
                 └───────────────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
-                        │   Harness² Composite Scorer   │
+                        │   Composite Scorer   │
                         │   Score = Base*0.4 + AST*0.6  │
                         └───────────────┬───────────────┘
                                         ▼
@@ -80,6 +80,7 @@ Flags dynamic string interpolations, template literals, and runtime string conca
   ```
 
 ### Rule 2: `assertionless-test` (False-Green Hazard)
+> ⚠️ **Flag Requirement:** Test directories (`tests/`, `__tests__/`, `*_test.go`) are excluded from default AST passes to ensure sub-200ms speed. You **must pass `--include-tests`** to activate this rule (e.g., `baba wrap --include-tests`).
 LLMs frequently hallucinate tests that invoke application logic and mock return values, but never assert that anything actually succeeded. These tests pass trivially even when core business logic breaks.
 
 * **Target Function Identifiers:**
@@ -112,17 +113,19 @@ Identifies plaintext credentials, tokens, and private keys embedded in source co
   1. **Known Token Prefixes:** Identifies strings beginning with canonical secret signatures (`sk_live_`, `ghp_`, `AKIA`, `AIza`, `xoxb-`, `bearer `).
   2. **Sensitive Variable Names:** Variables matching `api_key`, `secret`, `token`, `password`, `auth_token` assigned to string literals.
   3. **Shannon Entropy Analysis:** Computes the mathematical Shannon entropy $H(S)$ of the literal:
-     $$H(S) = -\sum_{i=1}^{n} P(c_i) \log_2 P(c_i)$$
-     Strings with $H(S) > 3.0$ and length $\ge 16$ characters are flagged as potential high-entropy credentials.
+     *(Calculated via Shannon entropy algorithm, flagging strings with entropy > 3.0)*
+     Strings with entropy > 3.0 and length $\ge 16$ characters are flagged as potential high-entropy credentials.
 * **Exempt Patterns:** Environment variable readings (`process.env.KEY`, `os.environ.get("KEY")`, `os.Getenv("KEY")`) and trivial configuration placeholders are exempt.
 
 ---
 
-## 📊 3. Harness² Composite Scoring Model
+## 📊 3. Composite Scoring Model (`baba wrap`)
 
-Rather than evaluating code quality in isolation, Matryoshka computes a unified **Harness² Composite Score** combining repository hygiene with deep AST context health:
+Rather than evaluating code quality in isolation, Matryoshka computes a unified **Composite Score** combining repository hygiene with deep AST context health:
 
-$$\text{Composite Score} = (\text{Base Oracle Score} \times 0.4) + (\text{AST Context Health} \times 0.6)$$
+```text
+Composite Score = (Base Oracle Score × 0.4) + (AST Context Health × 0.6)
+```
 
 ### AST Context Health Calculation:
 Starting from a baseline of 100 points, deductions are calculated by violation severity:
@@ -131,7 +134,7 @@ Starting from a baseline of 100 points, deductions are calculated by violation s
 * **Medium (structural boundary leaks):** -4 points per occurrence
 * **Low (code smell / anti-slop warning):** -2 points per occurrence
 
-The resulting AST health score is strictly clamped to the interval $[0, 100]$.
+The resulting AST health score is strictly clamped to the interval 0 to 100.
 
 ---
 
@@ -148,7 +151,7 @@ To prevent downstream context window exhaustion when feeding the diagnostic repo
 # 🛡️ Matryoshka Diagnostic & Harness² Remediation Report
 
 **Target:** `/workspace/my-project`  
-**Harness² Composite Score:** **78 / 100** [Status: NEEDS REMEDIATION]
+**Composite Score:** **78 / 100** [Status: NEEDS REMEDIATION]
 
 ---
 
