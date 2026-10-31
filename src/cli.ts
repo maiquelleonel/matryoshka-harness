@@ -68,12 +68,41 @@ function resolveCliVersion(): string {
 
 const VERSION = resolveCliVersion();
 
+const FIX_HELP = `
+Usage: bbyg fix [path] [options]
+
+One-Shot Autonomous Remediation: upgrades an unharnessed codebase to L4 maturity.
+Automatically discovers stack, scaffolds lean AGENTS.md, generates modular skills,
+configures baseline GitHub Actions CI workflow, and auto-wires IDE MCP integration.
+
+Aliases:
+  bbyg fix, baba fix, matryoshka fix
+
+Arguments:
+  [path]             Target project directory (default: current directory)
+
+Options:
+  --ci               Generate baseline GitHub Actions CI workflow (default: true)
+  --no-ci            Skip CI workflow scaffolding
+  --force, -f        Overwrite existing files
+  --dry-run          Simulate remediation without writing changes to disk
+  --yes, -y          Accept defaults without interactive prompts
+  --json             Output strictly valid JSON
+  -h, --help         Show help information
+
+Examples:
+  $ bbyg fix
+  $ bbyg fix --yes
+  $ bbyg fix ./my-project --dry-run
+`.trim();
+
 const HELP_TEXT = `
 Matryoshka-Harness CLI (baba / bbyg / matryoshka)
 
 Concentric Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation
 
 Usage:
+  baba fix [path] [--ci] [--force] [--yes] [--json]
   baba detect [path] [--json]
   baba scan [path] [--json] [--badge [path]]
   baba agents generate [path] [--ci] [--force] [--dry-run] [--interactive] [--yes] [--json]
@@ -1144,6 +1173,108 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           );
         } else {
           console.error(pc.red(`\nGeneration failed: ${error?.message || "Unknown error"}\n`));
+        }
+        process.exit(1);
+      }
+      break;
+    }
+
+    case "fix":
+    case "harness": {
+      if (rest.includes("--help") || rest.includes("-h") || rest.includes("help")) {
+        console.log(FIX_HELP);
+        process.exit(0);
+      }
+
+      const positional = rest.filter((arg) => !arg.startsWith("-"));
+      const targetDir = positional[0] || process.cwd();
+      const resolvedPath = path.resolve(targetDir);
+
+      const isForce = rest.includes("--force") || rest.includes("-f");
+      const isDryRun = rest.includes("--dry-run");
+      const skipCi = rest.includes("--no-ci");
+      const isCi = !skipCi; // default to true
+
+      try {
+        if (!isJson) {
+          console.log(pc.bold(pc.cyan("\n🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)")));
+          console.log(`  ${pc.dim("•")} ${pc.bold("Target Path:")}     ${resolvedPath}`);
+        }
+
+        // 1. Detect Stack
+        const stack = detectStack(resolvedPath);
+        if (!isJson) {
+          console.log(`  ${pc.dim("•")} ${pc.bold("Detected Stack:")}  ${pc.magenta(stack.primary)} (${stack.frameworks.join(", ") || "none"}, test runner: ${stack.testRunner || "none"})`);
+        }
+
+        // 2. Generate Agents & Modular Skills & CI workflow
+        const agentsResult = generateAgents(resolvedPath, {
+          ci: isCi,
+          force: isForce,
+          dryRun: isDryRun,
+          yes: true,
+          json: false,
+        });
+
+        // 3. Auto-wire IDE MCP servers (Cursor, Gemini CLI, Claude)
+        const mcpResult = wireMcpTargets(resolvedPath, {
+          dryRun: isDryRun,
+          targets: ["cursor", "gemini", "claude"],
+        });
+
+        // 4. Compute Updated Maturity Score
+        const scanResult = await runMaturityScan(resolvedPath, {
+          allowFallback: true,
+          includeTests: true,
+        });
+
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "success",
+                command: "fix",
+                rootPath: resolvedPath,
+                stack,
+                agents: agentsResult,
+                mcp: mcpResult,
+                maturity: {
+                  score: scanResult.oracleScore,
+                  level: scanResult.oracleLevel,
+                },
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.log(pc.bold(pc.green("\n✨ Codebase Fortified for Coding Agents:")));
+          console.log(`  ${pc.dim("✓")} ${pc.bold("AGENTS.md:")}         ${pc.green(agentsResult.rootAgentsPath)} (~${agentsResult.rootTokens} tokens)`);
+          console.log(`  ${pc.dim("✓")} ${pc.bold("Modular Skills:")}    ${pc.blue(agentsResult.skillsDir)} (${agentsResult.plannedFiles.filter(f => f.type === "skill").length} active)`);
+          if (isCi) {
+            console.log(`  ${pc.dim("✓")} ${pc.bold("CI Workflow:")}       ${pc.cyan(".github/workflows/ci.yml")}`);
+          }
+          console.log(`  ${pc.dim("✓")} ${pc.bold("IDE MCP Wiring:")}    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code`);
+          console.log(`  ${pc.dim("✓")} ${pc.bold("Harness Maturity:")}  ${pc.green(`${scanResult.oracleLevel} (${scanResult.oracleScore}/105 pts)`)}`);
+          console.log(pc.bold(pc.cyan(`\n🎉 Success! Your repository is now fortified against context-rot and AI-slop!\n`)));
+        }
+        process.exit(0);
+      } catch (error: any) {
+        if (isJson) {
+          console.log(
+            JSON.stringify(
+              {
+                status: "error",
+                command: "fix",
+                rootPath: resolvedPath,
+                message: error?.message || "Remediation failed",
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.error(pc.red(`\nRemediation failed: ${error?.message || "Unknown error"}\n`));
         }
         process.exit(1);
       }
