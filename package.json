@@ -28,6 +28,7 @@
   "scripts": {
     "build": "bun build ./index.ts --target bun --outdir ./dist && bun build ./src/cli.ts --target bun --outdir ./dist && bun run tsc -p tsconfig.build.json",
     "build:binaries": "bun run scripts/build-binaries.ts",
+    "build:site": "cp -r site/* dist-pages/ && uvx --with mkdocs-material mkdocs build --site-dir dist-pages/docs",
     "build:shells": "bun run scripts/build-shells.ts",
     "build:types": "tsc -p tsconfig.build.json",
     "release": "bun run ./src/release.ts",
