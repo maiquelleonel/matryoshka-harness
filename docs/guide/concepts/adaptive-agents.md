@@ -4,8 +4,8 @@ When software engineering organizations introduce AI coding assistants (Claude C
 
 This approach universally triggers two critical failure modes:
 
-1. **The Context Bloat & FinOps Tax:** Dumping a 1,500-line monolithic rules file on every single prompt burns thousands of unnecessary input tokens per turn (costing hundreds of dollars per developer every week) while diluting the model's attention window, causing it to disregard critical architectural directives.
-2. **Generic AI Slop & Unidiomatic Abstractions:** Naive agents default to speculative textbook abstractions—such as inventing unnecessary abstract base classes, complex factory patterns, and excessive inheritance in functional or declarative frameworks (e.g. trying to write Java Enterprise patterns in a lightweight FastAPI or Next.js project).
+* **The Context Bloat & FinOps Tax:** Dumping a 1,500-line monolithic rules file on every single prompt burns thousands of unnecessary input tokens per turn (costing hundreds of dollars per developer every week) while diluting the model's attention window, causing it to disregard critical architectural directives.
+* **Generic AI Slop & Unidiomatic Abstractions:** Naive agents default to speculative textbook abstractions—such as inventing unnecessary abstract base classes, complex factory patterns, and excessive inheritance in functional or declarative frameworks (e.g. trying to write Java Enterprise patterns in a lightweight FastAPI or Next.js project).
 
 **Matryoshka-Harness** solves this with **Adaptive Context-Fencing**: an ultra-lean root `AGENTS.md` strictly under 200 tokens, combined with modular on-demand skills stored in `.agents/skills/`.
 
@@ -20,11 +20,12 @@ Rather than overwhelming the model's context window upfront, Matryoshka decouple
 ├── AGENTS.md                          # Ultra-lean root context fence (< 200 tokens)
 └── .agents/
     └── skills/                        # Loaded strictly on-demand via YAML frontmatter index
-        ├── skill-backend.md           # ORM patterns, transaction boundaries, anti-N+1 rules
-        ├── skill-frontend.md          # Reactivity, A11y, layout shift (CLS) prevention
-        ├── skill-database.md          # Zero-downtime migrations, concurrent index safety
-        ├── skill-security.md          # OWASP Top 10, sanitization, zero secret leakage
-        └── skill-testing.md           # The Seam Contract: Red-to-Green TDD discipline
+        ├── backend/SKILL.md           # ORM patterns, transaction boundaries, anti-N+1 rules
+        ├── frontend/SKILL.md          # Reactivity, A11y, layout shift (CLS) prevention
+        ├── database/SKILL.md          # Zero-downtime migrations, concurrent index safety
+        ├── security/SKILL.md          # OWASP Top 10, sanitization, zero secret leakage
+        ├── testing/SKILL.md           # The Seam Contract: Red-to-Green TDD discipline
+        └── <project-name>/SKILL.md    # Encapsulated institutional legacy memory
 ```
 
 ---
@@ -86,12 +87,15 @@ description: Framework-idiomatic ORM patterns, transactional boundaries, anti-N+
 
 By indexing only the frontmatter metadata (under 40 tokens per skill), the agent understands **what skills exist and when to invoke them**, loading the comprehensive instruction body **strictly on demand**. This architecture delivers **more than 85% token savings** per conversational turn.
 
-### The 5 Canonical Skill Modules:
-1. **`skill-backend.md`:** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
-2. **`skill-frontend.md`:** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
-3. **`skill-database.md`:** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
-4. **`skill-security.md`:** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
-5. **`skill-testing.md`:** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
+### The Canonical Skill Modules (`.agents/skills/<domain>/SKILL.md`):
+Adhering to the official Anthropic and Cursor Agent Skills specification, domain guidelines reside in dedicated subdirectories under `.agents/skills/` (with automatic compatibility aliases `skill-<domain>.md` generated during transitions):
+
+1. **`backend/SKILL.md` (`skill-backend.md`):** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
+2. **`frontend/SKILL.md` (`skill-frontend.md`):** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
+3. **`database/SKILL.md` (`skill-database.md`):** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
+4. **`security/SKILL.md` (`skill-security.md`):** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
+5. **`testing/SKILL.md` (`skill-testing.md`):** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
+6. **`<project-name>/SKILL.md` (`legacy-knowledge.md`):** Encapsulated institutional legacy instructions and project-specific human rules extracted without loss during migration.
 
 ---
 
@@ -169,14 +173,6 @@ To protect custom instructions created by human engineers from accidental deleti
 
 ---
 
-## ⏭️ Next Reading
-
-* [Concentric Layers](concentric-layers.md) — The 5-layer nesting doll architecture.
-* [Polyglot AST Engine](ast-engine.md) — Tree-sitter WASM antipattern detection in < 200ms.
-* [CLI Reference: baba agents](../cli/agents.md) — Complete parameter and flag reference.
-
----
-
 ## 🏛️ Specialized Repository Agent Skill (`.agents/skills/<project-name>/SKILL.md`)
 
 When Matryoshka initializes or migrates an existing codebase, it does **not** discard pre-existing human rules, conventions, or domain knowledge (`AGENTS.md`, `.cursorrules`, `CLAUDE.md`).
@@ -191,3 +187,13 @@ Instead of polluting the root instruction prompt, Matryoshka encapsulates the en
 1. **Canonical Directory Naming:** Subdirectory is derived directly from the project directory name (e.g., `.agents/skills/wpp-agent-checker/SKILL.md` or `.agents/skills/billing-api/SKILL.md`).
 2. **On-Demand Activation:** The root `AGENTS.md` indexes this skill under its operational directives. Coding agents load the comprehensive project-specific rules *strictly on-demand*, saving over 85% of token budget during general tasks.
 3. **Anthropic & Cursor Canonical Standards:** Conforms to the standard Agent Skills specification with YAML frontmatter metadata (`name`, `description`, `origin: legacy_migration`).
+
+---
+
+## ⏭️ Next Reading
+
+* [Concentric Layers](concentric-layers.md) — The 5-layer nesting doll architecture.
+* [Polyglot AST Engine](ast-engine.md) — Tree-sitter WASM antipattern detection in < 200ms.
+* [CLI Reference: baba agents](../cli/agents.md) — Complete parameter and flag reference.
+
+---
