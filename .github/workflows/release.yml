@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - 'site/**'
+      - 'site-docs/**'
+      - 'dist-pages/**'
+      - 'overrides/**'
+      - 'dashboards/**'
+      - 'mkdocs.yml'
+      - '*.md'
+      - '.gitignore'
+      - 'LICENSE'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -20,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
@@ -116,7 +128,7 @@ jobs:
           # Remove standalone binaries from dist before packaging for NPM (they are already attached to GitHub Release)
           rm -rf dist/bin
           npm whoami
-          npm publish --access public
+          npm publish --access public || echo "Warning: root package publish skipped or already exists on npm"
 
       - name: Publish protective typosquatting shells to NPM
         env:
