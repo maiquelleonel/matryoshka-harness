@@ -69,12 +69,12 @@ nav:
       - Polyglot AST Engine: concepts/ast-engine.md
       - Adaptive Agents: concepts/adaptive-agents.md
   - CLI Reference:
-      - bbyg fix (One-Shot): cli/fix.md
       - baba detect: cli/detect.md
       - baba scan: cli/scan.md
       - baba wrap: cli/wrap.md
       - baba agents: cli/agents.md
       - baba mcp: cli/mcp.md
+      - bbyg fix (One-Shot): cli/fix.md
   - Integrations:
       - MCP Server: integrations/mcp-server.md
       - CI/CD Quality Gates: integrations/ci-cd-gates.md
