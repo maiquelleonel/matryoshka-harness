@@ -95,10 +95,11 @@
     const clone = svg.cloneNode(true);
     clone.removeAttribute("width");
     clone.removeAttribute("height");
-    clone.style.minWidth = "750px";
+    clone.style.minWidth = "800px";
     clone.style.maxWidth = "none";
     clone.style.width = "auto";
     clone.style.height = "auto";
+    clone.style.display = "block";
 
     viewport.appendChild(clone);
     activeSvg = clone;
@@ -107,36 +108,43 @@
     document.getElementById("mm-zoom-reset").textContent = `${Math.round(currentZoom * 100)}%`;
 
     overlay.style.display = "flex";
-    // Force reflow for opacity transition
     void overlay.offsetWidth;
     overlay.classList.add("active");
   }
 
-  // Intercept clicks globally on any element inside or related to mermaid
   function attachGlobalListener() {
     ensureModal();
 
-    document.addEventListener("click", function (e) {
-      // Find closest mermaid container or svg
-      let el = e.target;
-      while (el && el !== document.body) {
-        if (
-          el.tagName &&
-          (el.tagName.toLowerCase() === "svg" ||
-            el.classList?.contains("mermaid") ||
-            el.parentElement?.classList?.contains("mermaid"))
-        ) {
-          const svg = el.tagName.toLowerCase() === "svg" ? el : el.querySelector("svg");
-          if (svg) {
-            e.preventDefault();
-            e.stopPropagation();
-            openModalWithSvg(svg);
-            return;
-          }
+    document.addEventListener(
+      "click",
+      function (e) {
+        // If clicking inside the modal overlay itself, do nothing (modal controls handle it)
+        if (e.target.closest && e.target.closest("#mermaid-modal-overlay")) {
+          return;
         }
-        el = el.parentElement;
-      }
-    }, true); // Use capture phase to ensure no framework stops propagation!
+
+        // Find closest rendered SVG or container
+        let el = e.target;
+        while (el && el !== document.body) {
+          if (
+            el.tagName &&
+            (el.tagName.toLowerCase() === "svg" ||
+              el.classList?.contains("mermaid") ||
+              el.parentElement?.classList?.contains("mermaid"))
+          ) {
+            const svg = el.tagName.toLowerCase() === "svg" ? el : el.querySelector("svg");
+            if (svg) {
+              e.preventDefault();
+              e.stopPropagation();
+              openModalWithSvg(svg);
+              return;
+            }
+          }
+          el = el.parentElement;
+        }
+      },
+      true
+    );
   }
 
   if (document.readyState === "loading") {
