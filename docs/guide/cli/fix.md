@@ -4,6 +4,15 @@ The `bbyg fix` command (also aliased as `baba fix` and `matryoshka fix`) is the 
 
 ---
 
+### Command Aliases
+`bbyg fix` guarantees strict behavioral parity across all aliases:
+
+* `bbyg fix` — Baba-Yaga alias (recommended 4-letter shortcut)
+* `baba fix` — Slavic matriarch alias
+* `matryoshka fix` — Canonical package executable
+
+---
+
 ## ⚡ Quickstart
 
 ```bash
@@ -34,6 +43,7 @@ bbyg fix [path] [options]
 ```
 
 ### Options:
+
 * `--ci`: Scaffold baseline GitHub Actions CI workflow (enabled by default).
 * `--no-ci`: Skip `.github/workflows/ci.yml` scaffolding.
 * `--force, -f`: Overwrite pre-existing files while creating backups.

@@ -12,6 +12,7 @@ baba wrap [path] [options]
 
 ### Command Aliases
 `baba wrap` guarantees strict behavioral parity across all aliases:
+
 * `baba wrap` — Fast 4-letter shortcut
 * `bbyg wrap` — Baba-Yaga alias
 * `matryoshka wrap` — Formal package executable
@@ -22,7 +23,7 @@ baba wrap [path] [options]
 
 The `wrap` command executes contextual Abstract Syntax Tree (AST) analysis across polyglot source trees to detect subtle security vulnerabilities and code smells introduced by LLM coding agents.
 
-Unlike superficial regex matchers, `baba wrap` utilizes **Tree-sitter WebAssembly (WASM)** runtimes to parse syntax trees directly in memory in sub-200ms. It calculates the **Harness² Composite Score** combining repository hygiene with deep AST findings, and compiles a token-bounded **`DIAGNOSTIC.md`** remediation report.
+Unlike superficial regex matchers, `baba wrap` utilizes **Tree-sitter WebAssembly (WASM)** runtimes to parse syntax trees directly in memory in sub-200ms. It audits deep AST findings and compiles a token-bounded **`DIAGNOSTIC.md`** remediation report.
 
 ---
 
@@ -51,7 +52,7 @@ Identifies unparameterized string interpolations, template literals, and concate
 * **Severity:** Critical (-15 points)
 * **Remediation:** Replace dynamic string interpolation with parameterized queries and bound variables.
 
-### 2. `assertionless-test` (False-Green Hazard)
+### 2. `assertionless-test` (False-Green Hazard — Optional / Opt-in via `--include-tests`)
 Identifies automated test functions (`it`, `test`, `def test_*`, `func Test*`) that invoke production code but lack behavioral assertions (`expect`, `assert`, `t.Fatal`).
 * **Requirement:** Requires `--include-tests` flag, since test suites are excluded by default during production AST walks.
 * **Severity:** High (-8 points)
@@ -62,20 +63,7 @@ Detects plaintext API keys, private certificates, and staging tokens assigned in
 * **Severity:** Critical (-15 points)
 * **Remediation:** Migrate secrets to environment variables (`process.env`, `os.environ`) and secrets managers.
 
----
 
-## 🧮 Harness² Composite Scoring Model
-
-The Harness² composite score synthesizes external repository hygiene with deep internal AST health:
-
-$$\text{Composite Score} = (\text{Oracle Hygiene} \times 0.4) + (\text{AST Health} \times 0.6)$$
-
-* **Oracle Hygiene (0–100):** Evaluated against the 5 governance axes via `paladini/harness-score`.
-* **AST Health (0–100):** Starts at 100 with deterministic point deductions for detected violations:
-  * Critical: -15 pts
-  * High: -8 pts
-  * Medium: -4 pts
-  * Low: -2 pts
 
 ---
 
@@ -97,6 +85,7 @@ baba wrap --strict --threshold 85
 ```
 
 ### Exit Codes:
+
 * `0` — Clean scan. Composite score $\ge$ threshold, and zero critical AST violations.
 * `1` — Quality gate failed. Either composite score $<$ threshold or at least one critical violation was detected.
 

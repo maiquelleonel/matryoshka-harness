@@ -4,8 +4,8 @@ When software engineering organizations introduce AI coding assistants (Claude C
 
 This approach universally triggers two critical failure modes:
 
-1. **The Context Bloat & FinOps Tax:** Dumping a 1,500-line monolithic rules file on every single prompt burns thousands of unnecessary input tokens per turn (costing hundreds of dollars per developer every week) while diluting the model's attention window, causing it to disregard critical architectural directives.
-2. **Generic AI Slop & Unidiomatic Abstractions:** Naive agents default to speculative textbook abstractions—such as inventing unnecessary abstract base classes, complex factory patterns, and excessive inheritance in functional or declarative frameworks (e.g. trying to write Java Enterprise patterns in a lightweight FastAPI or Next.js project).
+* **The Context Bloat & FinOps Tax:** Dumping a 1,500-line monolithic rules file on every single prompt burns thousands of unnecessary input tokens per turn (costing hundreds of dollars per developer every week) while diluting the model's attention window, causing it to disregard critical architectural directives.
+* **Generic AI Slop & Unidiomatic Abstractions:** Naive agents default to speculative textbook abstractions—such as inventing unnecessary abstract base classes, complex factory patterns, and excessive inheritance in functional or declarative frameworks (e.g. trying to write Java Enterprise patterns in a lightweight FastAPI or Next.js project).
 
 **Matryoshka-Harness** solves this with **Adaptive Context-Fencing**: an ultra-lean root `AGENTS.md` strictly under 200 tokens, combined with modular on-demand skills stored in `.agents/skills/`.
 
@@ -20,11 +20,12 @@ Rather than overwhelming the model's context window upfront, Matryoshka decouple
 ├── AGENTS.md                          # Ultra-lean root context fence (< 200 tokens)
 └── .agents/
     └── skills/                        # Loaded strictly on-demand via YAML frontmatter index
-        ├── skill-backend.md           # ORM patterns, transaction boundaries, anti-N+1 rules
-        ├── skill-frontend.md          # Reactivity, A11y, layout shift (CLS) prevention
-        ├── skill-database.md          # Zero-downtime migrations, concurrent index safety
-        ├── skill-security.md          # OWASP Top 10, sanitization, zero secret leakage
-        └── skill-testing.md           # The Seam Contract: Red-to-Green TDD discipline
+        ├── backend/SKILL.md           # ORM patterns, transaction boundaries, anti-N+1 rules
+        ├── frontend/SKILL.md          # Reactivity, A11y, layout shift (CLS) prevention
+        ├── database/SKILL.md          # Zero-downtime migrations, concurrent index safety
+        ├── security/SKILL.md          # OWASP Top 10, sanitization, zero secret leakage
+        ├── testing/SKILL.md           # The Seam Contract: Red-to-Green TDD discipline
+        └── <project-name>/SKILL.md    # Encapsulated institutional legacy memory
 ```
 
 ---
@@ -35,6 +36,7 @@ The root `AGENTS.md` is the only file injected on every prompt turn. It serves a
 
 ### Token Guard Hard Ceiling (< 250 Tokens)
 Matryoshka's compiler enforces a mathematical token budget:
+
 * **Target Budget:** `< 200 tokens`
 * **Hard Token Guard Ceiling:** `< 250 tokens`
 
@@ -58,11 +60,12 @@ If a customized root `AGENTS.md` exceeds 250 tokens, `baba agents check` fails i
 
 ## 🧭 On-Demand Specialized Skills
 Load specialized guidelines only when touching respective domains:
-* Backend & ORM: `.agents/skills/skill-backend.md`
-* Frontend & UI: `.agents/skills/skill-frontend.md`
-* Database & Migrations: `.agents/skills/skill-database.md`
-* Security & DLP: `.agents/skills/skill-security.md`
-* Testing & TDD: `.agents/skills/skill-testing.md`
+
+* Backend & ORM: `.agents/skills/backend/SKILL.md`
+* Frontend & UI: `.agents/skills/frontend/SKILL.md`
+* Database & Migrations: `.agents/skills/database/SKILL.md`
+* Security & DLP: `.agents/skills/security/SKILL.md`
+* Testing & TDD: `.agents/skills/testing/SKILL.md`
 ```
 
 ---
@@ -86,12 +89,15 @@ description: Framework-idiomatic ORM patterns, transactional boundaries, anti-N+
 
 By indexing only the frontmatter metadata (under 40 tokens per skill), the agent understands **what skills exist and when to invoke them**, loading the comprehensive instruction body **strictly on demand**. This architecture delivers **more than 85% token savings** per conversational turn.
 
-### The 5 Canonical Skill Modules:
-1. **`skill-backend.md`:** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
-2. **`skill-frontend.md`:** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
-3. **`skill-database.md`:** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
-4. **`skill-security.md`:** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
-5. **`skill-testing.md`:** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
+### The Canonical Skill Modules (`.agents/skills/<domain>/SKILL.md`):
+Adhering to the official Anthropic and Cursor Agent Skills specification, domain guidelines reside in dedicated subdirectories under `.agents/skills/`:
+
+1. **`backend/SKILL.md`:** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
+2. **`frontend/SKILL.md`:** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
+3. **`database/SKILL.md`:** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
+4. **`security/SKILL.md`:** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
+5. **`testing/SKILL.md`:** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
+6. **`<project-name>/SKILL.md`:** Encapsulated institutional legacy instructions and project-specific human rules extracted without loss during migration.
 
 ---
 
@@ -160,12 +166,40 @@ baba agents skill database --json
 
 ---
 
-## 🛡️ Non-Destructive Overwrite Guardrails
+## 🛡️ Non-Destructive Overwrite & Migration Guardrails
 
-To protect custom instructions created by human engineers from accidental deletion:
-* Running `baba agents generate` against an existing `AGENTS.md` without `--force` **refuses to overwrite** and exits with code `1`.
-* When `--force` is provided, Matryoshka automatically copies the pre-existing file to **`AGENTS.md.bak`** before writing the new directives.
-* In `--dry-run` mode, zero filesystem mutations occur.
+Matryoshka guarantees that custom instructions and institutional memory created by human engineers are never destroyed or silently overwritten:
+
+### 1. Accidental Overwrite Protection (`baba agents generate`)
+* **Collision Guard:** When scaffolding fresh directives, running `baba agents generate` against an existing `AGENTS.md` without `--force` **refuses to overwrite** and exits with code `1`.
+* **Byte-for-Byte Backup:** When `--force` is supplied, Matryoshka creates an `AGENTS.md.bak` snapshot before generating default archetype directives.
+* **Simulation Mode:** Passing `--dry-run` calculates archetype profiling, token budgets, and projected savings with zero filesystem mutations.
+
+### 2. Zero-Loss Legacy Migration (`baba agents migrate`)
+* If your repository already contains customized human instructions (`AGENTS.md`, `.cursorrules`, `CLAUDE.md`), never force-generate templates over them.
+* Use **`baba agents migrate`**: it automatically snapshots the original file to `AGENTS.md.bak` and encapsulates 100% of your business rules into a dedicated repository skill (`.agents/skills/<project-name>/SKILL.md`), linking it on-demand in the new lean root `AGENTS.md`.
+
+### 3. One-Shot Auto-Remediation (`bbyg fix`)
+* The unified **`bbyg fix`** command intelligently audits existing instruction files before generating templates.
+* If a legacy instruction file (`.cursorrules`, `CLAUDE.md`, or pre-existing unmigrated `AGENTS.md`) is detected, `bbyg fix` automatically performs a zero-loss migration first—preserving your human rules in `.agents/skills/<project-name>/SKILL.md` before wiring MCP servers and generating missing CI gates.
+
+---
+
+## 🏛️ Specialized Repository Agent Skill (`.agents/skills/<project-name>/SKILL.md`)
+
+When Matryoshka initializes or migrates an existing codebase, it does **not** discard pre-existing human rules, conventions, or domain knowledge (`AGENTS.md`, `.cursorrules`, `CLAUDE.md`).
+
+Instead of polluting the root instruction prompt, Matryoshka encapsulates the entire institutional memory into a dedicated **Repository Specialist Skill**:
+
+```text
+.agents/skills/<project-name>/SKILL.md
+```
+
+### Architectural Properties:
+
+1. **Canonical Directory Naming:** Subdirectory is derived directly from the project directory name (e.g., `.agents/skills/wpp-agent-checker/SKILL.md` or `.agents/skills/billing-api/SKILL.md`).
+2. **On-Demand Activation:** The root `AGENTS.md` indexes this skill under its operational directives. Coding agents load the comprehensive project-specific rules *strictly on-demand*, saving over 85% of token budget during general tasks.
+3. **Anthropic & Cursor Canonical Standards:** Conforms to the standard Agent Skills specification with YAML frontmatter metadata (`name`, `description`, `origin: legacy_migration`).
 
 ---
 
@@ -174,3 +208,5 @@ To protect custom instructions created by human engineers from accidental deleti
 * [Concentric Layers](concentric-layers.md) — The 5-layer nesting doll architecture.
 * [Polyglot AST Engine](ast-engine.md) — Tree-sitter WASM antipattern detection in < 200ms.
 * [CLI Reference: baba agents](../cli/agents.md) — Complete parameter and flag reference.
+
+---

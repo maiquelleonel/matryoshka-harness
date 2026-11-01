@@ -332,7 +332,8 @@
     }
 
     .hero-evidence-wrapper {
-      max-width: 760px;
+      max-width: 980px;
+      width: 100%;
       margin: 0 auto;
     }
 
@@ -393,14 +394,16 @@ ms: center;
     }
 
     .chrome-dot {
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      border: 1px solid var(--border-strong);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      display: inline-block;
+      flex-shrink: 0;
     }
-    .chrome-dot.red { background: #e05244; }
-    .chrome-dot.yellow { background: #f3a615; }
-    .chrome-dot.green { background: #52c462; }
+    .chrome-dot.red { background: #e05244 !important; }
+    .chrome-dot.yellow { background: #f3a615 !important; }
+    .chrome-dot.green { background: #52c462 !important; }
 
     .chrome-title {
       font-family: var(--font-mono);
@@ -412,12 +415,36 @@ ms: center;
     }
 
     .terminal-body-full {
-      background: var(--terminal-bg);
+      background: #12100f;
       color: var(--terminal-text);
       font-family: var(--font-mono);
-      font-size: 0.86rem;
-      padding: 20px 24px;
+      font-size: 0.88rem;
+      padding: 22px 28px;
       line-height: 1.6;
+      max-height: 380px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+
+    /* Scrollbar retrô estilizada */
+    .terminal-body-full::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .terminal-body-full::-webkit-scrollbar-track {
+      background: #1a1716;
+    }
+    .terminal-body-full::-webkit-scrollbar-thumb {
+      background: #3d3733;
+      border: 1px solid var(--border-strong);
+    }
+    .terminal-body-full::-webkit-scrollbar-thumb:hover {
+      background: var(--gold-cyrillic);
+    }
+
+    #termOutputBody {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .term-line.prompt {
@@ -898,7 +925,7 @@ ms: center;
           </div>
           <a href="#concentric" class="nav-link" data-i18n="nav_concentric">Camadas Concêntricas</a>
           <a href="#anti-slop" class="nav-link" data-i18n="nav_safeguards">Garantias Anti-Slop</a>
-          <a href="https://matryoshka.leonellabshq.dev/docs/" target="_blank" class="nav-link" data-i18n="nav_docs">Documentação</a>
+          <a href="https://matryoshka-harness.leonellabshq.dev/docs/" target="_blank" class="nav-link" data-i18n="nav_docs">Documentação</a>
           <a href="https://github.com/maiquelleonel/matryoshka-harness" target="_blank" class="btn-github">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
             GITHUB
@@ -1047,7 +1074,7 @@ ms: center;
             <span class="step-badge" data-i18n="step3_badge">Terceira Casca • Camada 3</span>
             <h3 class="step-title" data-i18n="step3_title">AGENTS.md Adaptativo &amp; Skills Modulares</h3>
             <p class="step-desc">
-              <span data-i18n="step3_desc">Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.</span>
+              <span data-i18n="step3_desc">Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/<domain>/SKILL.md</code> sob demanda com YAML frontmatter.</span>
             </p>
             <pre class="step-code-preview"><code><span class="comment"># Compile lean boundary without touching disk:</span>
 <span class="keyword">baba</span> agents generate --dry-run</code></pre>
@@ -1188,7 +1215,7 @@ ms: center;
         step4_desc: "Parser sintático em WebAssembly Tree-sitter varrendo TypeScript, Python e Go em &lt; 200ms. Elimina testes falsos sem asserção, injeção dinâmica de SQL e credenciais hardcoded antes do push.",
         step3_badge: "Terceira Casca • Camada 3",
         step3_title: "AGENTS.md Adaptativo & Skills Modulares",
-        step3_desc: "Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/*.md</code> sob demanda com YAML frontmatter.",
+        step3_desc: "Combate a crise de inchaço de contexto. Compila um <code>AGENTS.md</code> raiz ultraleve (&lt; 200 tokens) com regras inegociáveis, roteando diretrizes especializadas para <code>.agents/skills/<domain>/SKILL.md</code> sob demanda com YAML frontmatter.",
         step2_badge: "Quarta Casca • Camada 2",
         step2_title: "Integração com o Grafo Semântico de Código",
         step2_desc: "Cruza caminhos estáticos de arquivos com o grafo de conhecimento da base de código (codebase-memory-mcp). Mapeia rotas, serviços e fluxo de chamadas antes de qualquer alteração cirúrgica do agente.",
@@ -1233,7 +1260,7 @@ ms: center;
         step4_desc: "WebAssembly Tree-sitter parser scanning TypeScript, Python, and Go in &lt; 200ms. Eliminates false-green tests without assertions, uncaught dynamic SQL injection, and hardcoded secrets before git push.",
         step3_badge: "Third Shell • Layer 3",
         step3_title: "Adaptive AGENTS.md & Modular Skills",
-        step3_desc: "Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/*.md</code> with strict YAML frontmatter.",
+        step3_desc: "Fights the prompt bloat crisis. Compiles an ultra-lean root <code>AGENTS.md</code> (&lt; 200 tokens) with non-negotiable invariants, routing specialized domain guidelines into on-demand <code>.agents/skills/<domain>/SKILL.md</code> with strict YAML frontmatter.",
         step2_badge: "Fourth Shell • Layer 2",
         step2_title: "Semantic Code Graph Integration",
         step2_desc: "Crosses static filesystem paths with the codebase knowledge graph (codebase-memory-mcp). Maps routes, services, and call flows before an agent initiates a surgical change.",
@@ -1380,47 +1407,17 @@ ms: center;
       {
         title: "terminal: bbyg fix --yes (One-Shot L4 Remediation)",
         cmd: "bunx @maiquelleonel/matryoshka fix",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</span>
-  • Target Path:     /home/dev/workspace/app
-  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span>
-
-<span style="color: #4cd964;">✨ Codebase Fortified for Coding Agents (L4 Ready):</span>
-  ✓ AGENTS.md:         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)
-  ✓ ARCHITECTURE:      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)
-  ✓ Modular Skills:    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)
-  ✓ CI Workflow:       <span style="color: #e5c07b;">.github/workflows/ci.yml</span>
-  ✓ IDE MCP Wiring:    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code
-  ✓ Harness Maturity:  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span>
-
-<span style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</div><div style="color: #928b81;">  • Target Path:     /home/dev/workspace/app</div><div style="color: #928b81;">  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span></div><br><div style="color: #4cd964; font-weight: bold; margin-bottom: 4px;">✨ Codebase Fortified for Coding Agents (L4 Ready):</div><div>  <span style="color: #4cd964;">✓</span> <b>AGENTS.md:</b>         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)</div><div>  <span style="color: #4cd964;">✓</span> <b>ARCHITECTURE:</b>      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)</div><div>  <span style="color: #4cd964;">✓</span> <b>Modular Skills:</b>    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)</div><div>  <span style="color: #4cd964;">✓</span> <b>CI Workflow:</b>       <span style="color: #e5c07b;">.github/workflows/ci.yml</span></div><div>  <span style="color: #4cd964;">✓</span> <b>IDE MCP Wiring:</b>    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code</div><div>  <span style="color: #4cd964;">✓</span> <b>Harness Maturity:</b>  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span></div><br><div style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</div>`
       },
       {
         title: "terminal: baba wrap . (Anti-Slop AST & Composite Scorer)",
         cmd: "bunx @maiquelleonel/matryoshka wrap .",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Harness² Remediation (baba wrap)</span>
-  • Target Path:      /home/dev/workspace/app
-  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)
-  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))
-  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))
-  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)
-  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)
-
-<span style="color: #5c6370;">No AST context-fencing violations detected. Repository is clean!</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Composite Audit (baba wrap)</div><div style="color: #928b81;">  • Target Path:      /home/dev/workspace/app</div><div>  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)</div><div>  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))</div><div>  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))</div><div>  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)</div><div>  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)</div><br><div style="color: #52c462;">✔ No AST context-fencing violations detected. Repository is clean!</div>`
       },
       {
         title: "terminal: baba scan . (Paladini Maturity Oracle & AST)",
         cmd: "bunx @maiquelleonel/matryoshka scan .",
-        output: `<span style="color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</span>
-  • Root Path:   /home/dev/workspace/app
-  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span>
-  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)
-
-<span style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</span>
-  • Routes:      src/routes/api.ts
-  • Models:      src/models/user.ts
-  • Controllers: src/controllers/auth.ts
-
-<span style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</span>`
+        output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</div><div style="color: #928b81;">  • Root Path:   /home/dev/workspace/app</div><div>  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span></div><div>  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)</div><br><div style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</div><div>  • Routes:      src/routes/api.ts</div><div>  • Models:      src/models/user.ts</div><div>  • Controllers: src/controllers/auth.ts</div><br><div style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</div>`
       }
     ];
 

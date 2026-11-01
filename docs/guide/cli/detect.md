@@ -12,6 +12,7 @@ baba detect [path] [options]
 
 ### Command Aliases
 `baba detect` provides 100% strict alias parity across all registered binary entry points:
+
 * `baba detect` — Slavic matriarch of nesting dolls (4 letters, ergonomic)
 * `bbyg detect` — Baba-Yaga mythology (silicon wizardry)
 * `matryoshka detect` — Formal academic package name
@@ -44,6 +45,7 @@ The `detect` command inspects the target directory to determine the architectura
 
 ### Polyglot Language Matrix
 The detection engine recognizes primary languages from manifests and directory fingerprints:
+
 * **TypeScript:** Detected via `tsconfig.json`, `package.json`, `.ts`/`.tsx` files.
 * **JavaScript:** Detected via `package.json`, `.js`/`.mjs` files without `tsconfig.json`.
 * **Python:** Detected via `pyproject.toml`, `requirements.txt`, `Pipfile`, `setup.py`.
@@ -66,6 +68,7 @@ The detection engine recognizes primary languages from manifests and directory f
 * `pytest` (via `pyproject.toml`, `setup.cfg`, `pytest.ini`)
 * `go test` (via Go test files and modules)
 * `cargo test` (via Cargo manifests)
+* `rspec` (via `Gemfile`, `.rspec`, or `spec/` directory)
 
 ---
 

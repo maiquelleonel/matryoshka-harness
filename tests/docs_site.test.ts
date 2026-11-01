@@ -272,11 +272,11 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
         expect(content).toContain(".agents/skills/");
         expect(content).toContain("YAML frontmatter");
-        expect(content).toContain("skill-backend.md");
-        expect(content).toContain("skill-frontend.md");
-        expect(content).toContain("skill-database.md");
-        expect(content).toContain("skill-security.md");
-        expect(content).toContain("skill-testing.md");
+        expect(content).toContain("backend/SKILL.md");
+        expect(content).toContain("frontend/SKILL.md");
+        expect(content).toContain("database/SKILL.md");
+        expect(content).toContain("security/SKILL.md");
+        expect(content).toContain("testing/SKILL.md");
       });
 
       it("documents archetype classification taxonomy and CLI commands", () => {
@@ -437,10 +437,8 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         expect(content).toContain("hardcoded-credential");
       });
 
-      it("documents Harness² composite score calculation and DIAGNOSTIC.md report generation", () => {
+      it("documents DIAGNOSTIC.md report generation and token ceiling bounds", () => {
         const content = fs.readFileSync(wrapPath, "utf-8");
-        expect(content).toContain("0.4");
-        expect(content).toContain("0.6");
         expect(content).toContain("DIAGNOSTIC.md");
         expect(content).toContain("1,500");
       });
@@ -791,6 +789,7 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         "check",
         "profile",
         "skill",
+        "migrate",
         "--dry-run",
         "--force",
         "-f",

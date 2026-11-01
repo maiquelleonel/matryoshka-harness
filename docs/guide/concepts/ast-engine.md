@@ -1,9 +1,9 @@
-# Polyglot AST Engine (Harness² Remediation)
+# Polyglot AST Engine (Composite Remediation)
 
 Static code analysis in modern AI-assisted engineering requires far deeper structural understanding than superficial regex matching or basic file-existence linters. Large Language Models (LLMs) frequently generate syntactically correct code that masks critical architectural and security flaws:
 
-* **Unparameterized Dynamic SQL (CWE-89):** LLMs assemble queries via string template interpolation (`db.query(\`SELECT * FROM users WHERE id = ${userId}\`)`), introducing critical SQL injection vulnerabilities.
-* **Assertionless "False-Green" Tests:** AI agents write tests that execute functions and mock everything, but assert zero behavioral invariants (`expect`, `assert`, `t.Fatal`), producing green CI runs with zero real verification.
+* **Unparameterized Dynamic SQL (CWE-89):** LLMs assemble queries via string template interpolation (`db.query("SELECT * FROM users WHERE id = " + userId)`), introducing critical SQL injection vulnerabilities.
+* **Assertionless "False-Green" Tests (Optional / Opt-in via `--include-tests`):** AI agents write tests that execute functions and mock everything, but assert zero behavioral invariants (`expect`, `assert`, `t.Fatal`), producing green CI runs with zero real verification. *(Note: Test directories are excluded by default for scan latency; pass `--include-tests` to inspect)*.
 * **Hardcoded Credentials & Leaked Seams:** Secrets, staging tokens, and high-entropy keys are placed directly into source literals, bypassing naive regex pattern filters.
 
 To eradicate these hazards in sub-200ms without imposing complex host build toolchains, Matryoshka-Harness incorporates the **Polyglot AST Engine** invoked via the canonical **`baba wrap`** (`matryoshka wrap`, `bbyg wrap`) command.
@@ -36,8 +36,8 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
                 └───────────────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
-                        │   Harness² Composite Scorer   │
-                        │   Score = Base*0.4 + AST*0.6  │
+                        │       Composite Scorer        │
+                        │   Score: 0.4 Base + 0.6 AST   │
                         └───────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
@@ -48,6 +48,7 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
 ```
 
 ### Architectural Guarantees:
+
 * **Zero Host Toolchains:** Executes natively inside the Bun JavaScript runtime without requiring GCC, Clang, Python, or Cargo on the host machine.
 * **Sub-200ms Execution:** In-memory AST construction and tree-walking inspects polyglot repositories in milliseconds.
 * **Resilient Walking Guards:**
@@ -80,6 +81,7 @@ Flags dynamic string interpolations, template literals, and runtime string conca
   ```
 
 ### Rule 2: `assertionless-test` (False-Green Hazard)
+> ⚠️ **Flag Requirement:** Test directories (`tests/`, `__tests__/`, `*_test.go`) are excluded from default AST passes to ensure sub-200ms speed. You **must pass `--include-tests`** to activate this rule (e.g., `baba wrap --include-tests`).
 LLMs frequently hallucinate tests that invoke application logic and mock return values, but never assert that anything actually succeeded. These tests pass trivially even when core business logic breaks.
 
 * **Target Function Identifiers:**
@@ -111,31 +113,16 @@ Identifies plaintext credentials, tokens, and private keys embedded in source co
 * **Structural AST Pattern:**
   1. **Known Token Prefixes:** Identifies strings beginning with canonical secret signatures (`sk_live_`, `ghp_`, `AKIA`, `AIza`, `xoxb-`, `bearer `).
   2. **Sensitive Variable Names:** Variables matching `api_key`, `secret`, `token`, `password`, `auth_token` assigned to string literals.
-  3. **Shannon Entropy Analysis:** Computes the mathematical Shannon entropy $H(S)$ of the literal:
-     $$H(S) = -\sum_{i=1}^{n} P(c_i) \log_2 P(c_i)$$
-     Strings with $H(S) > 3.0$ and length $\ge 16$ characters are flagged as potential high-entropy credentials.
+  3. **Shannon Entropy Analysis:** Computes the mathematical Shannon entropy of the literal:
+     > `H(S) = - ∑ p(x) * log₂ p(x)`
+     > Strings with entropy **H > 3.0** and length **≥ 16 characters** are flagged as potential high-entropy credentials/tokens.
 * **Exempt Patterns:** Environment variable readings (`process.env.KEY`, `os.environ.get("KEY")`, `os.Getenv("KEY")`) and trivial configuration placeholders are exempt.
 
----
 
-## 📊 3. Harness² Composite Scoring Model
-
-Rather than evaluating code quality in isolation, Matryoshka computes a unified **Harness² Composite Score** combining repository hygiene with deep AST context health:
-
-$$\text{Composite Score} = (\text{Base Oracle Score} \times 0.4) + (\text{AST Context Health} \times 0.6)$$
-
-### AST Context Health Calculation:
-Starting from a baseline of 100 points, deductions are calculated by violation severity:
-* **Critical (`raw-sql`, hardcoded secrets):** -15 points per occurrence
-* **High (`assertionless-test`):** -8 points per occurrence
-* **Medium (structural boundary leaks):** -4 points per occurrence
-* **Low (code smell / anti-slop warning):** -2 points per occurrence
-
-The resulting AST health score is strictly clamped to the interval $[0, 100]$.
 
 ---
 
-## 📝 4. Actionable Remediation: `DIAGNOSTIC.md`
+## 📝 3. Actionable Remediation: `DIAGNOSTIC.md`
 
 When violations are detected, developers and AI agents do not need to parse obscure terminal logs. `baba wrap` compiles an anti-slop, human- and machine-readable remediation plan to **`DIAGNOSTIC.md`**:
 
@@ -148,7 +135,7 @@ To prevent downstream context window exhaustion when feeding the diagnostic repo
 # 🛡️ Matryoshka Diagnostic & Harness² Remediation Report
 
 **Target:** `/workspace/my-project`  
-**Harness² Composite Score:** **78 / 100** [Status: NEEDS REMEDIATION]
+**Status:** [NEEDS REMEDIATION]
 
 ---
 

@@ -7,6 +7,7 @@ Welcome to **Matryoshka-Harness**! In less than 5 minutes, you will fence your c
 ## 📋 Prerequisites
 
 Before starting, make sure you have either:
+
 * Installed Matryoshka following the [Installation Guide](installation.md) (`baba`, `bbyg`, or `matryoshka`), or
 * Have `bunx` or `npx` ready to run zero-install commands on demand.
 
@@ -26,6 +27,7 @@ baba detect
 ```
 
 ### What Happens Behind the Scenes:
+
 * Identifies primary programming languages (TypeScript, JavaScript, Python, Go, Rust, Ruby, PHP).
 * Detects application frameworks (Next.js, FastAPI, Django, Gin, Actix, Rails, Laravel).
 * Recognizes testing harnesses (Bun test, Vitest, Jest, Pytest, Go test, Cargo test).
@@ -118,6 +120,7 @@ baba wrap
 ```
 
 ### Antipattern Rules Enforced:
+
 1. **`raw-sql` (CWE-89):** Flags dynamic SQL string interpolations, template literals, and unparameterized query calls.
 2. **`assertionless-test`:** Detects tests that execute functions without behavioral assertions (`expect`, `assert`, `t.Fatal`), preventing false-green test hazards.
 3. **`hardcoded-credential`:** Detects high-entropy plaintext API tokens, secret keys, and private credentials.
@@ -157,6 +160,7 @@ baba mcp serve
 ```
 
 The native MCP server exposes 4 core tools:
+
 * `detect_stack` — Polyglot language and framework inspection.
 * `scan_harness` — Maturity assessment (L0 to L4) and gap scoring.
 * `generate_agents` — Adaptive AGENTS.md compilation and modular skill provisioning.

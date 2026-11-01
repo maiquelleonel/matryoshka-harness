@@ -10,6 +10,9 @@ AI coding agents accelerate software development, but unchecked code generation 
 
 By integrating `baba wrap --strict` into CI runners, teams establish an automated, non-negotiable threshold for repository health and code safety.
 
+> 💡 **Pragmatic Adoption (Gate 3 in Any Project):**  
+> For 99% of consumer repositories adopting Matryoshka-Harness, **Gate 3 (`baba wrap --strict`)** is the only required gate to prevent regressions and AI-slop. Gates 1 and 2 represent your own linter/test suite, while Gates 4 and 5 illustrate our reference open-source repository governance (maintainer merge checks and automated SemVer packaging).
+
 ---
 
 ## 🏛️ The 5-Gate Quality Pipeline
@@ -25,7 +28,7 @@ flowchart TD
   Gate2 -->|Fail| Block2[CI Fails: Fix Failing Tests]
   Gate3 -->|Fail: Score < Threshold or Critical AST Violations| Remediate[Inspect DIAGNOSTIC.md & Remediate]
   Remediate --> PR
-  Gate3 -->|Pass: Clean Scan| Gate4[Gate 4: Maintainer Merge Gate @maiquelleonel]
+  Gate3 -->|Pass: Clean Scan| Gate4["Gate 4: Maintainer Merge Gate (CODEOWNERS)"]
   Gate4 -->|Approved Review| Merge[Merged into main]
   Gate4 -->|Blocked: Non-Maintainer| Wait[Await Maintainer Approval]
   Merge --> Gate5[Gate 5: Automated SemVer Release & NPM Distribution]
@@ -42,7 +45,7 @@ baba wrap --strict --threshold 80
 ```
 
 ### Deterministic Exit Codes
-* **`exit code 0` (Clean Build):** The composite Harness² score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
+* **`exit code 0` (Clean Build):** The composite score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
 * **`exit code 1` (Gate Failed):** The pipeline aborts immediately if:
   1. The composite score falls below `--threshold` (e.g. `< 80`).
   2. Any **Critical** AST anti-pattern violation is detected, regardless of overall score.
@@ -50,13 +53,16 @@ baba wrap --strict --threshold 80
 ### Critical Anti-Patterns That Block CI
 1. **`raw-sql` (CWE-89: SQL Injection):** Dynamic template string interpolation or unescaped string concatenation passed to database query methods.
 2. **`hardcoded-credential` (Secret Leakage):** Plaintext secret tokens (`sk_live_`, `ghp_`, `AKIA`) or variables with high Shannon entropy hardcoded in source files.
-3. **`assertionless-test` (False-Green Hazard):** Automated test functions (`it`, `test`, `def test_*`) executing production code without verifiable assertions (`expect`, `assert`).
+3. **`assertionless-test` (False-Green Hazard):** Automated test functions (`it`, `test`, `def test_*`) executing production code without verifiable assertions (`expect`, `assert`). *(Enabled when `--include-tests` is passed)*.
 
 ---
 
 ## ⚙️ GitHub Actions Workflow Configurations
 
-### 1. Verification Gate (`.github/workflows/ci.yml`)
+The following workflows illustrate how Matryoshka is embedded into continuous integration pipelines:
+
+### 1. Minimal Consumer Verification Gate (`.github/workflows/ci.yml`)
+> **The Core Integration:** Add the `baba wrap --strict` step to your existing CI pipeline to block regressions before merging.
 
 The primary CI verification workflow triggers on pull requests targeting `main` and on push events to `main` and `task/**` branches:
 
@@ -98,9 +104,10 @@ jobs:
         run: bun run baba wrap --strict --threshold 80
 ```
 
-### 2. Maintainer Merge Gate (`.github/workflows/maintainer-gate.yml`)
+### 2. Reference Governance: Maintainer Merge Gate (`.github/workflows/maintainer-gate.yml`)
+*(Optional / Reference implementation for open-source libraries or strict forks)*
 
-To prevent unauthorized or rogue merges by automated agents or external contributors, the maintainer merge gate ensures that PRs can only be merged when authored by or explicitly approved by authorized repository maintainers:
+To prevent unauthorized or rogue merges by automated agents or external contributors, this reference gate ensures that PRs can only be merged when authored by or explicitly approved by authorized repository maintainers:
 
 ```yaml
 name: Maintainer Merge Gate
@@ -126,7 +133,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const authorizedMaintainers = ['maiquelleonel'];
+            // Configure your team's authorized maintainers or tech leads:
+            const authorizedMaintainers = ['your-github-username', 'lead-maintainer'];
             const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed('No pull request found in event context.');
@@ -151,17 +159,21 @@ jobs:
             });
 
             if (!hasMaintainerApproval) {
-              core.setFailed(`PR requires approval from an authorized maintainer (@maiquelleonel) before merging into main.`);
+              core.setFailed(`PR requires approval from an authorized maintainer (${authorizedMaintainers.map(m => '@' + m).join(', ')}) before merging into main.`);
             }
 ```
 
+> 💡 **Implementation Reference Note:** In this repository, the authorized maintainer is configured as `@maiquelleonel`. When adopting this template in your own project, configure `authorizedMaintainers` with your team's authorized GitHub usernames.
+
 ### 3. Repository Ownership Definition (`.github/CODEOWNERS`)
 
-Code ownership is canonically configured in `.github/CODEOWNERS` to assign default review ownership across the entire codebase to the principal maintainer:
+Code ownership is canonically configured in `.github/CODEOWNERS` to assign default review ownership across the entire codebase to your designated maintainer or tech lead team:
 
 ```
-* @maiquelleonel
+* @your-org/tech-leads
 ```
+
+> 💡 **Implementation Reference Note:** In this repository, code ownership defaults to `* @maiquelleonel`. Replace this handle with your team's GitHub organization or maintainer handle.
 
 ---
 

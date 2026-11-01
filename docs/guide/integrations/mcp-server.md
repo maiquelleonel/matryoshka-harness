@@ -25,19 +25,19 @@ Matryoshka enforces rigorous stream separation:
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Agent as AI Coding Agent (Cursor / Claude / Gemini / Zed)
-  participant Stdio as Stdio Transport (JSON-RPC 2.0)
-  participant Guard as Stderr Logging Guard
-  participant Server as Matryoshka MCP Server (baba mcp serve)
-  participant Engine as Governance & AST Engines
+  participant Agent as 🤖 AI Coding Agent<br/>(Cursor / Claude / Gemini)
+  participant Stdio as 🔌 Stdio Transport<br/>(JSON-RPC 2.0)
+  participant Guard as 🛡️ Stderr Guard<br/>(Stream Isolation)
+  participant Server as 🪆 Matryoshka Server<br/>(baba mcp serve)
+  participant Engine as ⚙️ Governance Engines<br/>(AST & Oracle)
 
-  Agent->>Stdio: Send JSON-RPC 2.0 Request (tools/call, resources/read, prompts/get)
-  Stdio->>Server: Parse incoming line from stdin
-  Server->>Engine: Dispatch to registered Tool / Resource / Prompt handler
-  Engine-->>Server: Return domain results
-  Server-->>Stdio: Format JSON-RPC 2.0 response to stdout
-  Stdio-->>Agent: Deliver structured response to agent
-  Note over Guard,Server: Diagnostic logs redirected to stderr via installStderrLoggingGuard ([matryoshka-mcp])
+  Agent->>Stdio: 1. Send JSON-RPC Request<br/>(tools/call, resources, prompts)
+  Stdio->>Server: 2. Parse stdin stream envelope
+  Server->>Engine: 3. Dispatch to Tool / Resource handler
+  Engine-->>Server: 4. Return AST & maturity payload
+  Server-->>Stdio: 5. Write pure JSON-RPC to stdout
+  Stdio-->>Agent: 6. Deliver structured result
+  Note over Guard,Server: Diagnostic logs redirected to stderr<br/>via installStderrLoggingGuard
 ```
 
 ---
@@ -93,7 +93,7 @@ Compiles an ultra-lean, token-bounded root `AGENTS.md` (< 200 tokens) and genera
   * `strictTokenGuard` *(boolean, optional)*: Fail if token count exceeds budget.
 
 ### 4. `wrap_context`
-Executes deep, in-memory Abstract Syntax Tree (AST) scanning using Tree-sitter WebAssembly (WASM), identifies antipatterns (`raw-sql`, `assertionless-test`, `hardcoded-credential`), computes the Harness² Composite Score, and compiles the `DIAGNOSTIC.md` remediation plan.
+Executes deep, in-memory Abstract Syntax Tree (AST) scanning using Tree-sitter WebAssembly (WASM), identifies antipatterns (`raw-sql`, `assertionless-test`, `hardcoded-credential`), and compiles the `DIAGNOSTIC.md` remediation plan.
 
 * **Parameters:**
   * `path` *(string, optional)*: Target directory to parse and evaluate.

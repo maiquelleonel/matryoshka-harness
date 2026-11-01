@@ -12,6 +12,7 @@ baba agents <command> [path] [options]
 
 ### Command Aliases
 `baba agents` guarantees strict behavioral parity across all aliases:
+
 * `baba agents` — Short CLI entry point
 * `bbyg agents` — Baba-Yaga alias
 * `matryoshka agents` — Canonical package name
@@ -23,6 +24,7 @@ baba agents <command> [path] [options]
 The `agents` command suite eliminates the "AI-Slop" and context bloat crisis. Monolithic 500-line prompt files waste expensive API tokens and dilute model attention, leading to hallucinations and poor adherence to guidelines.
 
 Matryoshka solves this by enforcing **adaptive context-fencing**:
+
 1. An ultra-lean root **`AGENTS.md`** strictly bounded under **200 tokens** (hard limit: **250 tokens**).
 2. Modular, specialized skills housed in **`.agents/skills/`** loaded only on demand using mandatory **YAML frontmatter**.
 3. Non-negotiable software engineering invariants rooted in **YAGNI** and **DRY**.
@@ -39,6 +41,7 @@ baba agents generate [path] [options]
 ```
 
 #### Options:
+
 * `--interactive, -i` — Launch interactive terminal UI to review stack and select skills. In headless environments, automatically falls back to deterministic batch mode.
 * `--yes, -y` — Bypass interactive prompts and apply recommended defaults non-interactively.
 * `--force, -f` — Overwrite existing `AGENTS.md`. Automatically creates an `AGENTS.md.bak` backup to prevent loss of custom instructions.
@@ -55,6 +58,7 @@ baba agents profile [path] [options]
 ```
 
 Discovers architectural seams (routes, controllers, models, services) and classifies projects into:
+
 * `api_backend`
 * `opinionated_monolith`
 * `reactive_frontend`
@@ -71,6 +75,7 @@ baba agents check [path] [options]
 ```
 
 #### Options:
+
 * `--max-tokens <num>` — Maximum token threshold for compliance (defaults to `250`).
 * `--json` — Emit token metrics and pass/fail status as JSON.
 
@@ -84,6 +89,7 @@ baba agents skill <name> [path] [options]
 ```
 
 #### Available Skill Names:
+
 * `backend` — ORM query optimization, anti-N+1 strategies, and routing conventions.
 * `frontend` — Core Web Vitals, CLS prevention, image sizing, and semantic accessibility.
 * `database` — Migration safety, non-blocking indexing (`CONCURRENTLY`), and transaction boundaries.
@@ -156,4 +162,24 @@ Output:
     ]
   }
 }
+```
+
+
+---
+
+## 🔄 Non-Destructive Legacy Migration (`baba agents migrate`)
+
+The `baba agents migrate` command safely migrates pre-existing monolithic instruction files into modular skills.
+
+### Zero-Loss Guarantee:
+
+* **Byte-for-byte Backup:** Snapshots original file to `AGENTS.md.bak`.
+* **Domain Extraction:** Extracts customized business rules into `.agents/skills/<project-name>/SKILL.md`.
+* **Lean Root Index:** Compiles an ultra-lean root `AGENTS.md` (< 200 tokens) referencing the project custom skill.
+
+### Examples:
+```bash
+baba agents migrate
+baba agents migrate --from .cursorrules
+baba agents migrate --dry-run
 ```

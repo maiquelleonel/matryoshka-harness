@@ -12,6 +12,7 @@ baba mcp <command> [path] [options]
 
 ### Command Aliases
 `baba mcp` maintains strict parity across all CLI aliases:
+
 * `baba mcp` — Convenient 4-letter alias
 * `bbyg mcp` — Baba-Yaga alias
 * `matryoshka mcp` — Canonical package binary
@@ -23,6 +24,7 @@ baba mcp <command> [path] [options]
 The `mcp` command suite connects Matryoshka's governance engines directly to AI development tools and editors through Anthropic's **Model Context Protocol (MCP)**.
 
 It provides two core capabilities:
+
 1. **`wire`:** Automatically injects `codebase-memory-mcp` configuration into Cursor, Gemini CLI, and Claude Code without overwriting existing settings.
 2. **`serve`:** Launches a native JSON-RPC 2.0 MCP server over `stdio` exposing Matryoshka auditing tools, prompts, and resources.
 
@@ -42,6 +44,7 @@ baba mcp wire [path] [options]
 * **Claude Code:** Injected into `.claude/mcp.json`
 
 ### Options:
+
 * `--targets <list>` — Comma-separated list of target environments to configure (e.g. `cursor,gemini,claude`). Defaults to all supported targets.
 * `--target <name>` — Singular alias for targeting a single environment.
 * `--dry-run` — Preview planned configuration modifications without modifying files on disk.
