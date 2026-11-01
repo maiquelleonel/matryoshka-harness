@@ -25,7 +25,7 @@ flowchart TD
   Gate2 -->|Fail| Block2[CI Fails: Fix Failing Tests]
   Gate3 -->|Fail: Score < Threshold or Critical AST Violations| Remediate[Inspect DIAGNOSTIC.md & Remediate]
   Remediate --> PR
-  Gate3 -->|Pass: Clean Scan| Gate4[Gate 4: Maintainer Merge Gate @maiquelleonel]
+  Gate3 -->|Pass: Clean Scan| Gate4[Gate 4: Maintainer Merge Gate (CODEOWNERS)]
   Gate4 -->|Approved Review| Merge[Merged into main]
   Gate4 -->|Blocked: Non-Maintainer| Wait[Await Maintainer Approval]
   Merge --> Gate5[Gate 5: Automated SemVer Release & NPM Distribution]
@@ -126,7 +126,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const authorizedMaintainers = ['maiquelleonel'];
+            // Configure your team's authorized maintainers or tech leads:
+            const authorizedMaintainers = ['your-github-username', 'lead-maintainer'];
             const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed('No pull request found in event context.');
@@ -151,17 +152,21 @@ jobs:
             });
 
             if (!hasMaintainerApproval) {
-              core.setFailed(`PR requires approval from an authorized maintainer (@maiquelleonel) before merging into main.`);
+              core.setFailed(`PR requires approval from an authorized maintainer (${authorizedMaintainers.map(m => '@' + m).join(', ')}) before merging into main.`);
             }
 ```
 
+> 💡 **Implementation Reference Note:** In this repository, the authorized maintainer is configured as `@maiquelleonel`. When adopting this template in your own project, configure `authorizedMaintainers` with your team's authorized GitHub usernames.
+
 ### 3. Repository Ownership Definition (`.github/CODEOWNERS`)
 
-Code ownership is canonically configured in `.github/CODEOWNERS` to assign default review ownership across the entire codebase to the principal maintainer:
+Code ownership is canonically configured in `.github/CODEOWNERS` to assign default review ownership across the entire codebase to your designated maintainer or tech lead team:
 
 ```
-* @maiquelleonel
+* @your-org/tech-leads
 ```
+
+> 💡 **Implementation Reference Note:** In this repository, code ownership defaults to `* @maiquelleonel`. Replace this handle with your team's GitHub organization or maintainer handle.
 
 ---
 
