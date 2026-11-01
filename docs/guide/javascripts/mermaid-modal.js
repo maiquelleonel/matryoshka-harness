@@ -8,11 +8,41 @@
     return root;
   };
 
-  let currentZoom = 1.0;
-  let activeSvg = null;
+  let scale = 1.0;
+  let panX = 0;
+  let panY = 0;
+  let naturalWidth = 800;
+  let naturalHeight = 600;
+  let canvas = null;
+  let viewport = null;
   let isPanning = false;
   let startX = 0, startY = 0;
-  let scrollLeftStart = 0, scrollTopStart = 0;
+  let initialPanX = 0, initialPanY = 0;
+
+  function applyTransform() {
+    if (!canvas) return;
+    canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    const resetBtn = document.getElementById("mm-zoom-reset");
+    if (resetBtn) {
+      resetBtn.textContent = `${Math.round(scale * 100)}%`;
+    }
+  }
+
+  function fitToScreen() {
+    if (!viewport || !canvas) return;
+    const vW = viewport.clientWidth || window.innerWidth;
+    const vH = viewport.clientHeight || (window.innerHeight - 60);
+
+    const padding = 60;
+    const scaleX = (vW - padding * 2) / naturalWidth;
+    const scaleY = (vH - padding * 2) / naturalHeight;
+    // Fit completely inside viewport, max initial scale 1.0
+    scale = Math.max(0.1, Math.min(1.0, scaleX, scaleY));
+
+    panX = (vW - naturalWidth * scale) / 2;
+    panY = (vH - naturalHeight * scale) / 2;
+    applyTransform();
+  }
 
   function ensureModal() {
     let overlay = document.getElementById("mermaid-modal-overlay");
@@ -24,31 +54,29 @@
           <div class="mermaid-modal-title">🔍 Mermaid Architecture Inspector (Scroll wheel to zoom, drag to pan)</div>
           <div class="mermaid-modal-controls">
             <button type="button" class="mermaid-btn" id="mm-zoom-out" title="Zoom Out">−</button>
-            <button type="button" class="mermaid-btn" id="mm-zoom-reset" title="Reset">100%</button>
+            <button type="button" class="mermaid-btn" id="mm-zoom-reset" title="Fit to Screen">100%</button>
             <button type="button" class="mermaid-btn" id="mm-zoom-in" title="Zoom In">+</button>
             <button type="button" class="mermaid-btn btn-close" id="mm-close" title="Close (Esc)">✕ Close</button>
           </div>
         </div>
-        <div class="mermaid-modal-viewport" id="mermaid-modal-viewport"></div>
+        <div class="mermaid-modal-viewport" id="mermaid-modal-viewport">
+          <div class="mermaid-modal-canvas" id="mermaid-modal-canvas"></div>
+        </div>
       `;
       document.body.appendChild(overlay);
 
-      const viewport = document.getElementById("mermaid-modal-viewport");
+      viewport = document.getElementById("mermaid-modal-viewport");
+      canvas = document.getElementById("mermaid-modal-canvas");
 
       const close = () => {
         overlay.classList.remove("active");
         overlay.style.display = "none";
-        viewport.innerHTML = "";
-        activeSvg = null;
-        currentZoom = 1.0;
+        canvas.innerHTML = "";
+        scale = 1.0;
+        panX = 0;
+        panY = 0;
         isPanning = false;
         viewport.classList.remove("grabbing");
-      };
-
-      const updateScale = () => {
-        if (!activeSvg) return;
-        activeSvg.style.transform = `scale(${currentZoom})`;
-        document.getElementById("mm-zoom-reset").textContent = `${Math.round(currentZoom * 100)}%`;
       };
 
       document.getElementById("mm-close").addEventListener("click", (e) => {
@@ -57,7 +85,7 @@
       });
 
       overlay.addEventListener("click", (e) => {
-        if (e.target === overlay || e.target === viewport) {
+        if (e.target === overlay) {
           close();
         }
       });
@@ -68,52 +96,77 @@
         }
       });
 
+      // Zoom In (centered on screen)
       document.getElementById("mm-zoom-in").addEventListener("click", (e) => {
         e.stopPropagation();
-        currentZoom = Math.min(4.0, currentZoom + 0.25);
-        updateScale();
+        const vW = viewport.clientWidth;
+        const vH = viewport.clientHeight;
+        const centerX = vW / 2;
+        const centerY = vH / 2;
+        const newScale = Math.min(5.0, scale * 1.25);
+        panX = centerX - (centerX - panX) * (newScale / scale);
+        panY = centerY - (centerY - panY) * (newScale / scale);
+        scale = newScale;
+        applyTransform();
       });
 
+      // Zoom Out (centered on screen)
       document.getElementById("mm-zoom-out").addEventListener("click", (e) => {
         e.stopPropagation();
-        currentZoom = Math.max(0.3, currentZoom - 0.25);
-        updateScale();
+        const vW = viewport.clientWidth;
+        const vH = viewport.clientHeight;
+        const centerX = vW / 2;
+        const centerY = vH / 2;
+        const newScale = Math.max(0.1, scale * 0.8);
+        panX = centerX - (centerX - panX) * (newScale / scale);
+        panY = centerY - (centerY - panY) * (newScale / scale);
+        scale = newScale;
+        applyTransform();
       });
 
+      // Reset / Fit to Screen
       document.getElementById("mm-zoom-reset").addEventListener("click", (e) => {
         e.stopPropagation();
-        currentZoom = 1.0;
-        updateScale();
+        fitToScreen();
       });
 
-      // Mouse wheel zoom
+      // Mouse wheel zoom centered on cursor (Figma-style)
       viewport.addEventListener(
         "wheel",
         (e) => {
           e.preventDefault();
-          const delta = e.deltaY < 0 ? 0.15 : -0.15;
-          currentZoom = Math.max(0.3, Math.min(4.0, currentZoom + delta));
-          updateScale();
+          const rect = viewport.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+
+          const factor = e.deltaY < 0 ? 1.15 : 0.87;
+          const newScale = Math.max(0.08, Math.min(6.0, scale * factor));
+
+          panX = mouseX - (mouseX - panX) * (newScale / scale);
+          panY = mouseY - (mouseY - panY) * (newScale / scale);
+          scale = newScale;
+
+          applyTransform();
         },
         { passive: false }
       );
 
-      // Drag to pan
+      // Drag to pan (infinite canvas)
       viewport.addEventListener("mousedown", (e) => {
         if (e.button !== 0) return;
         isPanning = true;
         startX = e.clientX;
         startY = e.clientY;
-        scrollLeftStart = viewport.scrollLeft;
-        scrollTopStart = viewport.scrollTop;
+        initialPanX = panX;
+        initialPanY = panY;
         viewport.classList.add("grabbing");
       });
 
       window.addEventListener("mousemove", (e) => {
         if (!isPanning) return;
-        e.preventDefault();
-        viewport.scrollLeft = scrollLeftStart - (e.clientX - startX);
-        viewport.scrollTop = scrollTopStart - (e.clientY - startY);
+        panX = initialPanX + (e.clientX - startX);
+        panY = initialPanY + (e.clientY - startY);
+        applyTransform();
       });
 
       window.addEventListener("mouseup", () => {
@@ -129,26 +182,43 @@
   function openModalWithSvg(svg) {
     if (!svg) return;
     const overlay = ensureModal();
-    const viewport = document.getElementById("mermaid-modal-viewport");
-    viewport.innerHTML = "";
+    canvas = document.getElementById("mermaid-modal-canvas");
+    viewport = document.getElementById("mermaid-modal-viewport");
+    canvas.innerHTML = "";
 
     const clone = svg.cloneNode(true);
     clone.removeAttribute("width");
     clone.removeAttribute("height");
-        clone.style.maxWidth = "none";
-    clone.style.width = "auto";
-    clone.style.height = "auto";
+
+    // Extract natural dimensions from viewBox or bounding box
+    let w = 800;
+    let h = 600;
+    if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
+      w = svg.viewBox.baseVal.width;
+      h = svg.viewBox.baseVal.height;
+    } else {
+      const bbox = svg.getBoundingClientRect();
+      w = bbox.width || 800;
+      h = bbox.height || 600;
+    }
+
+    naturalWidth = w;
+    naturalHeight = h;
+
+    clone.style.width = `${w}px`;
+    clone.style.height = `${h}px`;
+    clone.style.maxWidth = "none";
+    clone.style.maxHeight = "none";
     clone.style.display = "block";
 
-    viewport.appendChild(clone);
-    activeSvg = clone;
-    currentZoom = 1.0;
-    activeSvg.style.transform = `scale(${currentZoom})`;
-    document.getElementById("mm-zoom-reset").textContent = `${Math.round(currentZoom * 100)}%`;
+    canvas.appendChild(clone);
 
     overlay.style.display = "flex";
     void overlay.offsetWidth;
     overlay.classList.add("active");
+
+    // Auto-fit to viewport so tall or wide diagrams are never cut off
+    fitToScreen();
   }
 
   function getSvgFromEvent(event) {
@@ -170,7 +240,6 @@
       }
     }
 
-    // If not inside a .mermaid block in composedPath, check target.closest
     if (!mermaidContainer) {
       const target = event.target;
       if (!target || !target.closest) return null;
@@ -178,8 +247,6 @@
       if (!mermaidContainer) return null;
     }
 
-    // STRICT ISOLATION: The click MUST have occurred inside a .mermaid block
-    // Ignore header logos, hamburger nav icons, search buttons, copy buttons, etc.
     const shadow = mermaidContainer.__mermaidShadow || mermaidContainer.shadowRoot;
     if (shadow) {
       const shadowSvg = shadow.querySelector("svg");
