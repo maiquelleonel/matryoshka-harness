@@ -1,6 +1,6 @@
 # baba scan
 
-Audit repository maturity across 5 governance axes against the canonical `paladini/harness-score` oracle and generate dynamic SVG compliance badges.
+Audit repository maturity across 5 governance axes against the canonical [`paladini/harness-score`](https://github.com/paladini/harness-score) oracle and generate dynamic SVG compliance badges.
 
 ---
 
@@ -20,7 +20,7 @@ baba scan [path] [options]
 
 ## 📖 Description
 
-The `scan` command evaluates the engineering hygiene and agentic maturity of your repository. It reconciles structural file markers against the canonical **`paladini/harness-score`** oracle model across five governance axes, computing an objective score out of **105 maximum points** and assigning a maturity tier from **L0** to **L4**.
+The `scan` command evaluates the engineering hygiene and agentic maturity of your repository. It reconciles structural file markers against the canonical [**`paladini/harness-score`**](https://github.com/paladini/harness-score) oracle model across five governance axes, computing an objective score out of **105 maximum points** and assigning a maturity tier from **L0** to **L4**.
 
 If the external oracle binary is unavailable in the execution environment, Matryoshka activates a resilient in-memory evaluator with zero network calls and zero host crashes.
 
