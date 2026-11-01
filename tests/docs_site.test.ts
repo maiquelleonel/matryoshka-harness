@@ -272,11 +272,11 @@ describe("SPEC-17: Technical Documentation Site & Agnostic Information Architect
         const content = fs.readFileSync(adaptiveAgentsPath, "utf-8");
         expect(content).toContain(".agents/skills/");
         expect(content).toContain("YAML frontmatter");
-        expect(content).toContain("skill-backend.md");
-        expect(content).toContain("skill-frontend.md");
-        expect(content).toContain("skill-database.md");
-        expect(content).toContain("skill-security.md");
-        expect(content).toContain("skill-testing.md");
+        expect(content).toContain("backend/SKILL.md");
+        expect(content).toContain("frontend/SKILL.md");
+        expect(content).toContain("database/SKILL.md");
+        expect(content).toContain("security/SKILL.md");
+        expect(content).toContain("testing/SKILL.md");
       });
 
       it("documents archetype classification taxonomy and CLI commands", () => {

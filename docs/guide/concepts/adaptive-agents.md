@@ -36,6 +36,7 @@ The root `AGENTS.md` is the only file injected on every prompt turn. It serves a
 
 ### Token Guard Hard Ceiling (< 250 Tokens)
 Matryoshka's compiler enforces a mathematical token budget:
+
 * **Target Budget:** `< 200 tokens`
 * **Hard Token Guard Ceiling:** `< 250 tokens`
 
@@ -88,14 +89,14 @@ description: Framework-idiomatic ORM patterns, transactional boundaries, anti-N+
 By indexing only the frontmatter metadata (under 40 tokens per skill), the agent understands **what skills exist and when to invoke them**, loading the comprehensive instruction body **strictly on demand**. This architecture delivers **more than 85% token savings** per conversational turn.
 
 ### The Canonical Skill Modules (`.agents/skills/<domain>/SKILL.md`):
-Adhering to the official Anthropic and Cursor Agent Skills specification, domain guidelines reside in dedicated subdirectories under `.agents/skills/` (with automatic compatibility aliases `skill-<domain>.md` generated during transitions):
+Adhering to the official Anthropic and Cursor Agent Skills specification, domain guidelines reside in dedicated subdirectories under `.agents/skills/`:
 
-1. **`backend/SKILL.md` (`skill-backend.md`):** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
-2. **`frontend/SKILL.md` (`skill-frontend.md`):** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
-3. **`database/SKILL.md` (`skill-database.md`):** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
-4. **`security/SKILL.md` (`skill-security.md`):** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
-5. **`testing/SKILL.md` (`skill-testing.md`):** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
-6. **`<project-name>/SKILL.md` (`legacy-knowledge.md`):** Encapsulated institutional legacy instructions and project-specific human rules extracted without loss during migration.
+1. **`backend/SKILL.md`:** Framework-specific ORM patterns (Prisma, SQLAlchemy, Django ORM, Diesel, GORM), repository seams, and transactional boundaries.
+2. **`frontend/SKILL.md`:** Core Web Vitals optimization, Cumulative Layout Shift (CLS) prevention, pure state rendering, and semantic Accessibility (A11y).
+3. **`database/SKILL.md`:** Zero-downtime migration patterns, concurrent index creation (`CREATE INDEX CONCURRENTLY`), lock timeouts, and connection pool sizing.
+4. **`security/SKILL.md`:** OWASP Top 10 defenses, input sanitization, safe parameter binding, and zero secret leakage prevention.
+5. **`testing/SKILL.md`:** The Seam Contract—enforcing Red-to-Green Test-Driven Development (RED acceptance tests before touching production code) and strict mock boundaries.
+6. **`<project-name>/SKILL.md`:** Encapsulated institutional legacy instructions and project-specific human rules extracted without loss during migration.
 
 ---
 
