@@ -127,7 +127,9 @@
         const mermaidContainer = e.target.closest(".mermaid");
         if (!mermaidContainer) return;
 
-        const svg = mermaidContainer.querySelector("svg");
+        const svg = mermaidContainer.tagName && mermaidContainer.tagName.toLowerCase() === "svg" 
+          ? mermaidContainer 
+          : mermaidContainer.querySelector("svg");
         if (svg) {
           e.preventDefault();
           e.stopPropagation();
