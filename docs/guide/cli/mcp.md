@@ -24,6 +24,7 @@ baba mcp <command> [path] [options]
 The `mcp` command suite connects Matryoshka's governance engines directly to AI development tools and editors through Anthropic's **Model Context Protocol (MCP)**.
 
 It provides two core capabilities:
+
 1. **`wire`:** Automatically injects `codebase-memory-mcp` configuration into Cursor, Gemini CLI, and Claude Code without overwriting existing settings.
 2. **`serve`:** Launches a native JSON-RPC 2.0 MCP server over `stdio` exposing Matryoshka auditing tools, prompts, and resources.
 

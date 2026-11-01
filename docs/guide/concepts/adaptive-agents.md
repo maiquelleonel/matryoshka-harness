@@ -196,6 +196,7 @@ Instead of polluting the root instruction prompt, Matryoshka encapsulates the en
 ```
 
 ### Architectural Properties:
+
 1. **Canonical Directory Naming:** Subdirectory is derived directly from the project directory name (e.g., `.agents/skills/wpp-agent-checker/SKILL.md` or `.agents/skills/billing-api/SKILL.md`).
 2. **On-Demand Activation:** The root `AGENTS.md` indexes this skill under its operational directives. Coding agents load the comprehensive project-specific rules *strictly on-demand*, saving over 85% of token budget during general tasks.
 3. **Anthropic & Cursor Canonical Standards:** Conforms to the standard Agent Skills specification with YAML frontmatter metadata (`name`, `description`, `origin: legacy_migration`).

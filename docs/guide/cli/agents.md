@@ -24,6 +24,7 @@ baba agents <command> [path] [options]
 The `agents` command suite eliminates the "AI-Slop" and context bloat crisis. Monolithic 500-line prompt files waste expensive API tokens and dilute model attention, leading to hallucinations and poor adherence to guidelines.
 
 Matryoshka solves this by enforcing **adaptive context-fencing**:
+
 1. An ultra-lean root **`AGENTS.md`** strictly bounded under **200 tokens** (hard limit: **250 tokens**).
 2. Modular, specialized skills housed in **`.agents/skills/`** loaded only on demand using mandatory **YAML frontmatter**.
 3. Non-negotiable software engineering invariants rooted in **YAGNI** and **DRY**.

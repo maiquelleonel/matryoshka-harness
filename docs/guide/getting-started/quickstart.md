@@ -120,6 +120,7 @@ baba wrap
 ```
 
 ### Antipattern Rules Enforced:
+
 1. **`raw-sql` (CWE-89):** Flags dynamic SQL string interpolations, template literals, and unparameterized query calls.
 2. **`assertionless-test`:** Detects tests that execute functions without behavioral assertions (`expect`, `assert`, `t.Fatal`), preventing false-green test hazards.
 3. **`hardcoded-credential`:** Detects high-entropy plaintext API tokens, secret keys, and private credentials.
