@@ -42,7 +42,7 @@ baba wrap --strict --threshold 80
 ```
 
 ### Deterministic Exit Codes
-* **`exit code 0` (Clean Build):** The composite Composite score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
+* **`exit code 0` (Clean Build):** The composite score meets or exceeds the required threshold, and zero critical AST violations were detected across parsed files.
 * **`exit code 1` (Gate Failed):** The pipeline aborts immediately if:
   1. The composite score falls below `--threshold` (e.g. `< 80`).
   2. Any **Critical** AST anti-pattern violation is detected, regardless of overall score.
@@ -50,7 +50,7 @@ baba wrap --strict --threshold 80
 ### Critical Anti-Patterns That Block CI
 1. **`raw-sql` (CWE-89: SQL Injection):** Dynamic template string interpolation or unescaped string concatenation passed to database query methods.
 2. **`hardcoded-credential` (Secret Leakage):** Plaintext secret tokens (`sk_live_`, `ghp_`, `AKIA`) or variables with high Shannon entropy hardcoded in source files.
-3. **`assertionless-test` (False-Green Hazard):** Automated test functions (`it`, `test`, `def test_*`) executing production code without verifiable assertions (`expect`, `assert`).
+3. **`assertionless-test` (False-Green Hazard):** Automated test functions (`it`, `test`, `def test_*`) executing production code without verifiable assertions (`expect`, `assert`). *(Enabled when `--include-tests` is passed)*.
 
 ---
 
