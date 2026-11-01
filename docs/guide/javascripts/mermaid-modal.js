@@ -123,24 +123,15 @@
           return;
         }
 
-        // Find closest rendered SVG or container
-        let el = e.target;
-        while (el && el !== document.body) {
-          if (
-            el.tagName &&
-            (el.tagName.toLowerCase() === "svg" ||
-              el.classList?.contains("mermaid") ||
-              el.parentElement?.classList?.contains("mermaid"))
-          ) {
-            const svg = el.tagName.toLowerCase() === "svg" ? el : el.querySelector("svg");
-            if (svg) {
-              e.preventDefault();
-              e.stopPropagation();
-              openModalWithSvg(svg);
-              return;
-            }
-          }
-          el = el.parentElement;
+        // Strictly target elements inside .mermaid blocks (ignore header logos, icons, nav SVGs)
+        const mermaidContainer = e.target.closest(".mermaid");
+        if (!mermaidContainer) return;
+
+        const svg = mermaidContainer.querySelector("svg");
+        if (svg) {
+          e.preventDefault();
+          e.stopPropagation();
+          openModalWithSvg(svg);
         }
       },
       true
