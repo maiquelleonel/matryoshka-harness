@@ -43,6 +43,7 @@ bbyg fix [path] [options]
 ```
 
 ### Options:
+
 * `--ci`: Scaffold baseline GitHub Actions CI workflow (enabled by default).
 * `--no-ci`: Skip `.github/workflows/ci.yml` scaffolding.
 * `--force, -f`: Overwrite pre-existing files while creating backups.

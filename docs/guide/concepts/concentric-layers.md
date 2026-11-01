@@ -1,6 +1,7 @@
 # Concentric Layers (The Russian Doll Mental Model)
 
 Modern autonomous AI coding agents (Claude Code, Gemini CLI, Cursor, OpenAI Codex) possess tremendous synthesis capabilities, yet in real-world software engineering, they frequently trigger what the industry terms the **AI-Slop Crisis**:
+
 * Unconstrained freedom leading to speculative abstractions (inventing unwanted class hierarchies, factory patterns, or enterprise boilerplate where simple functions suffice).
 * Context window pollution (dumping massive 1,500-line prompt files that dilute model attention and burn thousands of dollars in input tokens).
 * False-green verification (generating tests with mocks that assert nothing, masking breaking changes).

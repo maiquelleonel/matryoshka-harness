@@ -60,6 +60,7 @@ If a customized root `AGENTS.md` exceeds 250 tokens, `baba agents check` fails i
 
 ## 🧭 On-Demand Specialized Skills
 Load specialized guidelines only when touching respective domains:
+
 * Backend & ORM: `.agents/skills/backend/SKILL.md`
 * Frontend & UI: `.agents/skills/frontend/SKILL.md`
 * Database & Migrations: `.agents/skills/database/SKILL.md`

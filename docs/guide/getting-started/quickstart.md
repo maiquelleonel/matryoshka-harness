@@ -7,6 +7,7 @@ Welcome to **Matryoshka-Harness**! In less than 5 minutes, you will fence your c
 ## 📋 Prerequisites
 
 Before starting, make sure you have either:
+
 * Installed Matryoshka following the [Installation Guide](installation.md) (`baba`, `bbyg`, or `matryoshka`), or
 * Have `bunx` or `npx` ready to run zero-install commands on demand.
 
@@ -26,6 +27,7 @@ baba detect
 ```
 
 ### What Happens Behind the Scenes:
+
 * Identifies primary programming languages (TypeScript, JavaScript, Python, Go, Rust, Ruby, PHP).
 * Detects application frameworks (Next.js, FastAPI, Django, Gin, Actix, Rails, Laravel).
 * Recognizes testing harnesses (Bun test, Vitest, Jest, Pytest, Go test, Cargo test).
@@ -157,6 +159,7 @@ baba mcp serve
 ```
 
 The native MCP server exposes 4 core tools:
+
 * `detect_stack` — Polyglot language and framework inspection.
 * `scan_harness` — Maturity assessment (L0 to L4) and gap scoring.
 * `generate_agents` — Adaptive AGENTS.md compilation and modular skill provisioning.

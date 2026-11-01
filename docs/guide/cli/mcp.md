@@ -43,6 +43,7 @@ baba mcp wire [path] [options]
 * **Claude Code:** Injected into `.claude/mcp.json`
 
 ### Options:
+
 * `--targets <list>` — Comma-separated list of target environments to configure (e.g. `cursor,gemini,claude`). Defaults to all supported targets.
 * `--target <name>` — Singular alias for targeting a single environment.
 * `--dry-run` — Preview planned configuration modifications without modifying files on disk.

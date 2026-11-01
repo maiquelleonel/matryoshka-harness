@@ -85,6 +85,7 @@ baba wrap --strict --threshold 85
 ```
 
 ### Exit Codes:
+
 * `0` — Clean scan. Composite score $\ge$ threshold, and zero critical AST violations.
 * `1` — Quality gate failed. Either composite score $<$ threshold or at least one critical violation was detected.
 

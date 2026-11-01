@@ -48,6 +48,7 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
 ```
 
 ### Architectural Guarantees:
+
 * **Zero Host Toolchains:** Executes natively inside the Bun JavaScript runtime without requiring GCC, Clang, Python, or Cargo on the host machine.
 * **Sub-200ms Execution:** In-memory AST construction and tree-walking inspects polyglot repositories in milliseconds.
 * **Resilient Walking Guards:**

@@ -45,6 +45,7 @@ The `detect` command inspects the target directory to determine the architectura
 
 ### Polyglot Language Matrix
 The detection engine recognizes primary languages from manifests and directory fingerprints:
+
 * **TypeScript:** Detected via `tsconfig.json`, `package.json`, `.ts`/`.tsx` files.
 * **JavaScript:** Detected via `package.json`, `.js`/`.mjs` files without `tsconfig.json`.
 * **Python:** Detected via `pyproject.toml`, `requirements.txt`, `Pipfile`, `setup.py`.
