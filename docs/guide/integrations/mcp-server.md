@@ -37,7 +37,7 @@ sequenceDiagram
   Engine-->>Server: 4. Return AST & maturity payload
   Server-->>Stdio: 5. Write pure JSON-RPC to stdout
   Stdio-->>Agent: 6. Deliver structured result
-  Note over Guard,Server: Diagnostic logs redirected to stderr via installStderrLoggingGuard
+  Note over Guard,Server: Diagnostic logs redirected to stderr<br/>via installStderrLoggingGuard
 ```
 
 ---

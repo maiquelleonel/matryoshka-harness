@@ -9,6 +9,7 @@ site_dir: site-docs
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     - scheme: slate
       primary: red
@@ -36,6 +37,13 @@ theme:
     - content.tabs.link
   icon:
     repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+extra_css:
+  - stylesheets/mermaid-modal.css
+
 
 markdown_extensions:
   - admonition
