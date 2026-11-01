@@ -1,9 +1,9 @@
-# Polyglot AST Engine (Harness² Remediation)
+# Polyglot AST Engine (Composite Remediation)
 
 Static code analysis in modern AI-assisted engineering requires far deeper structural understanding than superficial regex matching or basic file-existence linters. Large Language Models (LLMs) frequently generate syntactically correct code that masks critical architectural and security flaws:
 
-* **Unparameterized Dynamic SQL (CWE-89):** LLMs assemble queries via string template interpolation (`db.query(\`SELECT * FROM users WHERE id = ${userId}\`)`), introducing critical SQL injection vulnerabilities.
-* **Assertionless "False-Green" Tests:** AI agents write tests that execute functions and mock everything, but assert zero behavioral invariants (`expect`, `assert`, `t.Fatal`), producing green CI runs with zero real verification.
+* **Unparameterized Dynamic SQL (CWE-89):** LLMs assemble queries via string template interpolation (`db.query("SELECT * FROM users WHERE id = " + userId)`), introducing critical SQL injection vulnerabilities.
+* **Assertionless "False-Green" Tests (Optional / Opt-in via `--include-tests`):** AI agents write tests that execute functions and mock everything, but assert zero behavioral invariants (`expect`, `assert`, `t.Fatal`), producing green CI runs with zero real verification. *(Note: Test directories are excluded by default for scan latency; pass `--include-tests` to inspect)*.
 * **Hardcoded Credentials & Leaked Seams:** Secrets, staging tokens, and high-entropy keys are placed directly into source literals, bypassing naive regex pattern filters.
 
 To eradicate these hazards in sub-200ms without imposing complex host build toolchains, Matryoshka-Harness incorporates the **Polyglot AST Engine** invoked via the canonical **`baba wrap`** (`matryoshka wrap`, `bbyg wrap`) command.
@@ -36,8 +36,8 @@ Matryoshka solves this with portable **Tree-sitter WebAssembly (WASM)** runtimes
                 └───────────────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
-                        │  Remediation Engine  │
-                        │   Score = Base*0.4 + AST*0.6  │
+                        │       Composite Scorer        │
+                        │   Score: 0.4 Base + 0.6 AST   │
                         └───────────────┬───────────────┘
                                         ▼
                         ┌───────────────────────────────┐
@@ -112,9 +112,9 @@ Identifies plaintext credentials, tokens, and private keys embedded in source co
 * **Structural AST Pattern:**
   1. **Known Token Prefixes:** Identifies strings beginning with canonical secret signatures (`sk_live_`, `ghp_`, `AKIA`, `AIza`, `xoxb-`, `bearer `).
   2. **Sensitive Variable Names:** Variables matching `api_key`, `secret`, `token`, `password`, `auth_token` assigned to string literals.
-  3. **Shannon Entropy Analysis:** Computes the mathematical Shannon entropy $H(S)$ of the literal:
-     *(Calculated via Shannon entropy algorithm, flagging strings with entropy > 3.0)*
-     Strings with entropy > 3.0 and length $\ge 16$ characters are flagged as potential high-entropy credentials.
+  3. **Shannon Entropy Analysis:** Computes the mathematical Shannon entropy of the literal:
+     > `H(S) = - ∑ p(x) * log₂ p(x)`
+     > Strings with entropy **H > 3.0** and length **≥ 16 characters** are flagged as potential high-entropy credentials/tokens.
 * **Exempt Patterns:** Environment variable readings (`process.env.KEY`, `os.environ.get("KEY")`, `os.Getenv("KEY")`) and trivial configuration placeholders are exempt.
 
 
