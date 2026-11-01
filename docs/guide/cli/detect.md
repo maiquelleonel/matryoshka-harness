@@ -12,6 +12,7 @@ baba detect [path] [options]
 
 ### Command Aliases
 `baba detect` provides 100% strict alias parity across all registered binary entry points:
+
 * `baba detect` — Slavic matriarch of nesting dolls (4 letters, ergonomic)
 * `bbyg detect` — Baba-Yaga mythology (silicon wizardry)
 * `matryoshka detect` — Formal academic package name

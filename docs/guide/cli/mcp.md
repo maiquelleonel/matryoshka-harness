@@ -12,6 +12,7 @@ baba mcp <command> [path] [options]
 
 ### Command Aliases
 `baba mcp` maintains strict parity across all CLI aliases:
+
 * `baba mcp` — Convenient 4-letter alias
 * `bbyg mcp` — Baba-Yaga alias
 * `matryoshka mcp` — Canonical package binary

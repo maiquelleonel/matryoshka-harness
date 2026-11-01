@@ -12,6 +12,7 @@ baba agents <command> [path] [options]
 
 ### Command Aliases
 `baba agents` guarantees strict behavioral parity across all aliases:
+
 * `baba agents` — Short CLI entry point
 * `bbyg agents` — Baba-Yaga alias
 * `matryoshka agents` — Canonical package name

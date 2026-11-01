@@ -12,6 +12,7 @@ baba wrap [path] [options]
 
 ### Command Aliases
 `baba wrap` guarantees strict behavioral parity across all aliases:
+
 * `baba wrap` — Fast 4-letter shortcut
 * `bbyg wrap` — Baba-Yaga alias
 * `matryoshka wrap` — Formal package executable

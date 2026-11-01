@@ -12,6 +12,7 @@ baba scan [path] [options]
 
 ### Command Aliases
 `baba scan` guarantees identical behavior across all aliases:
+
 * `baba scan` — Short 4-letter CLI shortcut
 * `bbyg scan` — Baba-Yaga alias
 * `matryoshka scan` — Formal package executable
