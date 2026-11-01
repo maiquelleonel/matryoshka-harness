@@ -1,4 +1,4 @@
-// Safe Click-to-Zoom Modal: Intercepts clicks on rendered Mermaid SVG or container
+// Universal Modal Zoom for all Mermaid Diagrams in MkDocs Material
 (function () {
   let currentZoom = 1.0;
   let activeSvg = null;
@@ -24,6 +24,7 @@
 
       const close = () => {
         overlay.classList.remove("active");
+        overlay.style.display = "none";
         document.getElementById("mermaid-modal-viewport").innerHTML = "";
         activeSvg = null;
         currentZoom = 1.0;
@@ -35,59 +36,58 @@
         document.getElementById("mm-zoom-reset").textContent = `${Math.round(currentZoom * 100)}%`;
       };
 
-      document.getElementById("mm-close").addEventListener("click", close);
+      document.getElementById("mm-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        close();
+      });
+
       overlay.addEventListener("click", (e) => {
-        if (e.target === overlay || e.target.id === "mermaid-modal-viewport") close();
+        if (e.target === overlay || e.target.id === "mermaid-modal-viewport") {
+          close();
+        }
       });
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && overlay.classList.contains("active")) close();
+        if (e.key === "Escape" && overlay.classList.contains("active")) {
+          close();
+        }
       });
 
-      document.getElementById("mm-zoom-in").addEventListener("click", () => {
+      document.getElementById("mm-zoom-in").addEventListener("click", (e) => {
+        e.stopPropagation();
         currentZoom = Math.min(4.0, currentZoom + 0.25);
         updateScale();
       });
 
-      document.getElementById("mm-zoom-out").addEventListener("click", () => {
+      document.getElementById("mm-zoom-out").addEventListener("click", (e) => {
+        e.stopPropagation();
         currentZoom = Math.max(0.3, currentZoom - 0.25);
         updateScale();
       });
 
-      document.getElementById("mm-zoom-reset").addEventListener("click", () => {
+      document.getElementById("mm-zoom-reset").addEventListener("click", (e) => {
+        e.stopPropagation();
         currentZoom = 1.0;
         updateScale();
       });
 
       const viewport = document.getElementById("mermaid-modal-viewport");
-      viewport.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const delta = e.deltaY < 0 ? 0.15 : -0.15;
-        currentZoom = Math.max(0.3, Math.min(4.0, currentZoom + delta));
-        updateScale();
-      }, { passive: false });
+      viewport.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 0.15 : -0.15;
+          currentZoom = Math.max(0.3, Math.min(4.0, currentZoom + delta));
+          updateScale();
+        },
+        { passive: false }
+      );
     }
     return overlay;
   }
 
-  function handleMermaidClick(e) {
-    // Check if clicked target is an SVG or inside .mermaid or svg.mermaid
-    const target = e.target;
-    let svg = null;
-
-    if (target.tagName && target.tagName.toLowerCase() === "svg") {
-      svg = target;
-    } else if (target.ownerSVGElement) {
-      svg = target.ownerSVGElement;
-    } else {
-      const container = target.closest(".mermaid");
-      if (container) {
-        svg = container.querySelector("svg");
-      }
-    }
-
+  function openModalWithSvg(svg) {
     if (!svg) return;
-
     const overlay = ensureModal();
     const viewport = document.getElementById("mermaid-modal-viewport");
     viewport.innerHTML = "";
@@ -95,36 +95,53 @@
     const clone = svg.cloneNode(true);
     clone.removeAttribute("width");
     clone.removeAttribute("height");
-    clone.style.minWidth = "800px";
+    clone.style.minWidth = "750px";
     clone.style.maxWidth = "none";
     clone.style.width = "auto";
     clone.style.height = "auto";
 
     viewport.appendChild(clone);
     activeSvg = clone;
-    currentZoom = 1.4; // 140% high clarity
+    currentZoom = 1.4;
     activeSvg.style.transform = `scale(${currentZoom})`;
     document.getElementById("mm-zoom-reset").textContent = `${Math.round(currentZoom * 100)}%`;
 
+    overlay.style.display = "flex";
+    // Force reflow for opacity transition
+    void overlay.offsetWidth;
     overlay.classList.add("active");
   }
 
-  function attachListeners() {
+  // Intercept clicks globally on any element inside or related to mermaid
+  function attachGlobalListener() {
     ensureModal();
-    document.removeEventListener("click", handleMermaidClick);
-    document.addEventListener("click", handleMermaidClick);
-  }
 
-  // MkDocs instant navigation support via document$ observable
-  if (typeof document$ !== "undefined") {
-    document$.subscribe(() => {
-      attachListeners();
-    });
+    document.addEventListener("click", function (e) {
+      // Find closest mermaid container or svg
+      let el = e.target;
+      while (el && el !== document.body) {
+        if (
+          el.tagName &&
+          (el.tagName.toLowerCase() === "svg" ||
+            el.classList?.contains("mermaid") ||
+            el.parentElement?.classList?.contains("mermaid"))
+        ) {
+          const svg = el.tagName.toLowerCase() === "svg" ? el : el.querySelector("svg");
+          if (svg) {
+            e.preventDefault();
+            e.stopPropagation();
+            openModalWithSvg(svg);
+            return;
+          }
+        }
+        el = el.parentElement;
+      }
+    }, true); // Use capture phase to ensure no framework stops propagation!
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachListeners);
+    document.addEventListener("DOMContentLoaded", attachGlobalListener);
   } else {
-    attachListeners();
+    attachGlobalListener();
   }
 })();
