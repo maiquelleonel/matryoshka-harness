@@ -423,9 +423,9 @@
       color: var(--terminal-text);
       font-family: var(--font-mono);
       font-size: 0.88rem;
-      padding: 22px 28px;
+      padding: 24px 28px;
       line-height: 1.6;
-      max-height: 380px;
+      min-height: 440px;
       overflow-y: auto;
       overflow-x: auto;
     }
@@ -975,7 +975,7 @@
               <button class="btn-term-tab" onclick="switchTermTab(2)">bbyg fix</button>
             </div>
           </div>
-          <div class="terminal-body-full" style="min-height: 280px;">
+          <div class="terminal-body-full" style="min-height: 440px;">
             <div class="term-line prompt"><span class="term-ps1">$</span> <span id="termCmdText" style="color: #61afef; font-weight: bold;"></span><span class="cursor-blink">▋</span></div>
             <div id="termOutputBody" style="display: none; margin-top: 10px; font-family: var(--font-mono); line-height: 1.55;"></div>
           </div>
