@@ -28,7 +28,7 @@ flowchart TD
   Gate2 -->|Fail| Block2[CI Fails: Fix Failing Tests]
   Gate3 -->|Fail: Score < Threshold or Critical AST Violations| Remediate[Inspect DIAGNOSTIC.md & Remediate]
   Remediate --> PR
-  Gate3 -->|Pass: Clean Scan| Gate4[Gate 4: Maintainer Merge Gate (CODEOWNERS)]
+  Gate3 -->|Pass: Clean Scan| Gate4["Gate 4: Maintainer Merge Gate (CODEOWNERS)"]
   Gate4 -->|Approved Review| Merge[Merged into main]
   Gate4 -->|Blocked: Non-Maintainer| Wait[Await Maintainer Approval]
   Merge --> Gate5[Gate 5: Automated SemVer Release & NPM Distribution]
