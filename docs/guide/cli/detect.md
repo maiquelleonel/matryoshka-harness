@@ -66,6 +66,7 @@ The detection engine recognizes primary languages from manifests and directory f
 * `pytest` (via `pyproject.toml`, `setup.cfg`, `pytest.ini`)
 * `go test` (via Go test files and modules)
 * `cargo test` (via Cargo manifests)
+* `rspec` (via `Gemfile`, `.rspec`, or `spec/` directory)
 
 ---
 
