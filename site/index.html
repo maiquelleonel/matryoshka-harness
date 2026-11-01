@@ -412,8 +412,10 @@
       font-size: 0.75rem;
       font-weight: 700;
       color: var(--ink);
-      margin-left: 8px;
       letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .terminal-body-full {
@@ -959,15 +961,15 @@
       <div class="hero-evidence-wrapper">
         <div class="hero-evidence-card">
           <div class="terminal-chrome">
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
               <div class="terminal-dots">
                 <span class="chrome-dot red"></span>
               <span class="chrome-dot yellow"></span>
               <span class="chrome-dot green"></span>
               </div>
-              <span class="chrome-title" id="terminalTitle">terminal: bbyg fix --yes (One-Shot L4 Remediation)</span>
+              <span class="chrome-title" id="terminalTitle">bbyg fix --yes // One-Shot L4 Remediation</span>
             </div>
-            <div class="terminal-actions" style="display: flex; gap: 6px;">
+            <div class="terminal-actions" style="display: flex; gap: 6px; flex-shrink: 0;">
               <button class="btn-term-tab active" onclick="switchTermTab(0)">bbyg fix</button>
               <button class="btn-term-tab" onclick="switchTermTab(1)">baba wrap</button>
               <button class="btn-term-tab" onclick="switchTermTab(2)">baba scan</button>
@@ -1409,17 +1411,17 @@
     // --- Terminal Animado Interativo (One-Shot Demo) ---
     const termTabs = [
       {
-        title: "terminal: bbyg fix --yes (One-Shot L4 Remediation)",
+        title: "bbyg fix --yes // One-Shot L4 Remediation",
         cmd: "bunx @maiquelleonel/matryoshka fix",
         output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka One-Shot Auto-Remediation (bbyg fix)</div><div style="color: #928b81;">  • Target Path:     /home/dev/workspace/app</div><div style="color: #928b81;">  • Detected Stack:  <span style="color: #e5c07b;">python (fastapi, test runner: pytest)</span></div><br><div style="color: #4cd964; font-weight: bold; margin-bottom: 4px;">✨ Codebase Fortified for Coding Agents (L4 Ready):</div><div>  <span style="color: #4cd964;">✓</span> <b>AGENTS.md:</b>         <span style="color: #4cd964;">AGENTS.md</span> (~176 tokens)</div><div>  <span style="color: #4cd964;">✓</span> <b>ARCHITECTURE:</b>      <span style="color: #4cd964;">ARCHITECTURE.md</span> (Blueprint draft ready for review)</div><div>  <span style="color: #4cd964;">✓</span> <b>Modular Skills:</b>    <span style="color: #61afef;">.agents/skills/</span> (4 active com subpastas SKILL.md)</div><div>  <span style="color: #4cd964;">✓</span> <b>CI Workflow:</b>       <span style="color: #e5c07b;">.github/workflows/ci.yml</span></div><div>  <span style="color: #4cd964;">✓</span> <b>IDE MCP Wiring:</b>    Cursor (.cursor/mcp.json), Gemini CLI, Claude Code</div><div>  <span style="color: #4cd964;">✓</span> <b>Harness Maturity:</b>  <span style="color: #4cd964; font-weight: bold;">L4 (105/105 pts)</span></div><br><div style="color: var(--gold-cyrillic); font-weight: bold;">🎉 Success! Your repository is now fortified against context-rot and AI-slop!</div>`
       },
       {
-        title: "terminal: baba wrap . (Anti-Slop AST & Composite Scorer)",
+        title: "baba wrap . // Anti-Slop AST & Scorer",
         cmd: "bunx @maiquelleonel/matryoshka wrap .",
         output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Context Wrap & Composite Audit (baba wrap)</div><div style="color: #928b81;">  • Target Path:      /home/dev/workspace/app</div><div>  • Composite Score:  <span style="color: #4cd964; font-weight: bold;">96 / 100 [PASS]</span> (threshold: 80)</div><div>  • Base Oracle:      <span style="color: #e5c07b;">90 / 100</span> (0 gap(s))</div><div>  • AST Health:       <span style="color: #4cd964;">100 / 100</span> (0 violation(s))</div><div>  • Files Analyzed:   26 (8 JavaScript, 18 TypeScript)</div><div>  • Report:           <span style="color: #61afef;">DIAGNOSTIC.md</span> (176 tokens)</div><br><div style="color: #52c462;">✔ No AST context-fencing violations detected. Repository is clean!</div>`
       },
       {
-        title: "terminal: baba scan . (Paladini Maturity Oracle & AST)",
+        title: "baba scan . // Paladini Maturity Oracle L1-L4",
         cmd: "bunx @maiquelleonel/matryoshka scan .",
         output: `<div style="margin-bottom: 8px; color: #4cd964; font-weight: bold;">🪆 Matryoshka Maturity Scanner (paladini/harness-score & semantic AST)</div><div style="color: #928b81;">  • Root Path:   /home/dev/workspace/app</div><div>  • Primary:     <span style="color: #e5c07b;">typescript</span> | Test Runner: <span style="color: #61afef;">bun test</span></div><div>  • Maturity:    <span style="color: #4cd964; font-weight: bold;">L4 (94/105 pts)</span> — 0 governance gap(s)</div><br><div style="color: #61afef; font-weight: bold;">📍 Discovered Codebase Entities</div><div>  • Routes:      src/routes/api.ts</div><div>  • Models:      src/models/user.ts</div><div>  • Controllers: src/controllers/auth.ts</div><br><div style="color: #4cd964;">✔ No governance gaps identified! Repository is fully harnessed.</div>`
       }
