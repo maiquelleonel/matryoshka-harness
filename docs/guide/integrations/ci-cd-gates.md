@@ -10,6 +10,9 @@ AI coding agents accelerate software development, but unchecked code generation 
 
 By integrating `baba wrap --strict` into CI runners, teams establish an automated, non-negotiable threshold for repository health and code safety.
 
+> 💡 **Pragmatic Adoption (Gate 3 in Any Project):**  
+> For 99% of consumer repositories adopting Matryoshka-Harness, **Gate 3 (`baba wrap --strict`)** is the only required gate to prevent regressions and AI-slop. Gates 1 and 2 represent your own linter/test suite, while Gates 4 and 5 illustrate our reference open-source repository governance (maintainer merge checks and automated SemVer packaging).
+
 ---
 
 ## 🏛️ The 5-Gate Quality Pipeline
@@ -56,7 +59,10 @@ baba wrap --strict --threshold 80
 
 ## ⚙️ GitHub Actions Workflow Configurations
 
-### 1. Verification Gate (`.github/workflows/ci.yml`)
+The following workflows illustrate how Matryoshka is embedded into continuous integration pipelines:
+
+### 1. Minimal Consumer Verification Gate (`.github/workflows/ci.yml`)
+> **The Core Integration:** Add the `baba wrap --strict` step to your existing CI pipeline to block regressions before merging.
 
 The primary CI verification workflow triggers on pull requests targeting `main` and on push events to `main` and `task/**` branches:
 
@@ -98,9 +104,10 @@ jobs:
         run: bun run baba wrap --strict --threshold 80
 ```
 
-### 2. Maintainer Merge Gate (`.github/workflows/maintainer-gate.yml`)
+### 2. Reference Governance: Maintainer Merge Gate (`.github/workflows/maintainer-gate.yml`)
+*(Optional / Reference implementation for open-source libraries or strict forks)*
 
-To prevent unauthorized or rogue merges by automated agents or external contributors, the maintainer merge gate ensures that PRs can only be merged when authored by or explicitly approved by authorized repository maintainers:
+To prevent unauthorized or rogue merges by automated agents or external contributors, this reference gate ensures that PRs can only be merged when authored by or explicitly approved by authorized repository maintainers:
 
 ```yaml
 name: Maintainer Merge Gate
