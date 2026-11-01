@@ -59,12 +59,6 @@ markdown_extensions:
   - toc:
       permalink: true
 
-extra_css:
-  - stylesheets/mermaid-zoom.css
-
-extra_javascript:
-  - javascripts/mermaid-zoom.js
-
 nav:
   - Overview: index.md
   - Getting Started:
