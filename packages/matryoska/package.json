@@ -1,6 +1,6 @@
 {
   "name": "@maiquelleonel/matryoska",
-  "version": "0.4.0",
+  "version": "0.23.5",
   "description": "Protective typosquatting shell and forwarding wrapper for @maiquelleonel/matryoshka (matryoska typo protection)",
   "main": "bin/matryoska.js",
   "module": "index.js",
@@ -20,7 +20,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@maiquelleonel/matryoshka": "^0.4.0"
+    "@maiquelleonel/matryoshka": "0.23.5"
   },
   "repository": {
     "type": "git",

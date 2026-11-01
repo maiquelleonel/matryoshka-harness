@@ -1,6 +1,6 @@
 {
   "name": "@maiquelleonel/matryoshka",
-  "version": "0.4.0",
+  "version": "0.23.5",
   "description": "Adaptive Context-Fencing, Anti-Slop AGENTS.md Compiler & L4 Maturity Remediation for Coding Agents",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -41,7 +41,8 @@
     "scan": "bun run src/cli.ts scan",
     "wrap": "bun run src/cli.ts wrap",
     "mcp": "bun run src/cli.ts mcp",
-    "test": "bun test"
+    "test": "bun test",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -67,7 +68,8 @@
   "author": "Maiquel Leonel <skywishmtfk@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "husky": "^9.1.7"
   },
   "peerDependencies": {
     "typescript": "^5"

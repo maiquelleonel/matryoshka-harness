@@ -1,6 +1,6 @@
 {
   "name": "@maiquelleonel/bbyg",
-  "version": "0.4.0",
+  "version": "0.23.5",
   "description": "Protective shell and forwarding wrapper for @maiquelleonel/matryoshka (bbyg compact alias)",
   "main": "bin/bbyg.js",
   "module": "index.js",
@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@maiquelleonel/matryoshka": "^0.4.0"
+    "@maiquelleonel/matryoshka": "0.23.5"
   },
   "repository": {
     "type": "git",
