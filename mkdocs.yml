@@ -59,6 +59,12 @@ markdown_extensions:
   - toc:
       permalink: true
 
+extra_css:
+  - stylesheets/mermaid-modal.css
+
+extra_javascript:
+  - javascripts/mermaid-modal.js
+
 nav:
   - Overview: index.md
   - Getting Started:
