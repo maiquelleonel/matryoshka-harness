@@ -389,21 +389,23 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
     }
-ms: center;
-      gap: 8px;
+.terminal-dots {
+      display: flex;
+      align-items: center;
+      gap: 7px;
     }
 
-    .chrome-dot {
-      width: 12px;
-      height: 12px;
+    .chrome-dot, .dot {
+      width: 11px;
+      height: 11px;
       border-radius: 50%;
-      border: 1px solid rgba(0, 0, 0, 0.4);
       display: inline-block;
       flex-shrink: 0;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     }
-    .chrome-dot.red { background: #e05244 !important; }
-    .chrome-dot.yellow { background: #f3a615 !important; }
-    .chrome-dot.green { background: #52c462 !important; }
+    .chrome-dot.red, .dot.red { background: #ef4444 !important; border: 1px solid #dc2626 !important; }
+    .chrome-dot.yellow, .dot.yellow { background: #f59e0b !important; border: 1px solid #d97706 !important; }
+    .chrome-dot.green, .dot.green { background: #10b981 !important; border: 1px solid #059669 !important; }
 
     .chrome-title {
       font-family: var(--font-mono);
@@ -957,10 +959,12 @@ ms: center;
       <div class="hero-evidence-wrapper">
         <div class="hero-evidence-card">
           <div class="terminal-chrome">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="chrome-dot red"></span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="terminal-dots">
+                <span class="chrome-dot red"></span>
               <span class="chrome-dot yellow"></span>
               <span class="chrome-dot green"></span>
+              </div>
               <span class="chrome-title" id="terminalTitle">terminal: bbyg fix --yes (One-Shot L4 Remediation)</span>
             </div>
             <div class="terminal-actions" style="display: flex; gap: 6px;">
