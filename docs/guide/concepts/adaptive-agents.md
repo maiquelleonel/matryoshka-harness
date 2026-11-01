@@ -165,12 +165,22 @@ baba agents skill database --json
 
 ---
 
-## 🛡️ Non-Destructive Overwrite Guardrails
+## 🛡️ Non-Destructive Overwrite & Migration Guardrails
 
-To protect custom instructions created by human engineers from accidental deletion:
-* Running `baba agents generate` against an existing `AGENTS.md` without `--force` **refuses to overwrite** and exits with code `1`.
-* When `--force` is provided, Matryoshka automatically copies the pre-existing file to **`AGENTS.md.bak`** before writing the new directives.
-* In `--dry-run` mode, zero filesystem mutations occur.
+Matryoshka guarantees that custom instructions and institutional memory created by human engineers are never destroyed or silently overwritten:
+
+### 1. Accidental Overwrite Protection (`baba agents generate`)
+* **Collision Guard:** When scaffolding fresh directives, running `baba agents generate` against an existing `AGENTS.md` without `--force` **refuses to overwrite** and exits with code `1`.
+* **Byte-for-Byte Backup:** When `--force` is supplied, Matryoshka creates an `AGENTS.md.bak` snapshot before generating default archetype directives.
+* **Simulation Mode:** Passing `--dry-run` calculates archetype profiling, token budgets, and projected savings with zero filesystem mutations.
+
+### 2. Zero-Loss Legacy Migration (`baba agents migrate`)
+* If your repository already contains customized human instructions (`AGENTS.md`, `.cursorrules`, `CLAUDE.md`), never force-generate templates over them.
+* Use **`baba agents migrate`**: it automatically snapshots the original file to `AGENTS.md.bak` and encapsulates 100% of your business rules into a dedicated repository skill (`.agents/skills/<project-name>/SKILL.md`), linking it on-demand in the new lean root `AGENTS.md`.
+
+### 3. One-Shot Auto-Remediation (`bbyg fix`)
+* The unified **`bbyg fix`** command intelligently audits existing instruction files before generating templates.
+* If a legacy instruction file (`.cursorrules`, `CLAUDE.md`, or pre-existing unmigrated `AGENTS.md`) is detected, `bbyg fix` automatically performs a zero-loss migration first—preserving your human rules in `.agents/skills/<project-name>/SKILL.md` before wiring MCP servers and generating missing CI gates.
 
 ---
 

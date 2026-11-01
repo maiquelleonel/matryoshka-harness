@@ -1207,11 +1207,43 @@ export async function runCli(args: string[] = process.argv.slice(2)): Promise<vo
           console.log(`  ${pc.dim("•")} ${pc.bold("Detected Stack:")}  ${pc.magenta(stack.primary)} (${stack.frameworks.join(", ") || "none"}, test runner: ${stack.testRunner || "none"})`);
         }
 
-        // 2. Generate Agents & Modular Skills & CI workflow
+        // 2. Intelligent Auto-Migration & Modular Scaffolding
+        // Detect pre-existing legacy instruction files (.cursorrules, CLAUDE.md, or unmigrated AGENTS.md)
+        let legacyFileToMigrate: string | null = null;
+        const legacyCandidates = ["AGENTS.md", ".cursorrules", "CLAUDE.md"];
+        for (const candidate of legacyCandidates) {
+          const candPath = path.join(resolvedPath, candidate);
+          if (fs.existsSync(candPath) && fs.statSync(candPath).isFile()) {
+            try {
+              const fileContent = fs.readFileSync(candPath, "utf-8");
+              const isAlreadyMigrated =
+                fileContent.includes("origin: legacy_migration") ||
+                (fileContent.includes("# 🤖 Project Operational Directives") && fileContent.includes("## 🌐 Stack & Identity"));
+              if (!isAlreadyMigrated && fileContent.trim().length > 0) {
+                legacyFileToMigrate = candidate;
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        let migratedLegacyResult = null;
+        if (legacyFileToMigrate) {
+          if (!isJson) {
+            console.log(`  ${pc.dim("•")} ${pc.bold("Legacy Directives:")} ${pc.yellow(legacyFileToMigrate)} (auto-migrating to zero-loss modular skill)`);
+          }
+          migratedLegacyResult = migrateLegacyInstructions(resolvedPath, {
+            from: legacyFileToMigrate,
+            force: true,
+            dryRun: isDryRun,
+          });
+        }
+
+        // Generate Agents & Modular Skills & CI workflow
         const agentsResult = generateAgents(resolvedPath, {
           ci: isCi,
           architecture: true,
-          force: isForce,
+          force: true, // safe to overwrite since legacy migration already snapshotted and encapsulated rules
           dryRun: isDryRun,
           yes: true,
           json: false,
