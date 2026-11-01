@@ -1,1 +1,2 @@
+bun audit
 bun test tests/docs_site.test.ts
