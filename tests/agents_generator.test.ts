@@ -94,17 +94,18 @@ dependencies = [
       // And directory '.agents/skills/' must contain 'skill-backend.md', 'skill-database.md', 'skill-security.md', 'skill-testing.md'
       const skillsDir = path.join(tempDir, ".agents", "skills");
       expect(fs.existsSync(skillsDir)).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-security.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "database", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "security", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "testing", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
 
       // And all generated skill files must contain valid YAML frontmatter ('name' and 'description')
       const skillFiles = [
-        "skill-backend.md",
-        "skill-database.md",
-        "skill-security.md",
-        "skill-testing.md"
+        "backend/SKILL.md",
+        "database/SKILL.md",
+        "security/SKILL.md",
+        "testing/SKILL.md"
       ];
       for (const file of skillFiles) {
         const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
@@ -152,14 +153,16 @@ dependencies = [
 
       // And '.agents/skills/' must contain both 'skill-frontend.md' and 'skill-backend.md' with YAML frontmatter.
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "frontend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
 
-      const frontendContent = fs.readFileSync(path.join(skillsDir, "skill-frontend.md"), "utf-8");
+      const frontendContent = fs.readFileSync(path.join(skillsDir, "frontend", "SKILL.md"), "utf-8");
       expect(frontendContent.startsWith("---\n")).toBe(true);
       expect(frontendContent).toContain("name: skill-frontend");
 
-      const backendContent = fs.readFileSync(path.join(skillsDir, "skill-backend.md"), "utf-8");
+      const backendContent = fs.readFileSync(path.join(skillsDir, "backend", "SKILL.md"), "utf-8");
       expect(backendContent.startsWith("---\n")).toBe(true);
       expect(backendContent).toContain("name: skill-backend");
     });
@@ -334,10 +337,10 @@ dependencies = [
 
         // On-demand specialized skills links
         expect(compiled).toContain("## 🧭 On-Demand Specialized Skills");
-        expect(compiled).toContain(".agents/skills/skill-backend.md");
-        expect(compiled).toContain(".agents/skills/skill-database.md");
-        expect(compiled).toContain(".agents/skills/skill-security.md");
-        expect(compiled).toContain(".agents/skills/skill-testing.md");
+        expect(compiled).toContain(".agents/skills/backend/SKILL.md");
+        expect(compiled).toContain(".agents/skills/database/SKILL.md");
+        expect(compiled).toContain(".agents/skills/security/SKILL.md");
+        expect(compiled).toContain(".agents/skills/testing/SKILL.md");
       });
     }
 
@@ -455,7 +458,7 @@ dependencies = [
         const skill = SKILL_DEFINITIONS[skillName];
         expect(skill).toBeDefined();
         expect(skill.name).toBe(skillName);
-        expect(skill.fileName).toBe(`${skillName}.md`);
+        expect(skill.fileName).toBe(`${skillName.replace(/^skill-/, "")}/SKILL.md`);
         expect(skill.description).toBeDefined();
         expect(skill.description.length).toBeGreaterThan(20);
 
@@ -535,7 +538,7 @@ dependencies = [
       expect(index.skills).toHaveLength(4);
 
       for (const item of index.skills) {
-        expect(item.relativePath).toMatch(/^\.agents\/skills\/skill-.*\.md$/);
+        expect(item.relativePath).toMatch(/^\.agents\/skills\/[a-z0-9_-]+\/SKILL\.md$/);
         expect(item.description.length).toBeGreaterThan(15);
         expect(item.domain.length).toBeGreaterThan(0);
         expect(item.tokenCount).toBeGreaterThan(0);
@@ -567,7 +570,7 @@ dependencies = [
       const diskSkill = loadSkillOnDemand("skill-backend", tempDir);
       expect(diskSkill.name).toBe("skill-backend");
       expect(diskSkill.source).toBe("disk");
-      expect(diskSkill.fullPath).toBe(path.join(tempDir, ".agents", "skills", "skill-backend.md"));
+      expect(diskSkill.fullPath).toBe(path.join(tempDir, ".agents", "skills", "backend", "SKILL.md"));
       expect(diskSkill.content).toContain("Anti-N+1 Query Invariant");
       expect(validateSkillFrontmatter(diskSkill.content)).toBe(true);
 
@@ -1880,8 +1883,8 @@ dependencies = [
           expect(proc.exitCode).toBe(0);
 
           const skillsDir = path.join(tempDir, ".agents", "skills");
-          const frontendPath = path.join(skillsDir, "skill-frontend.md");
-          const securityPath = path.join(skillsDir, "skill-security.md");
+          const frontendPath = path.join(skillsDir, "frontend", "SKILL.md");
+          const securityPath = path.join(skillsDir, "security", "SKILL.md");
 
           expect(fs.existsSync(frontendPath)).toBe(true);
           expect(fs.existsSync(securityPath)).toBe(true);
@@ -2202,7 +2205,7 @@ dependencies = [
           expect(proc.exitCode).toBe(0);
 
           const skillsDir = path.join(tempDir, ".agents", "skills");
-          const testingPath = path.join(skillsDir, "skill-testing.md");
+          const testingPath = path.join(skillsDir, "testing", "SKILL.md");
 
           expect(fs.existsSync(testingPath)).toBe(true);
 

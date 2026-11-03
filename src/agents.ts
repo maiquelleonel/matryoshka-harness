@@ -1718,42 +1718,42 @@ description: The Seam contract, Red-to-Green TDD discipline, deterministic test 
 export const SKILL_DEFINITIONS: Record<SkillName, SkillDefinition> = {
   "skill-backend": {
     name: "skill-backend",
-    fileName: "skill-backend.md",
+    fileName: "backend/SKILL.md",
     description:
       "Framework-idiomatic ORM patterns, transactional boundaries, anti-N+1 query prevention, and async persistence rules. Use when modifying models, controllers, repositories, or database queries.",
     content: compileBackendSkill()
   },
   "skill-database": {
     name: "skill-database",
-    fileName: "skill-database.md",
+    fileName: "database/SKILL.md",
     description:
       "Zero-downtime migrations, lock safety, column additions, and indexing strategies. Use when modifying database schemas, migrations, or table structures.",
     content: compileDatabaseSkill()
   },
   "skill-frontend": {
     name: "skill-frontend",
-    fileName: "skill-frontend.md",
+    fileName: "frontend/SKILL.md",
     description:
       "Reactivity best practices, layout shifts, pure rendering, accessibility standards (A11y), and state management. Use when modifying UI components, styling, or client-side logic.",
     content: compileFrontendSkill()
   },
   "skill-security": {
     name: "skill-security",
-    fileName: "skill-security.md",
+    fileName: "security/SKILL.md",
     description:
       "OWASP Top 10 mitigation, strict input sanitization, secret leakage prevention, and defense-in-depth security invariants. Use when handling user input, authentication, authorization, or sensitive data.",
     content: compileSecuritySkill()
   },
   "skill-testing": {
     name: "skill-testing",
-    fileName: "skill-testing.md",
+    fileName: "testing/SKILL.md",
     description:
       "The Seam contract, Red-to-Green TDD discipline, deterministic test fixtures, and mock isolation boundaries. Use when writing tests, refactoring, or verifying bugfixes.",
     content: compileTestingSkill()
   },
   "custom-instructions": {
     name: "custom-instructions",
-    fileName: "custom-instructions.md",
+    fileName: "custom/SKILL.md",
     description:
       "Repository-specific overrides, domain rules, bespoke workflows, and developer guidelines.",
     content: `---
@@ -1944,17 +1944,19 @@ export function loadSkillOnDemand(
 
   const root = path.resolve(projectPath);
   const diskPath = path.join(root, ".agents", "skills", catalogSkill.fileName);
+  const legacyDiskPath = path.join(root, ".agents", "skills", skillName + ".md");
+  const targetPath = fs.existsSync(diskPath) ? diskPath : (fs.existsSync(legacyDiskPath) ? legacyDiskPath : null);
 
-  if (fs.existsSync(diskPath)) {
+  if (targetPath) {
     try {
-      const content = fs.readFileSync(diskPath, "utf-8");
+      const content = fs.readFileSync(targetPath, "utf-8");
       const parsed = parseSkillFrontmatter(content);
       return {
         name: (parsed?.name as SkillName) || catalogSkill.name,
         fileName: catalogSkill.fileName,
         description: parsed?.description || catalogSkill.description,
         content,
-        fullPath: diskPath,
+        fullPath: targetPath,
         source: "disk"
       };
     } catch {
@@ -2057,7 +2059,7 @@ export function resolveSkillContent(
       return compileTestingSkill({ projectPath: root, profile });
     case "custom-instructions": {
       if (root) {
-        const customPath = path.join(root, ".agents", "skills", "custom-instructions.md");
+        const customPath = path.join(root, ".agents", "skills", "custom/SKILL.md");
         if (fs.existsSync(customPath)) {
           try {
             return fs.readFileSync(customPath, "utf-8");
@@ -2310,19 +2312,24 @@ export function generateAgents(
   // Write root AGENTS.md
   fs.writeFileSync(agentsPath, rootAgentsContent, "utf-8");
 
-  // Write active skills
+  // Write active skills strictly canonically (.agents/skills/<domain>/SKILL.md)
   for (const skillName of effectiveSkills) {
     const def = SKILL_DEFINITIONS[skillName];
     const skillFilePath = path.join(skillsDir, def.fileName);
+    const skillDir = path.dirname(skillFilePath);
+    if (!fs.existsSync(skillDir)) {
+      fs.mkdirSync(skillDir, { recursive: true });
+    }
     const skillContent = resolveSkillContent(skillName, { projectPath: root, profile: effectiveProfile });
     fs.writeFileSync(skillFilePath, skillContent, "utf-8");
 
-    // Compatibilidade com oráculos L4 e padrão Anthropic: gera subpasta com SKILL.md
-    const subSkillDir = path.join(skillsDir, skillName.replace(/^skill-/, ""));
-    if (!fs.existsSync(subSkillDir)) {
-      fs.mkdirSync(subSkillDir, { recursive: true });
+    // Clean up legacy flat file (.agents/skills/skill-*.md) if present to eliminate duplicates
+    const legacyFlatPath = path.join(skillsDir, skillName + ".md");
+    if (fs.existsSync(legacyFlatPath)) {
+      try {
+        fs.unlinkSync(legacyFlatPath);
+      } catch {}
     }
-    fs.writeFileSync(path.join(subSkillDir, "SKILL.md"), skillContent, "utf-8");
   }
 
   // Cria um SKILL.md mestre na raiz de skillsDir se houver skills ativas
