@@ -281,13 +281,24 @@ export function getSkillPreviewData(
   });
 
   if (options?.projectPath) {
-    const diskPath = path.join(
-      path.resolve(options.projectPath),
+    const rootProj = path.resolve(options.projectPath);
+    const canonicalDiskPath = path.join(
+      rootProj,
       ".agents",
       "skills",
-      def?.fileName || `${skillName}.md`
+      def?.fileName || (skillName.replace(/^skill-/, "") + "/SKILL.md")
     );
-    if (fs.existsSync(diskPath)) {
+    const legacyDiskPath = path.join(
+      rootProj,
+      ".agents",
+      "skills",
+      skillName + ".md"
+    );
+    const diskPath = fs.existsSync(canonicalDiskPath)
+      ? canonicalDiskPath
+      : (fs.existsSync(legacyDiskPath) ? legacyDiskPath : null);
+
+    if (diskPath && fs.existsSync(diskPath)) {
       try {
         rawContent = fs.readFileSync(diskPath, "utf-8");
       } catch {

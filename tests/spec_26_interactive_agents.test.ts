@@ -190,12 +190,12 @@ dependencies = [
 
       expect(result.status).toBe("success");
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "frontend", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "testing", "SKILL.md"))).toBe(false);
 
-      const customContent = fs.readFileSync(path.join(skillsDir, "custom-instructions.md"), "utf-8");
+      const customContent = fs.readFileSync(path.join(skillsDir, "custom", "SKILL.md"), "utf-8");
       expect(customContent).toContain("name: custom-instructions");
       expect(customContent).toContain("description:");
     });
@@ -546,12 +546,12 @@ describe("SPEC-26 Subtask 2: Selectively Toggle Specialized Skills Using Arrow K
 
       expect(result.status).toBe("success");
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-security.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "frontend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "database", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "security", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "testing", "SKILL.md"))).toBe(false);
     });
 
     it("persists no skill files when all skills are toggled off", () => {
@@ -950,7 +950,7 @@ describe("SPEC-26 Subtask 4: Smoothly Fallback to Non-Interactive Mode in Headle
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
 
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
     });
 
     it("bypasses interactive prompts and generates profile-recommended skills with -y shorthand", () => {
@@ -998,7 +998,7 @@ describe("SPEC-26 Subtask 4: Smoothly Fallback to Non-Interactive Mode in Headle
       const proc = Bun.spawnSync(["bun", "run", cliPath, "agents", "generate", tempDir]);
       expect(proc.exitCode).toBe(0);
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "backend", "SKILL.md"))).toBe(true);
     });
 
     it("smoothly falls back when --interactive is provided in a non-TTY environment", () => {
@@ -1376,12 +1376,12 @@ dependencies = [
 
       expect(genResult.status).toBe("success");
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-frontend.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-security.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-testing.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "custom", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "database", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "frontend", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "security", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "testing", "SKILL.md"))).toBe(false);
     });
   });
 });
@@ -1437,10 +1437,10 @@ describe("SPEC-26 Subtask 6: Skill Content Preview Modal/Screen", () => {
     });
 
     it("handles custom instructions skill with repository-specific file overrides", () => {
-      const customSkillsDir = path.join(tempDir, ".agents", "skills");
+      const customSkillsDir = path.join(tempDir, ".agents", "skills", "custom");
       fs.mkdirSync(customSkillsDir, { recursive: true });
       fs.writeFileSync(
-        path.join(customSkillsDir, "custom-instructions.md"),
+        path.join(customSkillsDir, "SKILL.md"),
         `---
 name: custom-instructions
 description: Custom engineering standards for our monorepo
@@ -1475,7 +1475,7 @@ description: Custom engineering standards for our monorepo
       });
 
       expect(output).toContain("Skill Preview: skill-backend");
-      expect(output).toContain(".agents/skills/skill-backend.md");
+      expect(output).toContain(".agents/skills/backend/SKILL.md");
       expect(output).toContain("Selected");
       expect(output).toContain("[recommended]");
       expect(output).toContain("[1/6]");
@@ -1757,8 +1757,8 @@ description: Custom engineering standards for our monorepo
 
       expect(genResult.status).toBe("success");
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "custom-instructions.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "custom", "SKILL.md"))).toBe(true);
     });
   });
 });
@@ -1850,8 +1850,8 @@ describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
       });
       expect(genResult.status).toBe("success");
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(false);
-      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(false);
+      expect(fs.existsSync(path.join(skillsDir, "database", "SKILL.md"))).toBe(false);
     });
 
     it("aborts cleanly without modifying files when user cancels with q or escape", async () => {
@@ -1904,8 +1904,8 @@ describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
       expect(fs.existsSync(agentsPath)).toBe(true);
 
       const skillsDir = path.join(tempDir, ".agents", "skills");
-      expect(fs.existsSync(path.join(skillsDir, "skill-backend.md"))).toBe(true);
-      expect(fs.existsSync(path.join(skillsDir, "skill-database.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "backend", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(skillsDir, "database", "SKILL.md"))).toBe(true);
     });
 
     it("bypasses prompts identically with -y shorthand flag", () => {
@@ -2048,7 +2048,7 @@ describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
         });
         expect(proc.exitCode).toBe(0);
         expect(fs.existsSync(path.join(sub, "AGENTS.md"))).toBe(true);
-        expect(fs.existsSync(path.join(sub, ".agents", "skills", "skill-backend.md"))).toBe(true);
+        expect(fs.existsSync(path.join(sub, ".agents", "skills", "backend", "SKILL.md"))).toBe(true);
       }
     });
 
@@ -2167,7 +2167,7 @@ describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
       expect(stdout).toContain("Notice: Headless environment detected");
       expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-testing.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "testing", "SKILL.md"))).toBe(true);
     });
 
     it("falls back to deterministic generation when -i shorthand is run in non-TTY environment", () => {
@@ -2182,7 +2182,7 @@ describe("SPEC-26 Subtask 7: Headless & Flag Parity", () => {
       expect(stdout).toContain("Notice: Headless environment detected");
       expect(stdout).toContain("Matryoshka Adaptive Agents Generator");
       expect(fs.existsSync(path.join(tempDir, "AGENTS.md"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "skill-backend.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, ".agents", "skills", "backend", "SKILL.md"))).toBe(true);
     });
 
     it("handles implicit generate command when invoked as 'baba agents --interactive' or 'baba agents -i'", () => {
