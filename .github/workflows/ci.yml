@@ -36,8 +36,8 @@ jobs:
       - name: Security audit
         run: bun audit
 
-      - name: Run tests
-        run: bun test
-
       - name: Run build
         run: bun run build
+
+      - name: Run tests
+        run: bun test
