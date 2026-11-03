@@ -213,14 +213,31 @@ export function getGitReleaseContext(cwd: string = process.cwd()): {
   commits: string[];
 } {
   let latestTag: string | null = null;
-  const tagResult = spawnSync(
+  // Primary: Sort all semver tags descending to find true global latest release
+  const allTagsResult = spawnSync(
     "git",
-    ["describe", "--tags", "--abbrev=0"],
+    ["tag", "-l", "v*", "--sort=-v:refname"],
     { cwd, encoding: "utf-8" },
   );
 
-  if (tagResult.status === 0 && tagResult.stdout.trim().length > 0) {
-    latestTag = tagResult.stdout.trim();
+  if (allTagsResult.status === 0 && allTagsResult.stdout.trim().length > 0) {
+    const lines = allTagsResult.stdout.trim().split(String.fromCharCode(10));
+    const first = lines[0];
+    if (first && first.trim().length > 0) {
+      latestTag = first.trim();
+    }
+  }
+
+  // Fallback to git describe if no v* tags matched
+  if (!latestTag) {
+    const tagResult = spawnSync(
+      "git",
+      ["describe", "--tags", "--abbrev=0"],
+      { cwd, encoding: "utf-8" },
+    );
+    if (tagResult.status === 0 && tagResult.stdout.trim().length > 0) {
+      latestTag = tagResult.stdout.trim();
+    }
   }
 
   const gitLogArgs = latestTag
